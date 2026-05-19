@@ -3,20 +3,25 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Dastak Rider App API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Rider authentication
+  - name: orders
+    description: Order management
+  - name: earnings
+    description: Rider earnings
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +29,204 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /rider/register:
+    post:
+      operationId: registerRider
+      tags: [auth]
+      summary: Register a new rider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiderRegisterInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rider"
+        "400":
+          description: Bad request
+        "409":
+          description: Phone already registered
+
+  /rider/login:
+    post:
+      operationId: loginRider
+      tags: [auth]
+      summary: Login a rider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiderLoginInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rider"
+        "401":
+          description: Invalid credentials
+
+  /rider/logout:
+    post:
+      operationId: logoutRider
+      tags: [auth]
+      summary: Logout a rider
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  /rider/me:
+    get:
+      operationId: getRiderMe
+      tags: [auth]
+      summary: Get current rider profile
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rider"
+        "401":
+          description: Not authenticated
+
+  /rider/availability:
+    put:
+      operationId: updateRiderAvailability
+      tags: [auth]
+      summary: Toggle rider online/offline status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AvailabilityInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+
+  /rider/orders/available:
+    get:
+      operationId: getAvailableOrders
+      tags: [orders]
+      summary: Get available (unassigned) orders
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RiderOrder"
+
+  /rider/orders/active:
+    get:
+      operationId: getActiveOrders
+      tags: [orders]
+      summary: Get rider's active deliveries
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RiderOrder"
+
+  /rider/orders/history:
+    get:
+      operationId: getOrderHistory
+      tags: [orders]
+      summary: Get rider's completed deliveries
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RiderOrder"
+
+  /rider/orders/{orderId}/accept:
+    post:
+      operationId: acceptOrder
+      tags: [orders]
+      summary: Accept an available order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiderOrder"
+        "400":
+          description: Already has active delivery
+        "409":
+          description: Order already taken
+
+  /rider/orders/{orderId}/status:
+    put:
+      operationId: updateOrderStatus
+      tags: [orders]
+      summary: Update delivery status
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderStatusInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiderOrder"
+
+  /rider/earnings:
+    get:
+      operationId: getRiderEarnings
+      tags: [earnings]
+      summary: Get rider earnings summary
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EarningsSummary"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +237,187 @@ components:
       required:
         - status
 
+    OkResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required:
+        - ok
+
+    OrderItem:
+      type: object
+      properties:
+        name:
+          type: string
+        quantity:
+          type: number
+        price:
+          type: number
+      required:
+        - name
+        - quantity
+        - price
+
+    Rider:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        city:
+          type: string
+        vehicleType:
+          type: string
+        isOnline:
+          type: boolean
+        totalEarnings:
+          type: number
+        totalDeliveries:
+          type: number
+        rating:
+          type: number
+        ratingCount:
+          type: number
+      required:
+        - id
+        - name
+        - phone
+        - city
+        - vehicleType
+        - isOnline
+        - totalEarnings
+        - totalDeliveries
+        - rating
+        - ratingCount
+
+    RiderOrder:
+      type: object
+      properties:
+        id:
+          type: string
+        restaurantName:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        status:
+          type: string
+        total:
+          type: number
+        deliveryFee:
+          type: number
+        subtotal:
+          type: number
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        userName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: ["string", "null"]
+        riderId:
+          type: ["string", "null"]
+        riderName:
+          type: ["string", "null"]
+      required:
+        - id
+        - status
+        - total
+        - deliveryFee
+        - subtotal
+        - createdAt
+
+    EarningsSummary:
+      type: object
+      properties:
+        totalEarnings:
+          type: number
+        totalDeliveries:
+          type: number
+        todayEarnings:
+          type: number
+        todayDeliveries:
+          type: number
+        weekEarnings:
+          type: number
+        weekDeliveries:
+          type: number
+        rating:
+          type: number
+        ratingCount:
+          type: number
+      required:
+        - totalEarnings
+        - totalDeliveries
+        - todayEarnings
+        - todayDeliveries
+        - weekEarnings
+        - weekDeliveries
+        - rating
+        - ratingCount
+
+    RiderRegisterInput:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        password:
+          type: string
+        city:
+          type: string
+        vehicleType:
+          type: string
+      required:
+        - name
+        - phone
+        - password
+        - city
+        - vehicleType
+
+    RiderLoginInput:
+      type: object
+      properties:
+        phone:
+          type: string
+        password:
+          type: string
+      required:
+        - phone
+        - password
+
+    AvailabilityInput:
+      type: object
+      properties:
+        isOnline:
+          type: boolean
+      required:
+        - isOnline
+
+    AvailabilityResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        isOnline:
+          type: boolean
+      required:
+        - ok
+        - isOnline
+
+    OrderStatusInput:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
