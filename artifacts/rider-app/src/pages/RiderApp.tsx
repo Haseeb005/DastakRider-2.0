@@ -364,15 +364,14 @@ function AvailableTab({ riderId, isOnline }: { riderId: string, isOnline: boolea
 
 // -- ACTIVE DELIVERIES TAB --
 const getNextStatusAndLabel = (currentStatus: string) => {
-  if (currentStatus === "placed" || currentStatus === "confirmed") return { next: "preparing", label: "Arrived at Restaurant", icon: MapPin };
-  if (currentStatus === "preparing") return { next: "out_for_delivery", label: "Picked Up — On My Way", icon: Navigation };
-  if (currentStatus === "out_for_delivery") return { next: "delivered", label: "Mark as Delivered", icon: Check };
+  if (currentStatus === "Rider Accepted") return { next: "Rider Picked Up", label: "Picked Up — On My Way", icon: Navigation };
+  if (currentStatus === "Rider Picked Up") return { next: "Delivered", label: "Mark as Delivered", icon: Check };
   return null;
 };
 
 const getStatusDisplay = (status: string) => {
   const map: Record<string, string> = {
-    placed: "Waiting Pickup", confirmed: "Accepted", preparing: "At Restaurant", out_for_delivery: "On the Way", delivered: "Delivered"
+    Pending: "Waiting Pickup", "Rider Accepted": "Accepted", "Rider Picked Up": "On the Way", Delivered: "Delivered"
   };
   return map[status] || status;
 };
@@ -388,7 +387,7 @@ function ActiveTab() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetActiveOrdersQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetRiderEarningsQueryKey() });
-        if (status === "delivered") toast({ title: "Delivery Complete!", description: "Great job. Earnings updated." });
+        if (status === "Delivered") toast({ title: "Delivery Complete!", description: "Great job. Earnings updated." });
       }
     });
   };

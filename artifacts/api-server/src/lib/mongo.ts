@@ -12,8 +12,9 @@ export async function connectMongo(): Promise<void> {
   logger.info("Connected to MongoDB");
 }
 
-export function ridersCol() {
-  return db.collection("riders");
+// Riders are stored in the shared `users` collection with `type: "rider"`.
+export function usersCol() {
+  return db.collection("users");
 }
 
 export function ordersCol() {

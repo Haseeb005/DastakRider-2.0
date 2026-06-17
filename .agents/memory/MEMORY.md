@@ -1,0 +1,1 @@
+- [Dastak DB schema](dastak-db-schema.md) — rider app uses the REAL prod Mongo: riders are `users` with `type:"rider"` (plaintext passwords), orders use capitalized statuses + `_id`/`riderId`/`riderFare`.
