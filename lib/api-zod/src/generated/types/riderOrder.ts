@@ -40,7 +40,7 @@ export interface RiderOrder {
   orderNum?: string | null;
   /** @nullable */
   comment?: string | null;
-  /** The rider's payout for this order (per-order snapshot locked at accept time). This is the rider's earnings, distinct from deliveryFee. */
+  /** The rider's payout for this order = the rider's current tillNoonFare (from their users-collection doc), falling back to the per-order snapshot when unset. The rider's earnings, distinct from deliveryFee (customer charge). */
   riderFare?: number;
   tip?: number;
   discount?: number;

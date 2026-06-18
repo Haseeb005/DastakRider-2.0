@@ -157,17 +157,18 @@ function pktPeriodStart(kind: "day" | "week" | "month"): Date {
 }
 
 // Aggregate a rider's delivered-order earnings into total / today / week / month
-// buckets, plus COD-only cash collected. Pay is the per-order snapshot stored on
-// each order at accept time (riderFare); a rider's current tillNoonFare is NOT
-// applied retroactively, so changing the rate never re-values past deliveries.
+// buckets, plus COD-only cash collected. Pay per delivered order is the rider's
+// CURRENT tillNoonFare (passed in); the per-order snapshot (riderFare) is only a
+// fallback for riders with no tillNoonFare. Never the customer's deliveryCharges.
 // Shared by /rider/me and /rider/earnings.
-async function computeEarnings(riderId: string) {
+async function computeEarnings(riderId: string, tillNoonFare = 0) {
   const dayStart = pktPeriodStart("day");
   const weekStart = pktPeriodStart("week");
   const monthStart = pktPeriodStart("month");
 
-  // Sum the per-order snapshot only; never the customer's deliveryCharges.
-  const fareExpr = {
+  // Use the rider's current tillNoonFare per delivered order when set; otherwise
+  // fall back to that order's stored snapshot. Never the customer's deliveryCharges.
+  const snapshotExpr = {
     $convert: {
       input: { $ifNull: ["$riderFare", 0] },
       to: "double",
@@ -175,6 +176,8 @@ async function computeEarnings(riderId: string) {
       onNull: 0,
     },
   };
+  const fareExpr =
+    tillNoonFare > 0 ? { $literal: tillNoonFare } : snapshotExpr;
   // Cash the rider physically collects — COD only (online payments excluded).
   const codAmountExpr = {
     $cond: [
@@ -316,7 +319,7 @@ router.get("/rider/me", async (req: any, res: any) => {
       (req.session as any).riderId = undefined;
       return res.status(401).json({ message: "Rider not found" });
     }
-    const earn = await computeEarnings(riderId);
+    const earn = await computeEarnings(riderId, Number(rider.tillNoonFare) || 0);
     res.json({
       ...safeRider(rider),
       totalEarnings: earn.totalEarnings,
@@ -384,12 +387,14 @@ router.get("/rider/orders/active", async (req: any, res: any) => {
   try {
     const riderId = requireRiderId(req, res);
     if (!riderId) return;
+    const rider = await findRiderById(riderId);
+    const tnf = Number(rider?.tillNoonFare) || 0;
     const docs = await ordersCol()
       .find({ riderId, status: { $in: ACTIVE_STATUSES } })
       .sort({ updatedAt: -1 })
       .toArray();
-    // Accepted orders already carry their snapshot fare; no current-rate fallback.
-    res.json(docs.map((d: any) => normalizeOrder(d)));
+    // Fare shown = the rider's current tillNoonFare (overrides the stored snapshot).
+    res.json(docs.map((d: any) => normalizeOrder(d, tnf)));
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
@@ -410,13 +415,15 @@ router.get("/rider/orders/history", async (req: any, res: any) => {
         $gte: pktPeriodStart(period === "today" ? "day" : period),
       };
     }
+    const rider = await findRiderById(riderId);
+    const tnf = Number(rider?.tillNoonFare) || 0;
     const docs = await ordersCol()
       .find(query)
       .sort({ createdAt: -1 })
       .limit(200)
       .toArray();
-    // History uses each order's stored snapshot fare (rate locked at accept time).
-    res.json(docs.map((d: any) => normalizeOrder(d)));
+    // Fare shown = the rider's current tillNoonFare (overrides the stored snapshot).
+    res.json(docs.map((d: any) => normalizeOrder(d, tnf)));
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
@@ -463,7 +470,7 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       { returnDocument: "after" }
     );
     if (!updated) return res.status(409).json({ message: "Order already taken or unavailable." });
-    res.json(normalizeOrder(updated));
+    res.json(normalizeOrder(updated, Number(rider.tillNoonFare) || 0));
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
@@ -475,6 +482,8 @@ router.post("/rider/orders/:orderId/arrived", async (req: any, res: any) => {
   try {
     const riderId = requireRiderId(req, res);
     if (!riderId) return;
+    const rider = await findRiderById(riderId);
+    const tnf = Number(rider?.tillNoonFare) || 0;
     let orderObjectId: ObjectId;
     try {
       orderObjectId = new ObjectId(req.params.orderId);
@@ -490,7 +499,7 @@ router.post("/rider/orders/:orderId/arrived", async (req: any, res: any) => {
       return res
         .status(409)
         .json({ message: "Order not assigned to you, or not in the accepted state." });
-    res.json(normalizeOrder(updated));
+    res.json(normalizeOrder(updated, tnf));
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
@@ -505,6 +514,8 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
     const { status } = req.body;
     if (!["Rider Picked Up", DELIVERED_STATUS].includes(status))
       return res.status(400).json({ message: "Invalid status" });
+    const rider = await findRiderById(riderId);
+    const tnf = Number(rider?.tillNoonFare) || 0;
     let orderObjectId: ObjectId;
     try {
       orderObjectId = new ObjectId(req.params.orderId);
@@ -536,7 +547,7 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
           : "Invalid status transition, or order not assigned to you.";
       return res.status(409).json({ message });
     }
-    res.json(normalizeOrder(updated));
+    res.json(normalizeOrder(updated, tnf));
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
@@ -551,7 +562,7 @@ router.get("/rider/earnings", async (req: any, res: any) => {
     const rider = await findRiderById(riderId);
     if (!rider) return res.status(404).json({ message: "Rider not found" });
 
-    const earn = await computeEarnings(riderId);
+    const earn = await computeEarnings(riderId, Number(rider.tillNoonFare) || 0);
     const { rating, ratingCount } = riderRating(rider);
 
     res.json({
@@ -631,7 +642,7 @@ function fmtTime(v: any): string | null {
 }
 
 // Parse a deal item name like "Burger Deal (Coleslaw, Drink)" handled on the client.
-function normalizeOrder(doc: any, currentRateFallback?: number) {
+function normalizeOrder(doc: any, riderFareOverride?: number) {
   const items = Array.isArray(doc.products)
     ? doc.products.map((p: any) => ({
         name: p.productName || p.name || "Item",
@@ -641,15 +652,16 @@ function normalizeOrder(doc: any, currentRateFallback?: number) {
       }))
     : [];
   const total = toNum(doc.orderTotal);
-  // Pay is the per-order snapshot stored at accept time (riderFare). Only when an
-  // order has no snapshot yet (pre-accept "available" orders) do we fall back to
-  // the rider's current tillNoonFare. Never use deliveryCharges (customer charge).
+  // The rider's pay shown for an order is their CURRENT tillNoonFare (passed in as
+  // riderFareOverride from the rider's users-collection doc). It takes precedence
+  // over the per-order snapshot; the stored snapshot (riderFare) is only a fallback
+  // for riders with no tillNoonFare. Never use deliveryCharges (customer charge).
   const snapshot = toNum(doc.riderFare);
-  const fallback =
-    typeof currentRateFallback === "number" && currentRateFallback > 0
-      ? currentRateFallback
+  const override =
+    typeof riderFareOverride === "number" && riderFareOverride > 0
+      ? riderFareOverride
       : 0;
-  const riderFare = snapshot > 0 ? snapshot : fallback;
+  const riderFare = override > 0 ? override : snapshot;
   return {
     id: String(doc._id),
     restaurantName: doc.martName || null,
