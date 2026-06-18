@@ -165,33 +165,76 @@ function playOrderAlert(): () => void {
   };
 }
 
-// Tracks seen order IDs; alerts (sound + notification) when genuinely new ones appear.
+const ALERT_AUTO_HIDE_MS = 12000;
+
+// Tracks seen order IDs; alerts (sound + notification) when genuinely new ones
+// appear. The banner auto-hides after a timeout, when the rider accepts
+// (stopAlert), or when the new orders leave the available list.
 function useOrderAlert(orders: RiderOrder[], isOnline: boolean) {
   const seen = useRef<Set<string>>(new Set());
   const seeded = useRef(false);
   const stopFn = useRef<(() => void) | null>(null);
-  const [newCount, setNewCount] = useState(0);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const newIdsRef = useRef<string[]>([]);
+  const [newIds, setNewIds] = useState<string[]>([]);
+
+  const clearTimer = () => {
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+  };
+
+  // Set the banner's new-order list, mirroring into a ref and bailing out of the
+  // render when the contents are unchanged (avoids churn on the 10s poll).
+  const commitNewIds = (next: string[]) => {
+    const prev = newIdsRef.current;
+    const same =
+      next.length === prev.length && next.every((id, i) => id === prev[i]);
+    if (same) return;
+    newIdsRef.current = next;
+    setNewIds(next);
+  };
 
   const stopAlert = () => {
     stopFn.current?.();
     stopFn.current = null;
-    setNewCount(0);
+    clearTimer();
+    commitNewIds([]);
   };
 
   useEffect(() => {
     if (!isOnline) return;
     const ids = orders.map((o) => o.id);
+    const presentIds = new Set(ids);
     if (!seeded.current) {
       seen.current = new Set(ids);
       seeded.current = true;
       return;
     }
     const fresh = ids.filter((id) => !seen.current.has(id));
+    // Prune previously-new orders that left the list (accepted, expired, …) and
+    // merge in the fresh ones.
+    const kept = newIdsRef.current.filter((id) => presentIds.has(id));
+    const merged = Array.from(new Set([...kept, ...fresh]));
+    commitNewIds(merged);
+    // Everything new is gone (accepted/expired) before the timeout — silence the
+    // lingering sound immediately so a rider isn't beeped for a vanished order.
+    if (merged.length === 0) {
+      stopFn.current?.();
+      stopFn.current = null;
+      clearTimer();
+    }
     if (fresh.length > 0) {
       fresh.forEach((id) => seen.current.add(id));
-      setNewCount((n) => n + fresh.length);
       stopFn.current?.();
       stopFn.current = playOrderAlert();
+      clearTimer();
+      hideTimer.current = setTimeout(() => {
+        stopFn.current?.();
+        stopFn.current = null;
+        commitNewIds([]);
+      }, ALERT_AUTO_HIDE_MS);
       if ("Notification" in window && Notification.permission === "granted") {
         try {
           new Notification("New delivery order!", {
@@ -204,7 +247,7 @@ function useOrderAlert(orders: RiderOrder[], isOnline: boolean) {
     }
     // Drop IDs that are no longer available so they can re-alert if they return.
     seen.current.forEach((id) => {
-      if (!ids.includes(id)) seen.current.delete(id);
+      if (!presentIds.has(id)) seen.current.delete(id);
     });
   }, [orders, isOnline]);
 
@@ -216,12 +259,21 @@ function useOrderAlert(orders: RiderOrder[], isOnline: boolean) {
     }
   }, [isOnline]);
 
+  // Clean up sound + timer on unmount.
+  useEffect(
+    () => () => {
+      stopFn.current?.();
+      clearTimer();
+    },
+    [],
+  );
+
   const triggerTest = () => {
     stopFn.current?.();
     stopFn.current = playOrderAlert();
   };
 
-  return { newCount, triggerTest, stopAlert };
+  return { newCount: newIds.length, triggerTest, stopAlert };
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────────
@@ -324,6 +376,30 @@ function RiderOrderDetailModal({
   const isCod = (order.paymentType || "").toLowerCase().includes("cod") ||
     (order.paymentType || "").toLowerCase().includes("cash");
   const isDelivered = order.status === "Delivered";
+
+  const mapsUrl = (query: string) =>
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+
+  const hasCustomerCoords =
+    typeof order.latitude === "number" && typeof order.longitude === "number";
+  const customerMapsUrl = mapsUrl(
+    hasCustomerCoords
+      ? `${order.latitude},${order.longitude}`
+      : [order.userName, order.address].filter(Boolean).join(" "),
+  );
+  const canNavigateCustomer = hasCustomerCoords || !!order.address;
+
+  const hasRestCoords =
+    typeof order.martLatitude === "number" &&
+    typeof order.martLongitude === "number";
+  const restMapsUrl = mapsUrl(
+    hasRestCoords
+      ? `${order.martLatitude},${order.martLongitude}`
+      : [order.restaurantName, order.martAddress].filter(Boolean).join(" "),
+  );
+  const canNavigateRest =
+    hasRestCoords || !!order.martAddress || !!order.restaurantName;
+
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
@@ -382,6 +458,16 @@ function RiderOrderDetailModal({
             {order.distance && (
               <p className="text-xs text-gray-400 pl-6">{order.distance} km away</p>
             )}
+            {canNavigateCustomer && (
+              <a
+                href={customerMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600"
+              >
+                <Navigation className="w-3.5 h-3.5" /> Open in Google Maps
+              </a>
+            )}
           </div>
 
           {/* Restaurant */}
@@ -403,6 +489,16 @@ function RiderOrderDetailModal({
                   <Phone className="w-4 h-4 text-brand-500 shrink-0" />
                   <a href={`tel:${order.martPhone}`} className="text-blue-600 font-medium">{order.martPhone}</a>
                 </div>
+              )}
+              {canNavigateRest && (
+                <a
+                  href={restMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600"
+                >
+                  <Navigation className="w-3.5 h-3.5" /> Open in Google Maps
+                </a>
               )}
             </div>
           )}
@@ -602,7 +698,10 @@ function OrderCard({
           <div className="flex items-start justify-between mb-3">
             <div className="flex-1 min-w-0">
               <h3 className="font-bold text-gray-900 truncate">{order.restaurantName || "Restaurant"}</h3>
-              <p className="text-xs text-gray-400 mt-0.5">{timeAgo(order.createdAt)}</p>
+              <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                <Clock className="w-3 h-3 shrink-0" />
+                {formatDateTime(order.createdAt) || timeAgo(order.createdAt)}
+              </p>
             </div>
             <Badge className={`ml-2 shrink-0 text-xs border-0 ${badgeColor}`}>
               {badgeLabel}
@@ -1060,8 +1159,9 @@ function DeliveryHistory() {
                     {order.restaurantName || "Restaurant"}
                   </p>
                   <p className="text-xs text-gray-500 truncate">{order.address || "—"}</p>
-                  <p className="text-xs text-gray-400">
-                    {formatDateTime(order.timeWhenDelivered || order.updatedAt || order.createdAt)}
+                  <p className="text-xs text-gray-400 flex items-center gap-1">
+                    <Clock className="w-3 h-3 shrink-0" />
+                    {formatDateTime(order.createdAt)}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
