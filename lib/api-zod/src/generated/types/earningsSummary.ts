@@ -9,10 +9,18 @@
 export interface EarningsSummary {
   totalEarnings: number;
   totalDeliveries: number;
+  totalOrderAmount?: number;
   todayEarnings: number;
   todayDeliveries: number;
+  todayOrderAmount?: number;
   weekEarnings: number;
   weekDeliveries: number;
+  weekOrderAmount?: number;
+  monthEarnings?: number;
+  monthDeliveries?: number;
+  monthOrderAmount?: number;
   rating: number;
   ratingCount: number;
+  pendingCollection?: number;
+  unpaidCollection?: number;
 }

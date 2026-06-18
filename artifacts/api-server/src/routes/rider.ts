@@ -10,6 +10,7 @@ const router = Router();
 const ACTIVE_STATUSES = ["Rider Accepted", "Rider Picked Up"];
 const AVAILABLE_STATUS = "Pending";
 const DELIVERED_STATUS = "Delivered";
+const COD_TYPES = ["COD", "Cash", "cash", "cod"];
 
 function normPhone(phone: any): string {
   return String(phone).replace(/[\s\-()]/g, "");
@@ -76,17 +77,38 @@ function safeRider(user: any) {
     totalDeliveries: Number(user.orderCount) || 0,
     rating,
     ratingCount,
+    riderZones: Array.isArray(user.riderZones) ? user.riderZones.filter(Boolean) : [],
+    pendingCollection: Number(user.pendingCollection) || 0,
+    unpaidCollection: Number(user.unpaidCollection) || 0,
+    tillNoonFare: Number(user.tillNoonFare) || 0,
   };
 }
 
+// ── Pakistan timezone helpers (UTC+5) ──────────────────────────────────────────
+// Start-of-period returned as a real UTC instant aligned to the PKT calendar, so
+// comparisons against stored timestamps (updatedAt/createdAt) are correct for PK.
+const PKT_MS = 5 * 60 * 60 * 1000;
+
+function pktPeriodStart(kind: "day" | "week" | "month"): Date {
+  const shifted = new Date(Date.now() + PKT_MS); // read PKT wall clock via UTC getters
+  const y = shifted.getUTCFullYear();
+  const m = shifted.getUTCMonth();
+  const d = shifted.getUTCDate();
+  const dow = shifted.getUTCDay();
+  let day = d;
+  if (kind === "week") day = d - dow;
+  if (kind === "month") day = 1;
+  // PKT midnight of that calendar date == that UTC midnight minus 5h.
+  return new Date(Date.UTC(y, m, day) - PKT_MS);
+}
+
 // Aggregate a rider's delivered-order earnings (riderFare, fallback deliveryCharges)
-// into total / today / this-week buckets. Shared by /rider/me and /rider/earnings.
+// into total / today / week / month buckets, plus COD-only cash collected.
+// Shared by /rider/me and /rider/earnings.
 async function computeEarnings(riderId: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const weekStart = new Date();
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-  weekStart.setHours(0, 0, 0, 0);
+  const dayStart = pktPeriodStart("day");
+  const weekStart = pktPeriodStart("week");
+  const monthStart = pktPeriodStart("month");
 
   const fareExpr = {
     $convert: {
@@ -96,7 +118,20 @@ async function computeEarnings(riderId: string) {
       onNull: 0,
     },
   };
-  const group = { _id: null, count: { $sum: 1 }, earnings: { $sum: fareExpr } };
+  // Cash the rider physically collects — COD only (online payments excluded).
+  const codAmountExpr = {
+    $cond: [
+      { $in: [{ $ifNull: ["$paymentType", "$paymentMethod"] }, COD_TYPES] },
+      { $convert: { input: "$orderTotal", to: "double", onError: 0, onNull: 0 } },
+      0,
+    ],
+  };
+  const group = {
+    _id: null,
+    count: { $sum: 1 },
+    earnings: { $sum: fareExpr },
+    orderAmount: { $sum: codAmountExpr },
+  };
 
   const [agg] = await ordersCol()
     .aggregate([
@@ -104,8 +139,9 @@ async function computeEarnings(riderId: string) {
       {
         $facet: {
           total: [{ $group: group }],
-          today: [{ $match: { updatedAt: { $gte: today } } }, { $group: group }],
+          today: [{ $match: { updatedAt: { $gte: dayStart } } }, { $group: group }],
           week: [{ $match: { updatedAt: { $gte: weekStart } } }, { $group: group }],
+          month: [{ $match: { updatedAt: { $gte: monthStart } } }, { $group: group }],
         },
       },
     ])
@@ -114,18 +150,26 @@ async function computeEarnings(riderId: string) {
   const pick = (arr: any[]) => ({
     earnings: Math.round(arr?.[0]?.earnings || 0),
     count: arr?.[0]?.count || 0,
+    orderAmount: Math.round(arr?.[0]?.orderAmount || 0),
   });
   const total = pick(agg?.total);
-  const todayStats = pick(agg?.today);
+  const today = pick(agg?.today);
   const week = pick(agg?.week);
+  const month = pick(agg?.month);
 
   return {
     totalEarnings: total.earnings,
     totalDeliveries: total.count,
-    todayEarnings: todayStats.earnings,
-    todayDeliveries: todayStats.count,
+    totalOrderAmount: total.orderAmount,
+    todayEarnings: today.earnings,
+    todayDeliveries: today.count,
+    todayOrderAmount: today.orderAmount,
     weekEarnings: week.earnings,
     weekDeliveries: week.count,
+    weekOrderAmount: week.orderAmount,
+    monthEarnings: month.earnings,
+    monthDeliveries: month.count,
+    monthOrderAmount: month.orderAmount,
   };
 }
 
@@ -159,6 +203,10 @@ router.post("/rider/register", async (req: any, res: any) => {
       deleted: false,
       verified: false,
       orderCount: 0,
+      riderZones: [],
+      pendingCollection: 0,
+      unpaidCollection: 0,
+      tillNoonFare: 0,
       wallet: { amount: 0, isUsable: true },
       createdAt: now,
       updatedAt: now,
@@ -239,17 +287,27 @@ router.put("/rider/availability", async (req: any, res: any) => {
   }
 });
 
-// Available orders — unassigned pending orders
+// Available orders — unassigned pending orders, filtered to the rider's city & zones.
+// Faithful to the original: a rider only sees orders in their city whose zone is in
+// their assigned riderZones. (Zone filter applies only when the rider has zones set.)
 router.get("/rider/orders/available", async (req: any, res: any) => {
   try {
     const riderId = requireRiderId(req, res);
     if (!riderId) return;
+    const rider = await findRiderById(riderId);
+    if (!rider) return res.status(404).json({ message: "Rider not found" });
+
+    const query: Record<string, any> = {
+      status: AVAILABLE_STATUS,
+      selfDelivery: { $ne: true },
+      $or: [{ riderId: { $exists: false } }, { riderId: null }, { riderId: "" }],
+    };
+    if (rider.city) query.city = rider.city;
+    const zones = Array.isArray(rider.riderZones) ? rider.riderZones.filter(Boolean) : [];
+    if (zones.length) query.zone = { $in: zones };
+
     const docs = await ordersCol()
-      .find({
-        status: AVAILABLE_STATUS,
-        selfDelivery: { $ne: true },
-        $or: [{ riderId: { $exists: false } }, { riderId: null }, { riderId: "" }],
-      })
+      .find(query)
       .sort({ createdAt: -1 })
       .limit(100)
       .toArray();
@@ -276,16 +334,25 @@ router.get("/rider/orders/active", async (req: any, res: any) => {
   }
 });
 
-// Order history — delivered orders for this rider
+// Order history — delivered orders for this rider, optionally filtered by period.
 router.get("/rider/orders/history", async (req: any, res: any) => {
   try {
     const riderId = requireRiderId(req, res);
     if (!riderId) return;
-    const docs = await ordersCol()
+    const period = String(req.query.period || "all");
+    let docs = await ordersCol()
       .find({ riderId, status: DELIVERED_STATUS })
       .sort({ updatedAt: -1 })
-      .limit(100)
+      .limit(200)
       .toArray();
+    if (period === "today" || period === "week" || period === "month") {
+      const start = pktPeriodStart(period === "today" ? "day" : period).getTime();
+      docs = docs.filter((d: any) => {
+        const t = d.updatedAt || d.createdAt || d.date;
+        const dt = t instanceof Date ? t : new Date(t);
+        return !isNaN(dt.getTime()) && dt.getTime() >= start;
+      });
+    }
     res.json(docs.map(normalizeOrder));
   } catch (e: any) {
     req.log.error(e);
@@ -324,6 +391,7 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
           riderId,
           riderName: rider.name,
           riderPhone: rider.phone,
+          riderFare: rider.tillNoonFare ? Number(rider.tillNoonFare) : undefined,
           status: "Rider Accepted",
           acceptedTime: now,
           updatedAt: now,
@@ -383,13 +451,19 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
     // Enforce the 3-step progression server-side: a rider must mark "Arrived at
     // Restaurant" (riderArrived) before picking up. This guards against stale
     // clients or direct API calls skipping the checkpoint.
+    const now = new Date();
     const filter: Record<string, any> =
       status === "Rider Picked Up"
         ? { _id: orderObjectId, riderId, status: "Rider Accepted", riderArrived: true }
         : { _id: orderObjectId, riderId, status: "Rider Picked Up" };
+    // Additive timestamps that mirror the original app (no shared counter writes).
+    const extra: Record<string, any> =
+      status === "Rider Picked Up"
+        ? { pickUpTime: now }
+        : { timeWhenDelivered: now, paidToRider: false };
     const updated = await ordersCol().findOneAndUpdate(
       filter,
-      { $set: { status, updatedAt: new Date() } },
+      { $set: { status, updatedAt: now, ...extra } },
       { returnDocument: "after" }
     );
     if (!updated) {
@@ -417,11 +491,69 @@ router.get("/rider/earnings", async (req: any, res: any) => {
     const earn = await computeEarnings(riderId);
     const { rating, ratingCount } = riderRating(rider);
 
-    res.json({ ...earn, rating, ratingCount });
+    res.json({
+      ...earn,
+      rating,
+      ratingCount,
+      pendingCollection: Number(rider.pendingCollection) || 0,
+      unpaidCollection: Number(rider.unpaidCollection) || 0,
+    });
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
   }
+});
+
+// ── GPS location tracking ──────────────────────────────────────────────────────
+// In-memory only (no DB). The customer's order-tracking page reads the public
+// endpoint below; locations expire after 60 seconds.
+const riderLocations = new Map<
+  string,
+  { lat: number; lng: number; riderId: string; ts: number }
+>();
+const LOCATION_TTL_MS = 60_000;
+
+// Rider pushes GPS coordinates for an active order they own and are delivering.
+router.post("/rider/location", async (req: any, res: any) => {
+  try {
+    const riderId = requireRiderId(req, res);
+    if (!riderId) return;
+    const { orderId, lat, lng } = req.body || {};
+    if (!orderId || typeof lat !== "number" || typeof lng !== "number")
+      return res.status(400).json({ message: "orderId, lat and lng are required" });
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180)
+      return res.status(400).json({ message: "lat/lng out of range" });
+    let orderObjectId: ObjectId;
+    try {
+      orderObjectId = new ObjectId(String(orderId));
+    } catch {
+      return res.status(400).json({ message: "Invalid order id" });
+    }
+    // Only the assigned rider may publish a location, and only while the order
+    // is in transit ("Rider Picked Up"). Prevents spoofing other orders.
+    const order = await ordersCol().findOne({
+      _id: orderObjectId,
+      riderId,
+      status: "Rider Picked Up",
+    });
+    if (!order)
+      return res
+        .status(403)
+        .json({ message: "Order is not assigned to you or not in transit" });
+    riderLocations.set(String(orderId), { lat, lng, riderId, ts: Date.now() });
+    res.json({ ok: true });
+  } catch (e: any) {
+    req.log.error(e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// Public — customer's tracking page reads the rider's current location
+router.get("/orders/:orderId/rider-location", (req: any, res: any) => {
+  const loc = riderLocations.get(String(req.params.orderId));
+  if (!loc || Date.now() - loc.ts > LOCATION_TTL_MS)
+    return res.status(404).json({ message: "No recent location" });
+  res.json({ lat: loc.lat, lng: loc.lng, ts: loc.ts });
 });
 
 function toNum(v: any): number {
@@ -429,16 +561,24 @@ function toNum(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function fmtTime(v: any): string | null {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? String(v) : d.toISOString();
+}
+
+// Parse a deal item name like "Burger Deal (Coleslaw, Drink)" handled on the client.
 function normalizeOrder(doc: any) {
   const items = Array.isArray(doc.products)
     ? doc.products.map((p: any) => ({
         name: p.productName || p.name || "Item",
         quantity: Number(p.count) || 1,
         price: toNum(p.price ?? p.net),
+        size: p.size || p.variation || null,
       }))
     : [];
   const total = toNum(doc.orderTotal);
-  const deliveryFee = toNum(doc.riderFare ?? doc.deliveryCharges);
+  const riderFare = toNum(doc.riderFare ?? doc.deliveryCharges);
   return {
     id: String(doc._id),
     restaurantName: doc.martName || null,
@@ -446,18 +586,36 @@ function normalizeOrder(doc: any) {
     phone: doc.phone || null,
     status: doc.status,
     total,
-    deliveryFee,
+    deliveryFee: riderFare,
+    riderFare,
     subtotal: Math.max(total - toNum(doc.deliveryCharges), 0) || total,
     items,
     userName: doc.name || null,
-    createdAt:
-      doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt),
-    updatedAt:
-      doc.updatedAt instanceof Date
-        ? doc.updatedAt.toISOString()
-        : doc.updatedAt
-          ? String(doc.updatedAt)
-          : null,
+    city: doc.city || null,
+    zone: doc.zone || null,
+    distance: doc.distance != null && doc.distance !== "" ? String(doc.distance) : null,
+    martAddress: doc.martAddress || null,
+    martPhone: doc.martPhone || null,
+    paymentType: doc.paymentType || doc.paymentMethod || null,
+    orderNum: doc.orderNum != null ? String(doc.orderNum) : null,
+    comment: doc.comment || null,
+    tip: toNum(doc.tip),
+    discount: toNum(doc.discount),
+    platformFee: toNum(doc.platformFee),
+    vatAmount: toNum(doc.vatAmount),
+    paidToRider: !!doc.paidToRider,
+    actions: Array.isArray(doc.actions)
+      ? doc.actions.map((a: any) => ({
+          action: a.action || a.name || "",
+          time: a.time || "",
+          name: a.name || "",
+        }))
+      : [],
+    acceptedTime: fmtTime(doc.acceptedTime),
+    pickUpTime: fmtTime(doc.pickUpTime),
+    timeWhenDelivered: fmtTime(doc.timeWhenDelivered),
+    createdAt: fmtTime(doc.createdAt) || String(doc.createdAt),
+    updatedAt: fmtTime(doc.updatedAt),
     riderId: doc.riderId || null,
     riderName: doc.riderName || null,
     riderArrived: !!doc.riderArrived,

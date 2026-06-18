@@ -17,4 +17,8 @@ export interface Rider {
   totalDeliveries: number;
   rating: number;
   ratingCount: number;
+  riderZones?: string[];
+  pendingCollection?: number;
+  unpaidCollection?: number;
+  tillNoonFare?: number;
 }

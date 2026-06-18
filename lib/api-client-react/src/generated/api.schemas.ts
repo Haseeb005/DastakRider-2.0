@@ -17,6 +17,8 @@ export interface OrderItem {
   name: string;
   quantity: number;
   price: number;
+  /** @nullable */
+  size?: string | null;
 }
 
 export interface Rider {
@@ -30,6 +32,16 @@ export interface Rider {
   totalDeliveries: number;
   rating: number;
   ratingCount: number;
+  riderZones?: string[];
+  pendingCollection?: number;
+  unpaidCollection?: number;
+  tillNoonFare?: number;
+}
+
+export interface OrderAction {
+  action?: string;
+  time?: string;
+  name?: string;
 }
 
 export interface RiderOrder {
@@ -47,6 +59,35 @@ export interface RiderOrder {
   items?: OrderItem[];
   /** @nullable */
   userName?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  zone?: string | null;
+  /** @nullable */
+  distance?: string | null;
+  /** @nullable */
+  martAddress?: string | null;
+  /** @nullable */
+  martPhone?: string | null;
+  /** @nullable */
+  paymentType?: string | null;
+  /** @nullable */
+  orderNum?: string | null;
+  /** @nullable */
+  comment?: string | null;
+  riderFare?: number;
+  tip?: number;
+  discount?: number;
+  platformFee?: number;
+  vatAmount?: number;
+  paidToRider?: boolean;
+  actions?: OrderAction[];
+  /** @nullable */
+  acceptedTime?: string | null;
+  /** @nullable */
+  pickUpTime?: string | null;
+  /** @nullable */
+  timeWhenDelivered?: string | null;
   createdAt: string;
   /** @nullable */
   updatedAt?: string | null;
@@ -60,12 +101,32 @@ export interface RiderOrder {
 export interface EarningsSummary {
   totalEarnings: number;
   totalDeliveries: number;
+  totalOrderAmount?: number;
   todayEarnings: number;
   todayDeliveries: number;
+  todayOrderAmount?: number;
   weekEarnings: number;
   weekDeliveries: number;
+  weekOrderAmount?: number;
+  monthEarnings?: number;
+  monthDeliveries?: number;
+  monthOrderAmount?: number;
   rating: number;
   ratingCount: number;
+  pendingCollection?: number;
+  unpaidCollection?: number;
+}
+
+export interface RiderLocationInput {
+  orderId: string;
+  lat: number;
+  lng: number;
+}
+
+export interface RiderLocation {
+  lat: number;
+  lng: number;
+  ts: number;
 }
 
 export interface RiderRegisterInput {
@@ -93,4 +154,18 @@ export interface AvailabilityResponse {
 export interface OrderStatusInput {
   status: string;
 }
+
+export type GetOrderHistoryParams = {
+period?: GetOrderHistoryPeriod;
+};
+
+export type GetOrderHistoryPeriod = typeof GetOrderHistoryPeriod[keyof typeof GetOrderHistoryPeriod];
+
+
+export const GetOrderHistoryPeriod = {
+  today: 'today',
+  week: 'week',
+  month: 'month',
+  all: 'all',
+} as const;
 

@@ -6,10 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface OrderItem {
-  name: string;
-  quantity: number;
-  price: number;
-  /** @nullable */
-  size?: string | null;
+export interface OrderAction {
+  action?: string;
+  time?: string;
+  name?: string;
 }

@@ -23,10 +23,13 @@ import type {
   AvailabilityInput,
   AvailabilityResponse,
   EarningsSummary,
+  GetOrderHistoryParams,
   HealthStatus,
   OkResponse,
   OrderStatusInput,
   Rider,
+  RiderLocation,
+  RiderLocationInput,
   RiderLoginInput,
   RiderOrder,
   RiderRegisterInput
@@ -635,20 +638,27 @@ export function useGetActiveOrders<TData = Awaited<ReturnType<typeof getActiveOr
 
 
 
-export const getGetOrderHistoryUrl = () => {
+export const getGetOrderHistoryUrl = (params?: GetOrderHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/rider/orders/history`
+  return stringifiedParams.length > 0 ? `/api/rider/orders/history?${stringifiedParams}` : `/api/rider/orders/history`
 }
 
 /**
  * @summary Get rider's completed deliveries
  */
-export const getOrderHistory = async ( options?: RequestInit): Promise<RiderOrder[]> => {
+export const getOrderHistory = async (params?: GetOrderHistoryParams, options?: RequestInit): Promise<RiderOrder[]> => {
 
-  return customFetch<RiderOrder[]>(getGetOrderHistoryUrl(),
+  return customFetch<RiderOrder[]>(getGetOrderHistoryUrl(params),
   {
     ...options,
     method: 'GET'
@@ -661,23 +671,23 @@ export const getOrderHistory = async ( options?: RequestInit): Promise<RiderOrde
 
 
 
-export const getGetOrderHistoryQueryKey = () => {
+export const getGetOrderHistoryQueryKey = (params?: GetOrderHistoryParams,) => {
     return [
-    `/api/rider/orders/history`
+    `/api/rider/orders/history`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetOrderHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getOrderHistory>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrderHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetOrderHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getOrderHistory>>, TError = ErrorType<unknown>>(params?: GetOrderHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrderHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetOrderHistoryQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetOrderHistoryQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOrderHistory>>> = ({ signal }) => getOrderHistory({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOrderHistory>>> = ({ signal }) => getOrderHistory(params, { signal, ...requestOptions });
 
 
 
@@ -695,11 +705,11 @@ export type GetOrderHistoryQueryError = ErrorType<unknown>
  */
 
 export function useGetOrderHistory<TData = Awaited<ReturnType<typeof getOrderHistory>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrderHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetOrderHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrderHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetOrderHistoryQueryOptions(options)
+  const queryOptions = getGetOrderHistoryQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -990,6 +1000,154 @@ export function useGetRiderEarnings<TData = Awaited<ReturnType<typeof getRiderEa
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetRiderEarningsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPushRiderLocationUrl = () => {
+
+
+
+
+  return `/api/rider/location`
+}
+
+/**
+ * @summary Push the rider's current GPS location for an active order
+ */
+export const pushRiderLocation = async (riderLocationInput: RiderLocationInput, options?: RequestInit): Promise<OkResponse> => {
+
+  return customFetch<OkResponse>(getPushRiderLocationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      riderLocationInput,)
+  }
+);}
+
+
+
+
+export const getPushRiderLocationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pushRiderLocation>>, TError,{data: BodyType<RiderLocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof pushRiderLocation>>, TError,{data: BodyType<RiderLocationInput>}, TContext> => {
+
+const mutationKey = ['pushRiderLocation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pushRiderLocation>>, {data: BodyType<RiderLocationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  pushRiderLocation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PushRiderLocationMutationResult = NonNullable<Awaited<ReturnType<typeof pushRiderLocation>>>
+    export type PushRiderLocationMutationBody = BodyType<RiderLocationInput>
+    export type PushRiderLocationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Push the rider's current GPS location for an active order
+ */
+export const usePushRiderLocation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pushRiderLocation>>, TError,{data: BodyType<RiderLocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof pushRiderLocation>>,
+        TError,
+        {data: BodyType<RiderLocationInput>},
+        TContext
+      > => {
+      return useMutation(getPushRiderLocationMutationOptions(options));
+    }
+
+export const getGetRiderLocationUrl = (orderId: string,) => {
+
+
+
+
+  return `/api/orders/${orderId}/rider-location`
+}
+
+/**
+ * @summary Get the rider's current location for an order (public)
+ */
+export const getRiderLocation = async (orderId: string, options?: RequestInit): Promise<RiderLocation> => {
+
+  return customFetch<RiderLocation>(getGetRiderLocationUrl(orderId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRiderLocationQueryKey = (orderId: string,) => {
+    return [
+    `/api/orders/${orderId}/rider-location`
+    ] as const;
+    }
+
+
+export const getGetRiderLocationQueryOptions = <TData = Awaited<ReturnType<typeof getRiderLocation>>, TError = ErrorType<void>>(orderId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderLocation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRiderLocationQueryKey(orderId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRiderLocation>>> = ({ signal }) => getRiderLocation(orderId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(orderId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRiderLocation>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRiderLocationQueryResult = NonNullable<Awaited<ReturnType<typeof getRiderLocation>>>
+export type GetRiderLocationQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the rider's current location for an order (public)
+ */
+
+export function useGetRiderLocation<TData = Awaited<ReturnType<typeof getRiderLocation>>, TError = ErrorType<void>>(
+ orderId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderLocation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRiderLocationQueryOptions(orderId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

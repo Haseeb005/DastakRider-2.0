@@ -156,6 +156,13 @@ paths:
       operationId: getOrderHistory
       tags: [orders]
       summary: Get rider's completed deliveries
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [today, week, month, all]
       responses:
         "200":
           description: OK
@@ -251,6 +258,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/EarningsSummary"
 
+  /rider/location:
+    post:
+      operationId: pushRiderLocation
+      tags: [orders]
+      summary: Push the rider's current GPS location for an active order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiderLocationInput"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  /orders/{orderId}/rider-location:
+    get:
+      operationId: getRiderLocation
+      tags: [orders]
+      summary: Get the rider's current location for an order (public)
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiderLocation"
+        "404":
+          description: No recent location
+
 components:
   schemas:
     HealthStatus:
@@ -278,6 +325,8 @@ components:
           type: number
         price:
           type: number
+        size:
+          type: ["string", "null"]
       required:
         - name
         - quantity
@@ -305,6 +354,16 @@ components:
         rating:
           type: number
         ratingCount:
+          type: number
+        riderZones:
+          type: array
+          items:
+            type: string
+        pendingCollection:
+          type: number
+        unpaidCollection:
+          type: number
+        tillNoonFare:
           type: number
       required:
         - id
@@ -343,6 +402,44 @@ components:
             $ref: "#/components/schemas/OrderItem"
         userName:
           type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        zone:
+          type: ["string", "null"]
+        distance:
+          type: ["string", "null"]
+        martAddress:
+          type: ["string", "null"]
+        martPhone:
+          type: ["string", "null"]
+        paymentType:
+          type: ["string", "null"]
+        orderNum:
+          type: ["string", "null"]
+        comment:
+          type: ["string", "null"]
+        riderFare:
+          type: number
+        tip:
+          type: number
+        discount:
+          type: number
+        platformFee:
+          type: number
+        vatAmount:
+          type: number
+        paidToRider:
+          type: boolean
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderAction"
+        acceptedTime:
+          type: ["string", "null"]
+        pickUpTime:
+          type: ["string", "null"]
+        timeWhenDelivered:
+          type: ["string", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -361,6 +458,16 @@ components:
         - subtotal
         - createdAt
 
+    OrderAction:
+      type: object
+      properties:
+        action:
+          type: string
+        time:
+          type: string
+        name:
+          type: string
+
     EarningsSummary:
       type: object
       properties:
@@ -368,17 +475,33 @@ components:
           type: number
         totalDeliveries:
           type: number
+        totalOrderAmount:
+          type: number
         todayEarnings:
           type: number
         todayDeliveries:
+          type: number
+        todayOrderAmount:
           type: number
         weekEarnings:
           type: number
         weekDeliveries:
           type: number
+        weekOrderAmount:
+          type: number
+        monthEarnings:
+          type: number
+        monthDeliveries:
+          type: number
+        monthOrderAmount:
+          type: number
         rating:
           type: number
         ratingCount:
+          type: number
+        pendingCollection:
+          type: number
+        unpaidCollection:
           type: number
       required:
         - totalEarnings
@@ -389,6 +512,34 @@ components:
         - weekDeliveries
         - rating
         - ratingCount
+
+    RiderLocationInput:
+      type: object
+      properties:
+        orderId:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+      required:
+        - orderId
+        - lat
+        - lng
+
+    RiderLocation:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        ts:
+          type: number
+      required:
+        - lat
+        - lng
+        - ts
 
     RiderRegisterInput:
       type: object

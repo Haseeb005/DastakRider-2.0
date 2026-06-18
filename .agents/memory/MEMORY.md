@@ -1,1 +1,2 @@
 - [Dastak DB schema](dastak-db-schema.md) — rider app uses the REAL prod Mongo: riders are `users` with `type:"rider"` (plaintext passwords), orders use capitalized statuses + `_id`/`riderId`/`riderFare`.
+- [Dastak shared-DB safety + GPS authz](dastak-shared-db-safety.md) — additive-only writes to shared orders/users (no canonical-status/counter writes); GPS push needs ownership+in-transit guard; PKT=UTC+5 no DST.

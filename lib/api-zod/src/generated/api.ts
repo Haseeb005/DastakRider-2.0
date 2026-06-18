@@ -46,7 +46,11 @@ export const LoginRiderResponse = zod.object({
   "totalEarnings": zod.number(),
   "totalDeliveries": zod.number(),
   "rating": zod.number(),
-  "ratingCount": zod.number()
+  "ratingCount": zod.number(),
+  "riderZones": zod.array(zod.string()).optional(),
+  "pendingCollection": zod.number().optional(),
+  "unpaidCollection": zod.number().optional(),
+  "tillNoonFare": zod.number().optional()
 })
 
 
@@ -71,7 +75,11 @@ export const GetRiderMeResponse = zod.object({
   "totalEarnings": zod.number(),
   "totalDeliveries": zod.number(),
   "rating": zod.number(),
-  "ratingCount": zod.number()
+  "ratingCount": zod.number(),
+  "riderZones": zod.array(zod.string()).optional(),
+  "pendingCollection": zod.number().optional(),
+  "unpaidCollection": zod.number().optional(),
+  "tillNoonFare": zod.number().optional()
 })
 
 
@@ -103,9 +111,32 @@ export const GetAvailableOrdersResponseItem = zod.object({
   "items": zod.array(zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
-  "price": zod.number()
+  "price": zod.number(),
+  "size": zod.string().nullish()
 })).optional(),
   "userName": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "zone": zod.string().nullish(),
+  "distance": zod.string().nullish(),
+  "martAddress": zod.string().nullish(),
+  "martPhone": zod.string().nullish(),
+  "paymentType": zod.string().nullish(),
+  "orderNum": zod.string().nullish(),
+  "comment": zod.string().nullish(),
+  "riderFare": zod.number().optional(),
+  "tip": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "vatAmount": zod.number().optional(),
+  "paidToRider": zod.boolean().optional(),
+  "actions": zod.array(zod.object({
+  "action": zod.string().optional(),
+  "time": zod.string().optional(),
+  "name": zod.string().optional()
+})).optional(),
+  "acceptedTime": zod.string().nullish(),
+  "pickUpTime": zod.string().nullish(),
+  "timeWhenDelivered": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish(),
   "riderId": zod.string().nullish(),
@@ -130,9 +161,32 @@ export const GetActiveOrdersResponseItem = zod.object({
   "items": zod.array(zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
-  "price": zod.number()
+  "price": zod.number(),
+  "size": zod.string().nullish()
 })).optional(),
   "userName": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "zone": zod.string().nullish(),
+  "distance": zod.string().nullish(),
+  "martAddress": zod.string().nullish(),
+  "martPhone": zod.string().nullish(),
+  "paymentType": zod.string().nullish(),
+  "orderNum": zod.string().nullish(),
+  "comment": zod.string().nullish(),
+  "riderFare": zod.number().optional(),
+  "tip": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "vatAmount": zod.number().optional(),
+  "paidToRider": zod.boolean().optional(),
+  "actions": zod.array(zod.object({
+  "action": zod.string().optional(),
+  "time": zod.string().optional(),
+  "name": zod.string().optional()
+})).optional(),
+  "acceptedTime": zod.string().nullish(),
+  "pickUpTime": zod.string().nullish(),
+  "timeWhenDelivered": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish(),
   "riderId": zod.string().nullish(),
@@ -145,6 +199,10 @@ export const GetActiveOrdersResponse = zod.array(GetActiveOrdersResponseItem)
 /**
  * @summary Get rider's completed deliveries
  */
+export const GetOrderHistoryQueryParams = zod.object({
+  "period": zod.enum(['today', 'week', 'month', 'all']).optional()
+})
+
 export const GetOrderHistoryResponseItem = zod.object({
   "id": zod.string(),
   "restaurantName": zod.string().nullish(),
@@ -157,9 +215,32 @@ export const GetOrderHistoryResponseItem = zod.object({
   "items": zod.array(zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
-  "price": zod.number()
+  "price": zod.number(),
+  "size": zod.string().nullish()
 })).optional(),
   "userName": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "zone": zod.string().nullish(),
+  "distance": zod.string().nullish(),
+  "martAddress": zod.string().nullish(),
+  "martPhone": zod.string().nullish(),
+  "paymentType": zod.string().nullish(),
+  "orderNum": zod.string().nullish(),
+  "comment": zod.string().nullish(),
+  "riderFare": zod.number().optional(),
+  "tip": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "vatAmount": zod.number().optional(),
+  "paidToRider": zod.boolean().optional(),
+  "actions": zod.array(zod.object({
+  "action": zod.string().optional(),
+  "time": zod.string().optional(),
+  "name": zod.string().optional()
+})).optional(),
+  "acceptedTime": zod.string().nullish(),
+  "pickUpTime": zod.string().nullish(),
+  "timeWhenDelivered": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish(),
   "riderId": zod.string().nullish(),
@@ -188,9 +269,32 @@ export const AcceptOrderResponse = zod.object({
   "items": zod.array(zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
-  "price": zod.number()
+  "price": zod.number(),
+  "size": zod.string().nullish()
 })).optional(),
   "userName": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "zone": zod.string().nullish(),
+  "distance": zod.string().nullish(),
+  "martAddress": zod.string().nullish(),
+  "martPhone": zod.string().nullish(),
+  "paymentType": zod.string().nullish(),
+  "orderNum": zod.string().nullish(),
+  "comment": zod.string().nullish(),
+  "riderFare": zod.number().optional(),
+  "tip": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "vatAmount": zod.number().optional(),
+  "paidToRider": zod.boolean().optional(),
+  "actions": zod.array(zod.object({
+  "action": zod.string().optional(),
+  "time": zod.string().optional(),
+  "name": zod.string().optional()
+})).optional(),
+  "acceptedTime": zod.string().nullish(),
+  "pickUpTime": zod.string().nullish(),
+  "timeWhenDelivered": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish(),
   "riderId": zod.string().nullish(),
@@ -219,9 +323,32 @@ export const MarkOrderArrivedResponse = zod.object({
   "items": zod.array(zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
-  "price": zod.number()
+  "price": zod.number(),
+  "size": zod.string().nullish()
 })).optional(),
   "userName": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "zone": zod.string().nullish(),
+  "distance": zod.string().nullish(),
+  "martAddress": zod.string().nullish(),
+  "martPhone": zod.string().nullish(),
+  "paymentType": zod.string().nullish(),
+  "orderNum": zod.string().nullish(),
+  "comment": zod.string().nullish(),
+  "riderFare": zod.number().optional(),
+  "tip": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "vatAmount": zod.number().optional(),
+  "paidToRider": zod.boolean().optional(),
+  "actions": zod.array(zod.object({
+  "action": zod.string().optional(),
+  "time": zod.string().optional(),
+  "name": zod.string().optional()
+})).optional(),
+  "acceptedTime": zod.string().nullish(),
+  "pickUpTime": zod.string().nullish(),
+  "timeWhenDelivered": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish(),
   "riderId": zod.string().nullish(),
@@ -253,9 +380,32 @@ export const UpdateOrderStatusResponse = zod.object({
   "items": zod.array(zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
-  "price": zod.number()
+  "price": zod.number(),
+  "size": zod.string().nullish()
 })).optional(),
   "userName": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "zone": zod.string().nullish(),
+  "distance": zod.string().nullish(),
+  "martAddress": zod.string().nullish(),
+  "martPhone": zod.string().nullish(),
+  "paymentType": zod.string().nullish(),
+  "orderNum": zod.string().nullish(),
+  "comment": zod.string().nullish(),
+  "riderFare": zod.number().optional(),
+  "tip": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "platformFee": zod.number().optional(),
+  "vatAmount": zod.number().optional(),
+  "paidToRider": zod.boolean().optional(),
+  "actions": zod.array(zod.object({
+  "action": zod.string().optional(),
+  "time": zod.string().optional(),
+  "name": zod.string().optional()
+})).optional(),
+  "acceptedTime": zod.string().nullish(),
+  "pickUpTime": zod.string().nullish(),
+  "timeWhenDelivered": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish(),
   "riderId": zod.string().nullish(),
@@ -270,12 +420,48 @@ export const UpdateOrderStatusResponse = zod.object({
 export const GetRiderEarningsResponse = zod.object({
   "totalEarnings": zod.number(),
   "totalDeliveries": zod.number(),
+  "totalOrderAmount": zod.number().optional(),
   "todayEarnings": zod.number(),
   "todayDeliveries": zod.number(),
+  "todayOrderAmount": zod.number().optional(),
   "weekEarnings": zod.number(),
   "weekDeliveries": zod.number(),
+  "weekOrderAmount": zod.number().optional(),
+  "monthEarnings": zod.number().optional(),
+  "monthDeliveries": zod.number().optional(),
+  "monthOrderAmount": zod.number().optional(),
   "rating": zod.number(),
-  "ratingCount": zod.number()
+  "ratingCount": zod.number(),
+  "pendingCollection": zod.number().optional(),
+  "unpaidCollection": zod.number().optional()
+})
+
+
+/**
+ * @summary Push the rider's current GPS location for an active order
+ */
+export const PushRiderLocationBody = zod.object({
+  "orderId": zod.string(),
+  "lat": zod.number(),
+  "lng": zod.number()
+})
+
+export const PushRiderLocationResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Get the rider's current location for an order (public)
+ */
+export const GetRiderLocationParams = zod.object({
+  "orderId": zod.coerce.string()
+})
+
+export const GetRiderLocationResponse = zod.object({
+  "lat": zod.number(),
+  "lng": zod.number(),
+  "ts": zod.number()
 })
 
 

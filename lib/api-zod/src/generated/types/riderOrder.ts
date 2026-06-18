@@ -5,6 +5,7 @@
  * Dastak Rider App API
  * OpenAPI spec version: 0.1.0
  */
+import type { OrderAction } from './orderAction';
 import type { OrderItem } from './orderItem';
 
 export interface RiderOrder {
@@ -22,6 +23,35 @@ export interface RiderOrder {
   items?: OrderItem[];
   /** @nullable */
   userName?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  zone?: string | null;
+  /** @nullable */
+  distance?: string | null;
+  /** @nullable */
+  martAddress?: string | null;
+  /** @nullable */
+  martPhone?: string | null;
+  /** @nullable */
+  paymentType?: string | null;
+  /** @nullable */
+  orderNum?: string | null;
+  /** @nullable */
+  comment?: string | null;
+  riderFare?: number;
+  tip?: number;
+  discount?: number;
+  platformFee?: number;
+  vatAmount?: number;
+  paidToRider?: boolean;
+  actions?: OrderAction[];
+  /** @nullable */
+  acceptedTime?: string | null;
+  /** @nullable */
+  pickUpTime?: string | null;
+  /** @nullable */
+  timeWhenDelivered?: string | null;
   createdAt: string;
   /** @nullable */
   updatedAt?: string | null;

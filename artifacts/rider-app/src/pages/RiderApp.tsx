@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetRiderMe,
@@ -18,6 +18,7 @@ import {
   useMarkOrderArrived,
   useGetRiderEarnings,
   getGetRiderEarningsQueryKey,
+  usePushRiderLocation,
   type Rider,
   type RiderOrder,
 } from "@workspace/api-client-react";
@@ -42,6 +43,14 @@ import {
   Star,
   Wallet,
   Power,
+  Bell,
+  X,
+  Clock,
+  CreditCard,
+  Banknote,
+  Volume2,
+  Store,
+  Receipt,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -95,6 +104,136 @@ const CITIES = [
   "Quetta",
   "Sargodha",
 ];
+
+// Parse a deal item name like "Burger Deal (Coleslaw, Small Drink, Fries)" into a
+// base name + the list of selections inside the parentheses.
+function parseItemName(fullName: string): { baseName: string; selections: string[] } {
+  const match = fullName.match(/^(.*?)\s*\((.+)\)\s*$/);
+  if (match) {
+    return {
+      baseName: match[1].trim(),
+      selections: match[2].split(",").map((s) => s.trim()).filter(Boolean),
+    };
+  }
+  return { baseName: fullName, selections: [] };
+}
+
+function formatDateTime(dateStr?: string | null) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
+  return d.toLocaleString("en-PK", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+// ── New-order alert: Web Audio arpeggio + browser notification ──────────────────
+// Plays an ascending E-major arpeggio (E5 → G5 → B5 → E6) for ~10 seconds.
+function playOrderAlert(): () => void {
+  const AudioCtx =
+    (window as any).AudioContext || (window as any).webkitAudioContext;
+  if (!AudioCtx) return () => {};
+  let ctx: AudioContext;
+  try {
+    ctx = new AudioCtx();
+  } catch {
+    return () => {};
+  }
+  const melody = [
+    { freq: 659, dur: 0.1 }, // E5
+    { freq: 784, dur: 0.1 }, // G5
+    { freq: 988, dur: 0.1 }, // B5
+    { freq: 1319, dur: 0.2 }, // E6
+  ];
+  const cycleLen = melody.reduce((s, n) => s + n.dur, 0) + 0.2;
+  const cycles = Math.ceil(10 / cycleLen);
+  let t = ctx.currentTime + 0.05;
+  for (let c = 0; c < cycles; c++) {
+    melody.forEach((note, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = i % 2 === 0 ? "triangle" : "sine";
+      osc.frequency.value = note.freq;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + note.dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + note.dur + 0.02);
+      t += note.dur;
+    });
+    t += 0.2;
+  }
+  const stopAt = (t + 0.3) * 1000 - ctx.currentTime * 1000;
+  const timer = setTimeout(() => ctx.close().catch(() => {}), Math.max(stopAt, 0));
+  return () => {
+    clearTimeout(timer);
+    ctx.close().catch(() => {});
+  };
+}
+
+// Tracks seen order IDs; alerts (sound + notification) when genuinely new ones appear.
+function useOrderAlert(orders: RiderOrder[], isOnline: boolean) {
+  const seen = useRef<Set<string>>(new Set());
+  const seeded = useRef(false);
+  const stopFn = useRef<(() => void) | null>(null);
+  const [newCount, setNewCount] = useState(0);
+
+  const stopAlert = () => {
+    stopFn.current?.();
+    stopFn.current = null;
+    setNewCount(0);
+  };
+
+  useEffect(() => {
+    if (!isOnline) return;
+    const ids = orders.map((o) => o.id);
+    if (!seeded.current) {
+      seen.current = new Set(ids);
+      seeded.current = true;
+      return;
+    }
+    const fresh = ids.filter((id) => !seen.current.has(id));
+    if (fresh.length > 0) {
+      fresh.forEach((id) => seen.current.add(id));
+      setNewCount((n) => n + fresh.length);
+      stopFn.current?.();
+      stopFn.current = playOrderAlert();
+      if ("Notification" in window && Notification.permission === "granted") {
+        try {
+          new Notification("New delivery order!", {
+            body: `${fresh.length} new order${fresh.length > 1 ? "s" : ""} available to pick up.`,
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    // Drop IDs that are no longer available so they can re-alert if they return.
+    seen.current.forEach((id) => {
+      if (!ids.includes(id)) seen.current.delete(id);
+    });
+  }, [orders, isOnline]);
+
+  // Reset seeding when going offline so coming back online re-seeds silently.
+  useEffect(() => {
+    if (!isOnline) {
+      seeded.current = false;
+      stopAlert();
+    }
+  }, [isOnline]);
+
+  const triggerTest = () => {
+    stopFn.current?.();
+    stopFn.current = playOrderAlert();
+  };
+
+  return { newCount, triggerTest, stopAlert };
+}
 
 // ── Login / Register ──────────────────────────────────────────────────────────
 
@@ -270,6 +409,204 @@ function LoginForm() {
   );
 }
 
+// ── Order Detail Modal ────────────────────────────────────────────────────────
+
+function DetailRow({ label, value }: { label: string; value?: ReactNode }) {
+  if (value == null || value === "" || value === false) return null;
+  return (
+    <div className="flex justify-between gap-3 text-sm">
+      <span className="text-gray-500">{label}</span>
+      <span className="font-medium text-gray-900 text-right">{value}</span>
+    </div>
+  );
+}
+
+function RiderOrderDetailModal({
+  order,
+  onClose,
+}: {
+  order: RiderOrder;
+  onClose: () => void;
+}) {
+  const isCod = (order.paymentType || "").toLowerCase().includes("cod") ||
+    (order.paymentType || "").toLowerCase().includes("cash");
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-full max-w-md max-h-[88vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl">
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
+          <div className="min-w-0">
+            <h3 className="font-bold text-gray-900 truncate">{order.restaurantName || "Order"}</h3>
+            {order.orderNum && <p className="text-xs text-gray-400">Order #{order.orderNum}</p>}
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 shrink-0">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Status + payment */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge className={`border-0 text-xs ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-700"}`}>
+              {STATUS_LABELS[order.status] || order.status}
+            </Badge>
+            {order.paymentType && (
+              <Badge className={`border-0 text-xs ${isCod ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+                {isCod ? <Banknote className="w-3 h-3 mr-1 inline" /> : <CreditCard className="w-3 h-3 mr-1 inline" />}
+                {order.paymentType}
+              </Badge>
+            )}
+          </div>
+
+          {/* Customer */}
+          <div className="space-y-1.5">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Customer</h4>
+            {order.userName && (
+              <div className="flex items-center gap-2 text-sm text-gray-700">
+                <User className="w-4 h-4 text-orange-500 shrink-0" /> {order.userName}
+              </div>
+            )}
+            {order.address && (
+              <div className="flex items-start gap-2 text-sm text-gray-700">
+                <MapPin className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" /> {order.address}
+              </div>
+            )}
+            {order.phone && (
+              <div className="flex items-center gap-2 text-sm">
+                <Phone className="w-4 h-4 text-orange-500 shrink-0" />
+                <a href={`tel:${order.phone}`} className="text-blue-600 font-medium">{order.phone}</a>
+              </div>
+            )}
+          </div>
+
+          {/* Restaurant */}
+          {(order.martAddress || order.martPhone) && (
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Restaurant</h4>
+              {order.martAddress && (
+                <div className="flex items-start gap-2 text-sm text-gray-700">
+                  <Store className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" /> {order.martAddress}
+                </div>
+              )}
+              {order.martPhone && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone className="w-4 h-4 text-orange-500 shrink-0" />
+                  <a href={`tel:${order.martPhone}`} className="text-blue-600 font-medium">{order.martPhone}</a>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Items with deal parsing */}
+          {order.items && order.items.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Items ({order.items.length})
+              </h4>
+              {order.items.map((item, i) => {
+                const { baseName, selections } = parseItemName(item.name);
+                return (
+                  <div key={i} className="bg-gray-50 rounded-lg p-3">
+                    <div className="flex justify-between text-sm font-medium text-gray-900">
+                      <span>
+                        {item.quantity}× {baseName}
+                        {item.size ? ` (${item.size})` : ""}
+                      </span>
+                      <span>{formatMoney(item.price * item.quantity)}</span>
+                    </div>
+                    {selections.length > 0 && (
+                      <ol className="mt-1.5 ml-1 space-y-0.5 text-xs text-gray-500 list-decimal list-inside">
+                        {selections.map((s, j) => (
+                          <li key={j}>{s}</li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Bill summary */}
+          <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1.5">
+              <Receipt className="w-3.5 h-3.5" /> Bill
+            </h4>
+            <DetailRow label="Order Total" value={formatMoney(order.total)} />
+            <DetailRow label="Your Earning" value={<span className="text-green-600">{formatMoney(order.riderFare || order.deliveryFee)}</span>} />
+            {(order.tip ?? 0) > 0 && <DetailRow label="Tip" value={formatMoney(order.tip ?? 0)} />}
+            {(order.discount ?? 0) > 0 && (
+              <DetailRow label="Discount" value={`- ${formatMoney(order.discount ?? 0)}`} />
+            )}
+            {order.distance && <DetailRow label="Distance" value={`${order.distance} km`} />}
+            {order.zone && <DetailRow label="Zone" value={order.zone} />}
+            {isCod && (
+              <DetailRow
+                label="Cash to collect"
+                value={<span className="text-amber-700">{formatMoney(order.total)}</span>}
+              />
+            )}
+            {order.paidToRider && <DetailRow label="Settled" value="Paid to you ✓" />}
+          </div>
+
+          {order.comment && (
+            <div className="text-sm">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Note</h4>
+              <p className="text-gray-700 bg-yellow-50 rounded-lg p-3">{order.comment}</p>
+            </div>
+          )}
+
+          {/* Timeline */}
+          <div className="space-y-1.5">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" /> Timeline
+            </h4>
+            <DetailRow label="Placed" value={formatDateTime(order.createdAt)} />
+            <DetailRow label="Accepted" value={formatDateTime(order.acceptedTime)} />
+            <DetailRow label="Picked up" value={formatDateTime(order.pickUpTime)} />
+            <DetailRow label="Delivered" value={formatDateTime(order.timeWhenDelivered)} />
+          </div>
+
+          {order.actions && order.actions.length > 0 && (
+            <div className="space-y-1">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Activity Log</h4>
+              {order.actions.map((a, i) => (
+                <div key={i} className="flex justify-between text-xs text-gray-500">
+                  <span>{a.action}{a.name ? ` — ${a.name}` : ""}</span>
+                  <span>{a.time}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Push the rider's GPS location for the order in transit, every ~15s, while one
+// is picked up. In-memory on the server; the customer's tracking page reads it.
+function useLocationTracking(activeOrders: RiderOrder[]) {
+  const pushLocation = usePushRiderLocation();
+  const inTransit = activeOrders.find((o) => o.status === "Rider Picked Up");
+  const orderId = inTransit?.id;
+  const pushRef = useRef(pushLocation.mutate);
+  pushRef.current = pushLocation.mutate;
+
+  useEffect(() => {
+    if (!orderId || typeof navigator === "undefined" || !navigator.geolocation) return;
+    const send = (pos: GeolocationPosition) =>
+      pushRef.current({
+        data: { orderId, lat: pos.coords.latitude, lng: pos.coords.longitude },
+      });
+    navigator.geolocation.getCurrentPosition(send, () => {}, { enableHighAccuracy: true });
+    const id = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(send, () => {}, { enableHighAccuracy: true });
+    }, 15_000);
+    return () => clearInterval(id);
+  }, [orderId]);
+}
+
 // ── Order Card ────────────────────────────────────────────────────────────────
 
 function OrderCard({
@@ -277,6 +614,7 @@ function OrderCard({
   onAccept,
   onStatusUpdate,
   onArrived,
+  onClick,
   showAccept,
   showStatus,
   busy,
@@ -285,6 +623,7 @@ function OrderCard({
   onAccept?: () => void;
   onStatusUpdate?: (status: string) => void;
   onArrived?: () => void;
+  onClick?: () => void;
   showAccept?: boolean;
   showStatus?: boolean;
   busy?: boolean;
@@ -329,7 +668,10 @@ function OrderCard({
   return (
     <Card className="overflow-hidden border-0 shadow-md bg-white">
       <CardContent className="p-0">
-        <div className="p-4">
+        <div
+          className={`p-4 ${onClick ? "cursor-pointer active:bg-gray-50" : ""}`}
+          onClick={onClick}
+        >
           <div className="flex items-start justify-between mb-3">
             <div className="flex-1 min-w-0">
               <h3 className="font-bold text-gray-900 truncate">{order.restaurantName || "Restaurant"}</h3>
@@ -369,16 +711,27 @@ function OrderCard({
                 {order.items.length} item{order.items.length !== 1 ? "s" : ""}
               </p>
               <div className="space-y-1">
-                {order.items.slice(0, 3).map((item, i) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span className="text-gray-700">
-                      {item.quantity}× {item.name}
-                    </span>
-                    <span className="text-gray-500 font-medium">
-                      {formatMoney(item.price * item.quantity)}
-                    </span>
-                  </div>
-                ))}
+                {order.items.slice(0, 3).map((item, i) => {
+                  const { baseName, selections } = parseItemName(item.name);
+                  return (
+                    <div key={i}>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700">
+                          {item.quantity}× {baseName}
+                          {item.size ? ` (${item.size})` : ""}
+                        </span>
+                        <span className="text-gray-500 font-medium">
+                          {formatMoney(item.price * item.quantity)}
+                        </span>
+                      </div>
+                      {selections.length > 0 && (
+                        <p className="text-xs text-gray-400 truncate ml-1">
+                          {selections.join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
                 {order.items.length > 3 && (
                   <p className="text-xs text-gray-400">+{order.items.length - 3} more items</p>
                 )}
@@ -393,7 +746,9 @@ function OrderCard({
             </div>
             <div className="text-right">
               <p className="text-xs text-gray-400">Your Earning</p>
-              <p className="font-bold text-green-600 text-lg">{formatMoney(order.deliveryFee || 50)}</p>
+              <p className="font-bold text-green-600 text-lg">
+                {formatMoney(order.riderFare || order.deliveryFee || 50)}
+              </p>
             </div>
           </div>
         </div>
@@ -433,6 +788,7 @@ function OrderCard({
 function AvailableOrders({ rider }: { rider: Rider }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [selected, setSelected] = useState<RiderOrder | null>(null);
 
   const {
     data: orders = [],
@@ -445,6 +801,15 @@ function AvailableOrders({ rider }: { rider: Rider }) {
       enabled: rider.isOnline,
     },
   });
+
+  const { newCount, triggerTest, stopAlert } = useOrderAlert(orders, rider.isOnline);
+
+  // Ask for notification permission once, when the rider goes online.
+  useEffect(() => {
+    if (rider.isOnline && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, [rider.isOnline]);
 
   const acceptMutation = useAcceptOrder();
 
@@ -479,11 +844,39 @@ function AvailableOrders({ rider }: { rider: Rider }) {
 
   return (
     <div className="p-4 space-y-4">
+      {/* New-order alert banner */}
+      {newCount > 0 && (
+        <div className="flex items-center gap-3 rounded-xl bg-orange-500 text-white px-4 py-3 shadow-lg animate-pulse">
+          <Bell className="w-5 h-5 shrink-0" />
+          <p className="flex-1 text-sm font-semibold">
+            {newCount} new order{newCount > 1 ? "s" : ""} just arrived!
+          </p>
+          <button
+            onClick={stopAlert}
+            className="p-1 rounded-full hover:bg-white/20"
+            aria-label="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-gray-900">Available Orders</h2>
-        <Button variant="ghost" size="sm" onClick={() => refetch()} className="text-orange-600 hover:text-orange-700">
-          <RefreshCw className="w-4 h-4 mr-1" /> Refresh
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={triggerTest}
+            className="text-orange-600 hover:text-orange-700"
+            title="Test alert sound"
+          >
+            <Volume2 className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => refetch()} className="text-orange-600 hover:text-orange-700">
+            <RefreshCw className="w-4 h-4 mr-1" /> Refresh
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -510,9 +903,14 @@ function AvailableOrders({ rider }: { rider: Rider }) {
               showAccept
               busy={acceptMutation.isPending}
               onAccept={() => handleAccept(order.id)}
+              onClick={() => setSelected(order)}
             />
           ))}
         </>
+      )}
+
+      {selected && (
+        <RiderOrderDetailModal order={selected} onClose={() => setSelected(null)} />
       )}
     </div>
   );
@@ -523,6 +921,7 @@ function AvailableOrders({ rider }: { rider: Rider }) {
 function ActiveDelivery() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [selected, setSelected] = useState<RiderOrder | null>(null);
 
   const {
     data: orders = [],
@@ -598,8 +997,13 @@ function ActiveDelivery() {
             busy={statusMutation.isPending || arrivedMutation.isPending}
             onStatusUpdate={(status) => handleStatus(order.id, status)}
             onArrived={() => handleArrived(order.id)}
+            onClick={() => setSelected(order)}
           />
         ))
+      )}
+
+      {selected && (
+        <RiderOrderDetailModal order={selected} onClose={() => setSelected(null)} />
       )}
     </div>
   );
@@ -607,9 +1011,35 @@ function ActiveDelivery() {
 
 // ── History / Earnings Tab ────────────────────────────────────────────────────
 
+const HISTORY_PERIODS: Array<{ key: "today" | "week" | "month" | "all"; label: string }> = [
+  { key: "today", label: "Today" },
+  { key: "week", label: "Week" },
+  { key: "month", label: "Month" },
+  { key: "all", label: "All" },
+];
+
 function DeliveryHistory() {
+  const [period, setPeriod] = useState<"today" | "week" | "month" | "all">("today");
+  const [selected, setSelected] = useState<RiderOrder | null>(null);
+
   const { data: earnings } = useGetRiderEarnings();
-  const { data: history = [], isLoading } = useGetOrderHistory();
+  const { data: history = [], isLoading } = useGetOrderHistory(
+    { period },
+    { query: { queryKey: getGetOrderHistoryQueryKey({ period }) } },
+  );
+
+  // Earnings figures for the currently-selected period.
+  const periodStats =
+    period === "today"
+      ? { earnings: earnings?.todayEarnings, deliveries: earnings?.todayDeliveries, amount: earnings?.todayOrderAmount }
+      : period === "week"
+        ? { earnings: earnings?.weekEarnings, deliveries: earnings?.weekDeliveries, amount: earnings?.weekOrderAmount }
+        : period === "month"
+          ? { earnings: earnings?.monthEarnings, deliveries: earnings?.monthDeliveries, amount: earnings?.monthOrderAmount }
+          : { earnings: earnings?.totalEarnings, deliveries: earnings?.totalDeliveries, amount: earnings?.totalOrderAmount };
+
+  const pending = earnings?.pendingCollection ?? 0;
+  const unpaid = earnings?.unpaidCollection ?? 0;
 
   return (
     <div className="p-4 space-y-4">
@@ -631,16 +1061,50 @@ function DeliveryHistory() {
               <p className="text-xs opacity-80 mt-1">{earnings.weekDeliveries} deliveries</p>
             </div>
           </Card>
-          <Card className="border-0 shadow-md col-span-2 overflow-hidden">
-            <div className="bg-gradient-to-br from-green-500 to-green-600 p-4 text-white flex justify-between items-center">
-              <div>
-                <p className="text-xs opacity-80 mb-1">Total Earnings</p>
-                <p className="text-3xl font-bold">{formatMoney(earnings.totalEarnings)}</p>
-                <p className="text-xs opacity-80 mt-1">{earnings.totalDeliveries} total deliveries</p>
-              </div>
-              <Wallet className="w-12 h-12 opacity-30" />
+          <Card className="border-0 shadow-md overflow-hidden">
+            <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-4 text-white">
+              <p className="text-xs opacity-80 mb-1">This Month</p>
+              <p className="text-2xl font-bold">{formatMoney(earnings.monthEarnings ?? 0)}</p>
+              <p className="text-xs opacity-80 mt-1">{earnings.monthDeliveries ?? 0} deliveries</p>
             </div>
           </Card>
+          <Card className="border-0 shadow-md overflow-hidden">
+            <div className="bg-gradient-to-br from-green-500 to-green-600 p-4 text-white flex justify-between items-start">
+              <div>
+                <p className="text-xs opacity-80 mb-1">All Time</p>
+                <p className="text-2xl font-bold">{formatMoney(earnings.totalEarnings)}</p>
+                <p className="text-xs opacity-80 mt-1">{earnings.totalDeliveries} deliveries</p>
+              </div>
+              <Wallet className="w-8 h-8 opacity-30" />
+            </div>
+          </Card>
+
+          {/* Cash collection */}
+          {(pending > 0 || unpaid > 0) && (
+            <>
+              <Card className="border-0 shadow-md overflow-hidden">
+                <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-4 text-white">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Banknote className="w-4 h-4 opacity-80" />
+                    <p className="text-xs opacity-80">Cash to Deposit</p>
+                  </div>
+                  <p className="text-2xl font-bold">{formatMoney(pending)}</p>
+                  <p className="text-xs opacity-80 mt-1">COD collected from customers</p>
+                </div>
+              </Card>
+              <Card className="border-0 shadow-md overflow-hidden">
+                <div className="bg-gradient-to-br from-rose-500 to-rose-600 p-4 text-white">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Wallet className="w-4 h-4 opacity-80" />
+                    <p className="text-xs opacity-80">Unpaid to You</p>
+                  </div>
+                  <p className="text-2xl font-bold">{formatMoney(unpaid)}</p>
+                  <p className="text-xs opacity-80 mt-1">Fares pending settlement</p>
+                </div>
+              </Card>
+            </>
+          )}
+
           {earnings.rating > 0 && (
             <Card className="border-0 shadow-md col-span-2 overflow-hidden">
               <div className="bg-gradient-to-br from-yellow-400 to-orange-400 p-4 text-white flex justify-between items-center">
@@ -656,7 +1120,44 @@ function DeliveryHistory() {
         </div>
       )}
 
-      <h3 className="font-semibold text-gray-700 mt-2">Recent Deliveries</h3>
+      {/* Period filter */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+        {HISTORY_PERIODS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setPeriod(key)}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+              period === key ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Period totals row */}
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="border-0 shadow-sm bg-white">
+          <CardContent className="p-3 text-center">
+            <p className="text-lg font-bold text-green-600">{formatMoney(periodStats.earnings ?? 0)}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Earned</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-white">
+          <CardContent className="p-3 text-center">
+            <p className="text-lg font-bold text-gray-900">{periodStats.deliveries ?? 0}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Deliveries</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-white">
+          <CardContent className="p-3 text-center">
+            <p className="text-lg font-bold text-gray-900">{formatMoney(periodStats.amount ?? 0)}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Order Vol.</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <h3 className="font-semibold text-gray-700 mt-2">Deliveries</h3>
 
       {isLoading ? (
         <div className="space-y-3">
@@ -667,12 +1168,16 @@ function DeliveryHistory() {
       ) : history.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-32 text-center">
           <History className="w-12 h-12 text-gray-300 mb-2" />
-          <p className="text-gray-500">No deliveries yet</p>
+          <p className="text-gray-500">No deliveries in this period</p>
         </div>
       ) : (
         <div className="space-y-3">
           {history.map((order) => (
-            <Card key={order.id} className="border-0 shadow-sm bg-white">
+            <Card
+              key={order.id}
+              className="border-0 shadow-sm bg-white cursor-pointer active:bg-gray-50"
+              onClick={() => setSelected(order)}
+            >
               <CardContent className="p-3 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center shrink-0">
                   <CheckCircle className="w-5 h-5 text-green-600" />
@@ -682,16 +1187,22 @@ function DeliveryHistory() {
                     {order.restaurantName || "Restaurant"}
                   </p>
                   <p className="text-xs text-gray-500 truncate">{order.address || "—"}</p>
-                  <p className="text-xs text-gray-400">{timeAgo(order.updatedAt || order.createdAt)}</p>
+                  <p className="text-xs text-gray-400">
+                    {formatDateTime(order.timeWhenDelivered || order.updatedAt || order.createdAt)}
+                  </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-bold text-green-600">{formatMoney(order.deliveryFee || 50)}</p>
+                  <p className="font-bold text-green-600">{formatMoney(order.riderFare || order.deliveryFee || 50)}</p>
                   <p className="text-xs text-gray-400">{formatMoney(order.total)} order</p>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
+      )}
+
+      {selected && (
+        <RiderOrderDetailModal order={selected} onClose={() => setSelected(null)} />
       )}
     </div>
   );
@@ -804,6 +1315,30 @@ function RiderProfile({ rider }: { rider: Rider }) {
         </CardContent>
       </Card>
 
+      {/* Cash collection */}
+      {((rider.pendingCollection ?? 0) > 0 || (rider.unpaidCollection ?? 0) > 0) && (
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="border-0 shadow-sm bg-white">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Banknote className="w-4 h-4 text-amber-500" />
+                <p className="text-xs text-gray-500">Cash to Deposit</p>
+              </div>
+              <p className="text-xl font-bold text-amber-600">{formatMoney(rider.pendingCollection ?? 0)}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm bg-white">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Wallet className="w-4 h-4 text-rose-500" />
+                <p className="text-xs text-gray-500">Unpaid to You</p>
+              </div>
+              <p className="text-xl font-bold text-rose-600">{formatMoney(rider.unpaidCollection ?? 0)}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Account info */}
       <Card className="border-0 shadow-sm bg-white">
         <CardContent className="p-4 space-y-3">
@@ -820,6 +1355,18 @@ function RiderProfile({ rider }: { rider: Rider }) {
             <span className="text-gray-500">Vehicle</span>
             <span className="font-medium capitalize">{rider.vehicleType}</span>
           </div>
+          {(rider.tillNoonFare ?? 0) > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Per-Delivery Fare</span>
+              <span className="font-medium">{formatMoney(rider.tillNoonFare ?? 0)}</span>
+            </div>
+          )}
+          {rider.riderZones && rider.riderZones.length > 0 && (
+            <div className="flex justify-between text-sm gap-3">
+              <span className="text-gray-500 shrink-0">Zones</span>
+              <span className="font-medium text-right">{rider.riderZones.join(", ")}</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -848,6 +1395,10 @@ export default function RiderApp() {
   const { data: activeOrders = [] } = useGetActiveOrders({
     query: { queryKey: getGetActiveOrdersQueryKey(), refetchInterval: 10_000, enabled: !!rider },
   });
+
+  // GPS tracking runs app-wide (not tab-scoped) so it keeps publishing while a
+  // picked-up order is in transit, regardless of which tab the rider is on.
+  useLocationTracking(activeOrders);
 
   if (isLoading) {
     return (
