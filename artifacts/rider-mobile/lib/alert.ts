@@ -1,11 +1,29 @@
+import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 
+// The looping ringtone played on native when a new order arrives.
+const ORDER_TONE = require("../assets/sounds/new-order.wav");
+
+// Configure the native audio session once so the tone rings even when the
+// phone is on silent (iOS) and routes through the speaker.
+let audioModeReady = false;
+function ensureAudioMode() {
+  if (audioModeReady) return;
+  setAudioModeAsync({ playsInSilentMode: true })
+    .then(() => {
+      audioModeReady = true;
+    })
+    .catch(() => {
+      // Leave unready so a later alert retries the setup.
+    });
+}
+
 /**
  * Plays a new-order alert. On web, an ascending arpeggio via Web Audio.
- * On native, a sequence of haptic pulses for ~15 seconds (Expo Go has no
- * tone-synthesis API). Returns a stop function.
+ * On native, a looping ringtone (expo-audio) plus repeated haptic pulses.
+ * Returns a stop function.
  */
 export function playOrderAlert(): () => void {
   if (Platform.OS === "web") {
@@ -43,6 +61,18 @@ export function playOrderAlert(): () => void {
     }
   }
 
+  // Looping ringtone via expo-audio (works on a real device + Expo Go).
+  let player: ReturnType<typeof createAudioPlayer> | null = null;
+  try {
+    ensureAudioMode();
+    player = createAudioPlayer(ORDER_TONE);
+    player.loop = true;
+    player.volume = 1;
+    player.play();
+  } catch {
+    player = null;
+  }
+
   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
     () => {},
   );
@@ -54,7 +84,17 @@ export function playOrderAlert(): () => void {
     );
     if (count >= 25) clearInterval(id);
   }, 600);
-  return () => clearInterval(id);
+  return () => {
+    clearInterval(id);
+    if (player) {
+      try {
+        player.remove();
+      } catch {
+        // ignore
+      }
+      player = null;
+    }
+  };
 }
 
 const AUTO_HIDE_MS = 12000;

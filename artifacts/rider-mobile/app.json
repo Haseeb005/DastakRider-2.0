@@ -27,7 +27,8 @@
           "origin": "https://replit.com/"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
