@@ -42,10 +42,10 @@ const TABS: {
   },
   {
     name: "history",
-    title: "History",
-    feather: "clock",
-    sf: "clock",
-    sfSelected: "clock.fill",
+    title: "Earnings",
+    feather: "credit-card",
+    sf: "creditcard",
+    sfSelected: "creditcard.fill",
   },
   {
     name: "profile",
