@@ -652,9 +652,20 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
   const items = Array.isArray(doc.products)
     ? doc.products.map((p: any) => ({
         name: p.productName || p.name || "Item",
+        // The ordered count lives in `count`; for single/non-deal products the
+        // `quantity` field instead holds the size/variation descriptor
+        // (e.g. "Half", "Regular", "12 Pcs"), so it must not be used as the count.
         quantity: Number(p.count) || 1,
         price: toNum(p.price ?? p.net),
-        size: p.size || p.variation || null,
+        size:
+          p.size ||
+          p.variation ||
+          (p.type !== "deal" &&
+          typeof p.quantity === "string" &&
+          p.quantity.trim()
+            ? p.quantity.trim()
+            : null) ||
+          null,
         type: p.type || null,
         // For deal products, the included choices live in selectedFlavours.
         dealItems: Array.isArray(p.selectedFlavours)
