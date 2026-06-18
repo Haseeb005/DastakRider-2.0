@@ -23,6 +23,16 @@
   --color-primary-foreground: hsl(var(--primary-foreground));
   --color-primary-border: var(--primary-border);
 
+  /* DastakMart brand crimson scale (#DB143C) */
+  --color-brand-50: #FDE7EC;
+  --color-brand-100: #FBD0D9;
+  --color-brand-200: #F7A3B5;
+  --color-brand-400: #EC4D6E;
+  --color-brand-500: #DB143C;
+  --color-brand-600: #C01234;
+  --color-brand-700: #A30F2C;
+  --color-brand-800: #7E0B22;
+
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
   --color-secondary-border: var(--secondary-border);
@@ -88,17 +98,17 @@
   --sidebar: 0 0% 100%;
   --sidebar-foreground: 222.2 84% 4.9%;
   --sidebar-border: 214.3 31.8% 91.4%;
-  --sidebar-primary: 16 100% 50%;
+  --sidebar-primary: 348 83% 47%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 210 40% 96.1%;
   --sidebar-accent-foreground: 222.2 47.4% 11.2%;
-  --sidebar-ring: 16 100% 50%;
+  --sidebar-ring: 348 83% 47%;
 
   --popover: 0 0% 100%;
   --popover-foreground: 222.2 84% 4.9%;
   --popover-border: 214.3 31.8% 91.4%;
 
-  --primary: 16 100% 50%;
+  --primary: 348 83% 47%;
   --primary-foreground: 0 0% 100%;
 
   --secondary: 210 40% 96.1%;
@@ -114,9 +124,9 @@
   --destructive-foreground: 0 0% 100%;
 
   --input: 214.3 31.8% 91.4%;
-  --ring: 16 100% 50%;
+  --ring: 348 83% 47%;
 
-  --chart-1: 16 100% 50%;
+  --chart-1: 348 83% 47%;
   --chart-2: 173 58% 39%;
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 66%;
@@ -167,17 +177,17 @@
   --sidebar: 225 17% 10%;
   --sidebar-foreground: 210 40% 98%;
   --sidebar-border: 215 20% 18%;
-  --sidebar-primary: 16 100% 50%;
+  --sidebar-primary: 348 83% 47%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 215 20% 18%;
   --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 16 100% 50%;
+  --sidebar-ring: 348 83% 47%;
 
   --popover: 225 17% 10%;
   --popover-foreground: 210 40% 98%;
   --popover-border: 215 20% 18%;
 
-  --primary: 16 100% 50%;
+  --primary: 348 83% 47%;
   --primary-foreground: 0 0% 100%;
 
   --secondary: 215 20% 18%;
@@ -193,9 +203,9 @@
   --destructive-foreground: 210 40% 98%;
 
   --input: 215 20% 18%;
-  --ring: 16 100% 50%;
+  --ring: 348 83% 47%;
 
-  --chart-1: 16 100% 50%;
+  --chart-1: 348 83% 47%;
   --chart-2: 173 58% 39%;
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 66%;

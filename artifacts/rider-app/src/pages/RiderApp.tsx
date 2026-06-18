@@ -71,7 +71,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-800",
-  "Admin Accepted": "bg-orange-100 text-orange-800",
+  "Admin Accepted": "bg-brand-100 text-brand-800",
   "Rider Accepted": "bg-blue-100 text-blue-800",
   "Rider Picked Up": "bg-purple-100 text-purple-800",
   Delivered: "bg-green-100 text-green-800",
@@ -257,14 +257,14 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-500 to-red-600 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-brand-500 to-red-600 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Bike className="w-10 h-10 text-orange-500" />
+            <Bike className="w-10 h-10 text-brand-500" />
           </div>
           <h1 className="text-3xl font-bold text-white">Dastak Rider</h1>
-          <p className="text-orange-100 mt-1">Delivery Partner App</p>
+          <p className="text-brand-100 mt-1">Delivery Partner App</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-6">
@@ -288,7 +288,7 @@ function LoginForm() {
             </div>
             <Button
               type="submit"
-              className="w-full py-3 text-base bg-orange-500 hover:bg-orange-600 text-white"
+              className="w-full py-3 text-base rounded-full bg-brand-500 hover:bg-brand-600 text-white"
               disabled={pending}
             >
               {pending ? "Logging in..." : "Log In"}
@@ -296,7 +296,7 @@ function LoginForm() {
           </form>
         </div>
 
-        <p className="text-center text-orange-200 text-xs mt-6">Dastak Rider App · Powered by Dastak</p>
+        <p className="text-center text-brand-200 text-xs mt-6">Dastak Rider App · Powered by Dastak</p>
       </div>
     </div>
   );
@@ -365,18 +365,18 @@ function RiderOrderDetailModal({
             <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Customer</h4>
             {order.userName && (
               <div className="flex items-center gap-2 text-sm text-gray-700">
-                <User className="w-4 h-4 text-orange-500 shrink-0" /> {order.userName}
+                <User className="w-4 h-4 text-brand-500 shrink-0" /> {order.userName}
               </div>
             )}
             {order.phone && (
               <div className="flex items-center gap-2 text-sm">
-                <Phone className="w-4 h-4 text-orange-500 shrink-0" />
+                <Phone className="w-4 h-4 text-brand-500 shrink-0" />
                 <a href={`tel:${order.phone}`} className="text-blue-600 font-medium">{order.phone}</a>
               </div>
             )}
             {order.address && (
               <div className="flex items-start gap-2 text-sm text-gray-700">
-                <MapPin className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" /> {order.address}
+                <MapPin className="w-4 h-4 text-brand-500 shrink-0 mt-0.5" /> {order.address}
               </div>
             )}
             {order.distance && (
@@ -390,17 +390,17 @@ function RiderOrderDetailModal({
               <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Restaurant</h4>
               {order.restaurantName && (
                 <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <Store className="w-4 h-4 text-orange-500 shrink-0" /> {order.restaurantName}
+                  <Store className="w-4 h-4 text-brand-500 shrink-0" /> {order.restaurantName}
                 </div>
               )}
               {order.martAddress && (
                 <div className="flex items-start gap-2 text-sm text-gray-700">
-                  <MapPin className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" /> {order.martAddress}
+                  <MapPin className="w-4 h-4 text-brand-500 shrink-0 mt-0.5" /> {order.martAddress}
                 </div>
               )}
               {order.martPhone && (
                 <div className="flex items-center gap-2 text-sm">
-                  <Phone className="w-4 h-4 text-orange-500 shrink-0" />
+                  <Phone className="w-4 h-4 text-brand-500 shrink-0" />
                   <a href={`tel:${order.martPhone}`} className="text-blue-600 font-medium">{order.martPhone}</a>
                 </div>
               )}
@@ -564,7 +564,7 @@ function OrderCard({
   if (order.status === "Rider Accepted" && !order.riderArrived) {
     action = {
       label: "Arrived at Restaurant",
-      color: "bg-orange-500 hover:bg-orange-600",
+      color: "bg-brand-500 hover:bg-brand-600",
       kind: "arrived",
     };
   } else if (order.status === "Rider Accepted" && order.riderArrived) {
@@ -589,7 +589,7 @@ function OrderCard({
     ? "At Restaurant"
     : STATUS_LABELS[order.status] || order.status;
   const badgeColor = atRestaurant
-    ? "bg-orange-100 text-orange-800"
+    ? "bg-brand-100 text-brand-800"
     : STATUS_COLORS[order.status] || "bg-gray-100 text-gray-700";
 
   return (
@@ -612,13 +612,13 @@ function OrderCard({
           <div className="space-y-1.5 mb-3">
             {order.address && (
               <div className="flex items-start gap-2 text-sm text-gray-600">
-                <MapPin className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                <MapPin className="w-4 h-4 text-brand-500 shrink-0 mt-0.5" />
                 <span className="line-clamp-2">{order.address}</span>
               </div>
             )}
             {order.phone && (
               <div className="flex items-center gap-2 text-sm">
-                <Phone className="w-4 h-4 text-orange-500 shrink-0" />
+                <Phone className="w-4 h-4 text-brand-500 shrink-0" />
                 <a href={`tel:${order.phone}`} className="text-blue-600 font-medium">
                   {order.phone}
                 </a>
@@ -626,7 +626,7 @@ function OrderCard({
             )}
             {order.userName && (
               <div className="flex items-center gap-2 text-sm text-gray-600">
-                <User className="w-4 h-4 text-orange-500 shrink-0" />
+                <User className="w-4 h-4 text-brand-500 shrink-0" />
                 <span>{order.userName}</span>
               </div>
             )}
@@ -685,7 +685,7 @@ function OrderCard({
             <Button
               onClick={onAccept}
               disabled={busy}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold"
+              className="w-full rounded-full bg-brand-500 hover:bg-brand-600 text-white font-semibold"
             >
               <CheckCircle className="w-4 h-4 mr-2" /> Accept Order
             </Button>
@@ -699,7 +699,7 @@ function OrderCard({
                 action.kind === "arrived" ? onArrived?.() : onStatusUpdate?.(action.next)
               }
               disabled={busy}
-              className={`w-full text-white font-semibold ${action.color}`}
+              className={`w-full rounded-full text-white font-semibold ${action.color}`}
             >
               <Navigation className="w-4 h-4 mr-2" /> {action.label}
             </Button>
@@ -775,7 +775,7 @@ function AvailableOrders({ rider }: { rider: Rider }) {
     <div className="p-4 space-y-4">
       {/* New-order alert banner */}
       {newCount > 0 && (
-        <div className="flex items-center gap-3 rounded-xl bg-orange-500 text-white px-4 py-3 shadow-lg animate-pulse">
+        <div className="flex items-center gap-3 rounded-xl bg-brand-500 text-white px-4 py-3 shadow-lg animate-pulse">
           <Bell className="w-5 h-5 shrink-0" />
           <p className="flex-1 text-sm font-semibold">
             {newCount} new order{newCount > 1 ? "s" : ""} just arrived!
@@ -797,12 +797,12 @@ function AvailableOrders({ rider }: { rider: Rider }) {
             variant="ghost"
             size="sm"
             onClick={triggerTest}
-            className="text-orange-600 hover:text-orange-700"
+            className="text-brand-600 hover:text-brand-700"
             title="Test alert sound"
           >
             <Volume2 className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => refetch()} className="text-orange-600 hover:text-orange-700">
+          <Button variant="ghost" size="sm" onClick={() => refetch()} className="text-brand-600 hover:text-brand-700">
             <RefreshCw className="w-4 h-4 mr-1" /> Refresh
           </Button>
         </div>
@@ -904,7 +904,7 @@ function ActiveDelivery() {
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-gray-900">My Deliveries</h2>
-        <Button variant="ghost" size="sm" onClick={() => refetch()} className="text-orange-600 hover:text-orange-700">
+        <Button variant="ghost" size="sm" onClick={() => refetch()} className="text-brand-600 hover:text-brand-700">
           <RefreshCw className="w-4 h-4 mr-1" /> Refresh
         </Button>
       </div>
@@ -974,7 +974,7 @@ function DeliveryHistory() {
             key={key}
             onClick={() => setPeriod(key)}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-              period === key ? "bg-white text-orange-600 shadow-sm" : "text-gray-500"
+              period === key ? "bg-white text-brand-600 shadow-sm" : "text-gray-500"
             }`}
           >
             {label}
@@ -986,8 +986,8 @@ function DeliveryHistory() {
       {earnings && (
         <div className="grid grid-cols-3 gap-2 text-center">
           <div>
-            <p className="text-xs text-orange-500 font-medium mb-1">Today</p>
-            <p className="text-xl font-bold text-orange-600">{formatMoney(earnings.todayEarnings)}</p>
+            <p className="text-xs text-brand-500 font-medium mb-1">Today</p>
+            <p className="text-xl font-bold text-brand-600">{formatMoney(earnings.todayEarnings)}</p>
             <p className="text-xs text-gray-400 mt-0.5">{earnings.todayDeliveries} orders</p>
           </div>
           <div>
@@ -1019,7 +1019,7 @@ function DeliveryHistory() {
 
       {earnings && earnings.rating > 0 && (
         <Card className="border-0 shadow-md overflow-hidden">
-          <div className="bg-gradient-to-br from-yellow-400 to-orange-400 p-4 text-white flex justify-between items-center">
+          <div className="bg-gradient-to-br from-yellow-400 to-amber-500 p-4 text-white flex justify-between items-center">
             <div>
               <p className="text-xs opacity-80 mb-1">Your Rating</p>
               <p className="text-3xl font-bold">{earnings.rating.toFixed(1)} ⭐</p>
@@ -1116,14 +1116,14 @@ function RiderProfile({ rider }: { rider: Rider }) {
       <h2 className="text-lg font-bold text-gray-900">My Profile</h2>
 
       <Card className="border-0 shadow-md overflow-hidden">
-        <div className="bg-gradient-to-br from-orange-500 to-red-600 p-6 text-white">
+        <div className="bg-gradient-to-br from-brand-500 to-red-600 p-6 text-white">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-2xl font-bold">
               {(rider.name || "?").charAt(0).toUpperCase()}
             </div>
             <div>
               <h3 className="text-xl font-bold">{rider.name}</h3>
-              <p className="text-orange-100 text-sm">{rider.phone}</p>
+              <p className="text-brand-100 text-sm">{rider.phone}</p>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-xs bg-white/20 rounded-full px-2 py-0.5 capitalize">
                   {rider.vehicleType}
@@ -1275,9 +1275,9 @@ export default function RiderApp() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-orange-50 flex items-center justify-center">
+      <div className="min-h-screen bg-brand-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-3 animate-pulse">
+          <div className="w-16 h-16 bg-brand-500 rounded-full flex items-center justify-center mx-auto mb-3 animate-pulse">
             <Bike className="w-8 h-8 text-white" />
           </div>
           <p className="text-gray-500">Loading...</p>
@@ -1303,7 +1303,7 @@ export default function RiderApp() {
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center">
               <Bike className="w-4 h-4 text-white" />
             </div>
             <div>
@@ -1342,7 +1342,7 @@ export default function RiderApp() {
               key={key}
               onClick={() => setView(key)}
               className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors relative ${
-                view === key ? "text-orange-500" : "text-gray-400"
+                view === key ? "text-brand-500" : "text-gray-400"
               }`}
             >
               <div className="relative">
@@ -1355,7 +1355,7 @@ export default function RiderApp() {
               </div>
               <span>{label}</span>
               {view === key && (
-                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-orange-500 rounded-full" />
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-brand-500 rounded-full" />
               )}
             </button>
           ))}
