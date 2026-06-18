@@ -1013,9 +1013,9 @@ function ActiveDelivery() {
 
 const HISTORY_PERIODS: Array<{ key: "today" | "week" | "month" | "all"; label: string }> = [
   { key: "today", label: "Today" },
-  { key: "week", label: "Week" },
-  { key: "month", label: "Month" },
-  { key: "all", label: "All" },
+  { key: "week", label: "Weekly" },
+  { key: "month", label: "Monthly" },
+  { key: "all", label: "All Time" },
 ];
 
 function DeliveryHistory() {
@@ -1028,93 +1028,36 @@ function DeliveryHistory() {
     { query: { queryKey: getGetOrderHistoryQueryKey({ period }) } },
   );
 
-  // Earnings figures for the currently-selected period.
-  const periodStats =
-    period === "today"
-      ? { earnings: earnings?.todayEarnings, deliveries: earnings?.todayDeliveries, amount: earnings?.todayOrderAmount }
-      : period === "week"
-        ? { earnings: earnings?.weekEarnings, deliveries: earnings?.weekDeliveries, amount: earnings?.weekOrderAmount }
-        : period === "month"
-          ? { earnings: earnings?.monthEarnings, deliveries: earnings?.monthDeliveries, amount: earnings?.monthOrderAmount }
-          : { earnings: earnings?.totalEarnings, deliveries: earnings?.totalDeliveries, amount: earnings?.totalOrderAmount };
-
   const pending = earnings?.pendingCollection ?? 0;
   const unpaid = earnings?.unpaidCollection ?? 0;
+
+  const periodLabel =
+    period === "today" ? "Today"
+      : period === "week" ? "This Week"
+        : period === "month" ? "This Month"
+          : "All";
 
   return (
     <div className="p-4 space-y-4">
       <h2 className="text-lg font-bold text-gray-900">Earnings & History</h2>
 
-      {earnings && (
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="border-0 shadow-md overflow-hidden">
-            <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-4 text-white">
-              <p className="text-xs opacity-80 mb-1">Today</p>
-              <p className="text-2xl font-bold">{formatMoney(earnings.todayEarnings)}</p>
-              <p className="text-xs opacity-80 mt-1">{earnings.todayDeliveries} deliveries</p>
-            </div>
-          </Card>
-          <Card className="border-0 shadow-md overflow-hidden">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-4 text-white">
-              <p className="text-xs opacity-80 mb-1">This Week</p>
-              <p className="text-2xl font-bold">{formatMoney(earnings.weekEarnings)}</p>
-              <p className="text-xs opacity-80 mt-1">{earnings.weekDeliveries} deliveries</p>
-            </div>
-          </Card>
-          <Card className="border-0 shadow-md overflow-hidden">
-            <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-4 text-white">
-              <p className="text-xs opacity-80 mb-1">This Month</p>
-              <p className="text-2xl font-bold">{formatMoney(earnings.monthEarnings ?? 0)}</p>
-              <p className="text-xs opacity-80 mt-1">{earnings.monthDeliveries ?? 0} deliveries</p>
-            </div>
-          </Card>
-          <Card className="border-0 shadow-md overflow-hidden">
-            <div className="bg-gradient-to-br from-green-500 to-green-600 p-4 text-white flex justify-between items-start">
-              <div>
-                <p className="text-xs opacity-80 mb-1">All Time</p>
-                <p className="text-2xl font-bold">{formatMoney(earnings.totalEarnings)}</p>
-                <p className="text-xs opacity-80 mt-1">{earnings.totalDeliveries} deliveries</p>
-              </div>
-              <Wallet className="w-8 h-8 opacity-30" />
-            </div>
-          </Card>
-
-          {/* Cash collection */}
-          <Card className="border-0 shadow-md overflow-hidden">
-            <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-4 text-white">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Banknote className="w-4 h-4 opacity-80" />
-                <p className="text-xs opacity-80">Active Collection</p>
-              </div>
-              <p className="text-2xl font-bold">{formatMoney(pending)}</p>
-              <p className="text-xs opacity-80 mt-1">Cash in Hand</p>
-            </div>
-          </Card>
-          <Card className="border-0 shadow-md overflow-hidden">
-            <div className="bg-gradient-to-br from-rose-500 to-rose-600 p-4 text-white">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Wallet className="w-4 h-4 opacity-80" />
-                <p className="text-xs opacity-80">Pending Collection</p>
-              </div>
-              <p className="text-2xl font-bold">{formatMoney(unpaid)}</p>
-              <p className="text-xs opacity-80 mt-1">Unpaid to Company</p>
-            </div>
-          </Card>
-
-          {earnings.rating > 0 && (
-            <Card className="border-0 shadow-md col-span-2 overflow-hidden">
-              <div className="bg-gradient-to-br from-yellow-400 to-orange-400 p-4 text-white flex justify-between items-center">
-                <div>
-                  <p className="text-xs opacity-80 mb-1">Your Rating</p>
-                  <p className="text-3xl font-bold">{earnings.rating.toFixed(1)} ⭐</p>
-                  <p className="text-xs opacity-80 mt-1">from {earnings.ratingCount} ratings</p>
-                </div>
-                <Star className="w-12 h-12 opacity-30 fill-white" />
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
+      {/* Cash collection */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="border-0 shadow-md overflow-hidden">
+          <div className="bg-gradient-to-br from-red-500 to-orange-500 p-4 text-white">
+            <p className="text-xs opacity-90 mb-1">Active Collection</p>
+            <p className="text-3xl font-bold">{formatMoney(pending)}</p>
+            <p className="text-xs opacity-80 mt-2">Cash in hand</p>
+          </div>
+        </Card>
+        <Card className="border-0 shadow-md overflow-hidden">
+          <div className="bg-gradient-to-br from-rose-400 to-red-400 p-4 text-white">
+            <p className="text-xs opacity-90 mb-1">Pending Collection</p>
+            <p className="text-3xl font-bold">{formatMoney(unpaid)}</p>
+            <p className="text-xs opacity-80 mt-2">Unpaid to company</p>
+          </div>
+        </Card>
+      </div>
 
       {/* Period filter */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
@@ -1131,29 +1074,55 @@ function DeliveryHistory() {
         ))}
       </div>
 
-      {/* Period totals row */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="border-0 shadow-sm bg-white">
-          <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold text-green-600">{formatMoney(periodStats.earnings ?? 0)}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Earned</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm bg-white">
-          <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold text-gray-900">{periodStats.deliveries ?? 0}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Deliveries</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm bg-white">
-          <CardContent className="p-3 text-center">
-            <p className="text-lg font-bold text-gray-900">{formatMoney(periodStats.amount ?? 0)}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Order Vol.</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Today / Week / Month summary columns */}
+      {earnings && (
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <p className="text-xs text-orange-500 font-medium mb-1">Today</p>
+            <p className="text-xl font-bold text-orange-600">{formatMoney(earnings.todayEarnings)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{earnings.todayDeliveries} orders</p>
+          </div>
+          <div>
+            <p className="text-xs text-blue-500 font-medium mb-1">This Week</p>
+            <p className="text-xl font-bold text-blue-600">{formatMoney(earnings.weekEarnings)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{earnings.weekDeliveries} orders</p>
+          </div>
+          <div>
+            <p className="text-xs text-purple-500 font-medium mb-1">This Month</p>
+            <p className="text-xl font-bold text-purple-600">{formatMoney(earnings.monthEarnings ?? 0)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{earnings.monthDeliveries ?? 0} orders</p>
+          </div>
+        </div>
+      )}
 
-      <h3 className="font-semibold text-gray-700 mt-2">Deliveries</h3>
+      {/* Total earnings (all time) */}
+      {earnings && (
+        <Card className="border-0 shadow-md overflow-hidden">
+          <div className="bg-gradient-to-br from-green-500 to-green-600 p-5 text-white flex justify-between items-center">
+            <div>
+              <p className="text-xs opacity-90 mb-1">Total Earnings (All Time)</p>
+              <p className="text-3xl font-bold">{formatMoney(earnings.totalEarnings)}</p>
+              <p className="text-xs opacity-80 mt-1">{earnings.totalDeliveries} total deliveries</p>
+            </div>
+            <Wallet className="w-12 h-12 opacity-30" />
+          </div>
+        </Card>
+      )}
+
+      {earnings && earnings.rating > 0 && (
+        <Card className="border-0 shadow-md overflow-hidden">
+          <div className="bg-gradient-to-br from-yellow-400 to-orange-400 p-4 text-white flex justify-between items-center">
+            <div>
+              <p className="text-xs opacity-80 mb-1">Your Rating</p>
+              <p className="text-3xl font-bold">{earnings.rating.toFixed(1)} ⭐</p>
+              <p className="text-xs opacity-80 mt-1">from {earnings.ratingCount} ratings</p>
+            </div>
+            <Star className="w-12 h-12 opacity-30 fill-white" />
+          </div>
+        </Card>
+      )}
+
+      <h3 className="font-semibold text-gray-700 mt-2">{periodLabel} Deliveries</h3>
 
       {isLoading ? (
         <div className="space-y-3">
