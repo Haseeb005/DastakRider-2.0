@@ -55,9 +55,11 @@ function bearerRiderId(req: any): string {
 }
 
 // Real order status flow in the Dastak database:
-//   Pending -> Rider Accepted -> Rider Picked Up -> Delivered  (or Rejected)
+//   Pending -> Admin Accepted -> Rider Accepted -> Rider Picked Up -> Delivered  (or Rejected)
+// An order only becomes visible to riders once the admin has accepted it
+// ("Admin Accepted"). That is the trigger for the available list + new-order alert.
 const ACTIVE_STATUSES = ["Rider Accepted", "Rider Picked Up"];
-const AVAILABLE_STATUS = "Pending";
+const AVAILABLE_STATUS = "Admin Accepted";
 const DELIVERED_STATUS = "Delivered";
 const COD_TYPES = ["COD", "Cash", "cash", "cod"];
 
@@ -339,7 +341,7 @@ router.put("/rider/availability", async (req: any, res: any) => {
   }
 });
 
-// Available orders — unassigned pending orders, filtered to the rider's city & zones.
+// Available orders — unassigned admin-accepted orders, filtered to the rider's city & zones.
 // Faithful to the original: a rider only sees orders in their city whose zone is in
 // their assigned riderZones. (Zone filter applies only when the rider has zones set.)
 router.get("/rider/orders/available", async (req: any, res: any) => {

@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 
 /**
  * Plays a new-order alert. On web, an ascending arpeggio via Web Audio.
- * On native, a sequence of haptic pulses for ~10 seconds (Expo Go has no
+ * On native, a sequence of haptic pulses for ~15 seconds (Expo Go has no
  * tone-synthesis API). Returns a stop function.
  */
 export function playOrderAlert(): () => void {
@@ -18,7 +18,7 @@ export function playOrderAlert(): () => void {
       const melody = [659, 784, 988, 1319];
       const start = ctx.currentTime;
       let t = start;
-      for (let cycle = 0; cycle < 14 && t < start + 10; cycle++) {
+      for (let cycle = 0; cycle < 24 && t < start + 15; cycle++) {
         melody.forEach((freq, i) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -52,7 +52,7 @@ export function playOrderAlert(): () => void {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
       () => {},
     );
-    if (count >= 16) clearInterval(id);
+    if (count >= 25) clearInterval(id);
   }, 600);
   return () => clearInterval(id);
 }

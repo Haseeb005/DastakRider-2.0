@@ -5,6 +5,16 @@ description: Backend rules any rider client (web or mobile) must follow when pro
 
 # Rider order status progression contract
 
+## Availability gate: "Admin Accepted"
+
+An order becomes visible to riders (the available list + the new-order alert) ONLY when its status is `"Admin Accepted"` — NOT `"Pending"`. Full DB flow: `Pending → Admin Accepted → Rider Accepted → Rider Picked Up → Delivered` (or `Rejected`). The backend `AVAILABLE_STATUS` constant gates both `/rider/orders/available` and `/rider/orders/:id/accept`, so both must always reference the same status.
+
+**Why:** admin acceptance is the business trigger for rider visibility; the mobile app's `STATUS_LABELS` already mapped `"Admin Accepted"`→"Ready to Pick" before the gate was wired, confirming the exact string.
+
+**How to apply:** new-order alert beeps for ~15s on both apps; accepting an order must call `stopAlert()` immediately (before the accept mutation) so the beep silences on tap, not on server success.
+
+## Status progression
+
 The `/api/rider/orders/:orderId/status` PUT endpoint is strict. Any client (web app, Expo app, scripts) must follow these rules or it gets 400/409.
 
 - **Exact canonical status strings only.** The endpoint accepts ONLY `"Rider Picked Up"` and `"Delivered"`. Do NOT send snake_case (`rider_picked_up`/`delivered`) — that returns 400. Statuses in this DB are capitalized human strings throughout.

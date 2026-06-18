@@ -45,7 +45,7 @@ export default function AvailableScreen() {
   });
   const orders = ordersQ.data ?? [];
 
-  const { newCount, clearNew } = useOrderAlert(orders, isOnline);
+  const { newCount, clearNew, stopAlert } = useOrderAlert(orders, isOnline);
 
   const availabilityM = useUpdateRiderAvailability();
   const acceptM = useAcceptOrder();
@@ -62,6 +62,8 @@ export default function AvailableScreen() {
   };
 
   const accept = (order: RiderOrder) => {
+    // Accepting within the alert window must silence the beep immediately.
+    stopAlert();
     acceptM.mutate(
       { orderId: order.id },
       {

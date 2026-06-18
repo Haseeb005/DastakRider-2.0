@@ -62,6 +62,7 @@ type RiderView = "available" | "active" | "history" | "profile";
 
 const STATUS_LABELS: Record<string, string> = {
   Pending: "Waiting Pickup",
+  "Admin Accepted": "Ready to Pick",
   "Rider Accepted": "Accepted",
   "Rider Picked Up": "On the Way",
   Delivered: "Delivered",
@@ -70,6 +71,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-800",
+  "Admin Accepted": "bg-orange-100 text-orange-800",
   "Rider Accepted": "bg-blue-100 text-blue-800",
   "Rider Picked Up": "bg-purple-100 text-purple-800",
   Delivered: "bg-green-100 text-green-800",
@@ -118,7 +120,7 @@ function formatDateTime(dateStr?: string | null) {
 }
 
 // ── New-order alert: Web Audio arpeggio + browser notification ──────────────────
-// Plays an ascending E-major arpeggio (E5 → G5 → B5 → E6) for ~10 seconds.
+// Plays an ascending E-major arpeggio (E5 → G5 → B5 → E6) for ~15 seconds.
 function playOrderAlert(): () => void {
   const AudioCtx =
     (window as any).AudioContext || (window as any).webkitAudioContext;
@@ -136,7 +138,7 @@ function playOrderAlert(): () => void {
     { freq: 1319, dur: 0.2 }, // E6
   ];
   const cycleLen = melody.reduce((s, n) => s + n.dur, 0) + 0.2;
-  const cycles = Math.ceil(10 / cycleLen);
+  const cycles = Math.ceil(15 / cycleLen);
   let t = ctx.currentTime + 0.05;
   for (let c = 0; c < cycles; c++) {
     melody.forEach((note, i) => {
@@ -704,6 +706,8 @@ function AvailableOrders({ rider }: { rider: Rider }) {
   const acceptMutation = useAcceptOrder();
 
   const handleAccept = (orderId: string) => {
+    // Accepting within the alert window must silence the beep immediately.
+    stopAlert();
     acceptMutation.mutate(
       { orderId },
       {
