@@ -532,7 +532,6 @@ function RiderOrderDetailModal({
                       <span className="flex items-center gap-2">
                         <span>
                           {item.quantity}× {baseName}
-                          {item.size ? ` (${item.size})` : ""}
                         </span>
                         {isDeal && (
                           <span className="rounded-full bg-brand-500 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
@@ -542,6 +541,9 @@ function RiderOrderDetailModal({
                       </span>
                       <span>{formatMoney(item.price * item.quantity)}</span>
                     </div>
+                    {item.size && (
+                      <p className="mt-0.5 text-sm text-gray-700">{item.size}</p>
+                    )}
                     {selections.length > 0 && (
                       <ol className="mt-1.5 ml-1 space-y-0.5 text-xs text-gray-500 list-decimal list-inside">
                         {selections.map((s, j) => (

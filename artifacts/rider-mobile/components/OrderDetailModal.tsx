@@ -468,7 +468,6 @@ export function OrderDetailModal({
                           }}
                         >
                           {item.quantity}× {baseName}
-                          {item.size ? ` (${item.size})` : ""}
                         </Text>
                         {isDeal ? (
                           <Badge
@@ -478,6 +477,18 @@ export function OrderDetailModal({
                           />
                         ) : null}
                       </View>
+                      {item.size ? (
+                        <Text
+                          style={{
+                            fontFamily: "Inter_500Medium",
+                            fontSize: 12.5,
+                            color: c.foreground,
+                            marginTop: 3,
+                          }}
+                        >
+                          {item.size}
+                        </Text>
+                      ) : null}
                       {selections.map((sel, i) => (
                         <Text
                           key={i}
