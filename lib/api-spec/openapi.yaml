@@ -327,10 +327,28 @@ components:
           type: number
         size:
           type: ["string", "null"]
+        type:
+          type: ["string", "null"]
+          description: Product type from the order, e.g. "single" or "deal".
+        dealItems:
+          type: array
+          description: For deal products, the included choices (from selectedFlavours).
+          items:
+            $ref: "#/components/schemas/DealItem"
       required:
         - name
         - quantity
         - price
+
+    DealItem:
+      type: object
+      properties:
+        title:
+          type: ["string", "null"]
+        option:
+          type: ["string", "null"]
+        price:
+          type: number
 
     Rider:
       type: object
@@ -389,6 +407,10 @@ components:
           type: ["string", "null"]
         address:
           type: ["string", "null"]
+        martLatitude:
+          type: ["number", "null"]
+        martLongitude:
+          type: ["number", "null"]
         phone:
           type: ["string", "null"]
         status:

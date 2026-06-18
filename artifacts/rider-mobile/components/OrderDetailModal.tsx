@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
-import type { RiderOrder } from "@workspace/api-client-react";
-import React from "react";
+import type { OrderItem, RiderOrder } from "@workspace/api-client-react";
+import React, { useState } from "react";
 import {
   Linking,
   Modal,
@@ -114,21 +114,44 @@ export function OrderDetailModal({
   const c = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 20 : insets.top + 6;
+  const [dealItem, setDealItem] = useState<OrderItem | null>(null);
 
   if (!order) return null;
   const sc = statusColors(order.status, c);
   const cod = isCOD(order.paymentType);
 
+  const handleClose = () => {
+    setDealItem(null);
+    onClose();
+  };
+
   const callPhone = (phone?: string | null) => {
     if (phone) Linking.openURL(`tel:${phone}`).catch(() => {});
   };
+
+  const hasCoords =
+    typeof order.martLatitude === "number" &&
+    typeof order.martLongitude === "number";
+
+  const openRestaurantMaps = () => {
+    const query = hasCoords
+      ? `${order.martLatitude},${order.martLongitude}`
+      : [order.restaurantName, order.martAddress].filter(Boolean).join(" ");
+    if (!query) return;
+    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      query,
+    )}`;
+    Linking.openURL(url).catch(() => {});
+  };
+
+  const canNavigate = hasCoords || !!order.martAddress || !!order.restaurantName;
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <View style={{ flex: 1, backgroundColor: c.background }}>
         <View
@@ -167,7 +190,7 @@ export function OrderDetailModal({
             ) : null}
           </View>
           <Pressable
-            onPress={onClose}
+            onPress={handleClose}
             hitSlop={10}
             style={{
               width: 36,
@@ -240,6 +263,38 @@ export function OrderDetailModal({
                 </Text>
               </Pressable>
             ) : null}
+            {canNavigate ? (
+              <Pressable
+                onPress={openRestaurantMaps}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  marginTop: 12,
+                  alignSelf: "flex-start",
+                  backgroundColor: c.primary,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <Feather
+                  name="navigation"
+                  size={15}
+                  color={c.primaryForeground}
+                />
+                <Text
+                  style={{
+                    fontFamily: "Inter_700Bold",
+                    fontSize: 13,
+                    color: c.primaryForeground,
+                  }}
+                >
+                  Open in Google Maps
+                </Text>
+              </Pressable>
+            ) : null}
           </Section>
 
           <Section title="Customer">
@@ -298,54 +353,82 @@ export function OrderDetailModal({
                 </Text>
               </Pressable>
             ) : null}
-            {order.comment ? (
+          </Section>
+
+          {order.comment ? (
+            <Section title="Order notes">
               <View
-                style={{
-                  marginTop: 10,
-                  backgroundColor: c.warningBg,
-                  borderRadius: 10,
-                  padding: 10,
-                }}
+                style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}
               >
+                <Feather
+                  name="message-square"
+                  size={16}
+                  color={c.warning}
+                  style={{ marginTop: 1 }}
+                />
                 <Text
                   style={{
+                    flex: 1,
                     fontFamily: "Inter_500Medium",
-                    fontSize: 12,
-                    color: c.warning,
+                    fontSize: 14,
+                    lineHeight: 20,
+                    color: c.foreground,
                   }}
                 >
-                  Note: {order.comment}
+                  {order.comment}
                 </Text>
               </View>
-            ) : null}
-          </Section>
+            </Section>
+          ) : null}
 
           {order.items && order.items.length > 0 ? (
             <Section title={`Items (${order.items.length})`}>
               {order.items.map((item, idx) => {
                 const { baseName, selections } = parseItemName(item.name);
+                const isDeal =
+                  item.type === "deal" &&
+                  Array.isArray(item.dealItems) &&
+                  item.dealItems.length > 0;
                 return (
-                  <View
+                  <Pressable
                     key={idx}
+                    onPress={isDeal ? () => setDealItem(item) : undefined}
                     style={{
                       flexDirection: "row",
                       justifyContent: "space-between",
+                      alignItems: "center",
                       paddingVertical: 8,
                       borderTopWidth: idx === 0 ? 0 : 1,
                       borderTopColor: c.border,
                     }}
                   >
                     <View style={{ flex: 1, paddingRight: 10 }}>
-                      <Text
+                      <View
                         style={{
-                          fontFamily: "Inter_600SemiBold",
-                          fontSize: 14,
-                          color: c.foreground,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 8,
+                          flexWrap: "wrap",
                         }}
                       >
-                        {item.quantity}× {baseName}
-                        {item.size ? ` (${item.size})` : ""}
-                      </Text>
+                        <Text
+                          style={{
+                            fontFamily: "Inter_600SemiBold",
+                            fontSize: 14,
+                            color: c.foreground,
+                          }}
+                        >
+                          {item.quantity}× {baseName}
+                          {item.size ? ` (${item.size})` : ""}
+                        </Text>
+                        {isDeal ? (
+                          <Badge
+                            label="Deal"
+                            bg={c.primary}
+                            fg={c.primaryForeground}
+                          />
+                        ) : null}
+                      </View>
                       {selections.map((sel, i) => (
                         <Text
                           key={i}
@@ -359,6 +442,31 @@ export function OrderDetailModal({
                           • {sel}
                         </Text>
                       ))}
+                      {isDeal ? (
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 2,
+                            marginTop: 4,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontFamily: "Inter_600SemiBold",
+                              fontSize: 12,
+                              color: c.primary,
+                            }}
+                          >
+                            View what&apos;s included
+                          </Text>
+                          <Feather
+                            name="chevron-right"
+                            size={14}
+                            color={c.primary}
+                          />
+                        </View>
+                      ) : null}
                     </View>
                     <Text
                       style={{
@@ -369,7 +477,7 @@ export function OrderDetailModal({
                     >
                       {money(item.price)}
                     </Text>
-                  </View>
+                  </Pressable>
                 );
               })}
             </Section>
@@ -480,6 +588,147 @@ export function OrderDetailModal({
           ) : null}
         </ScrollView>
       </View>
+
+      <Modal
+        visible={!!dealItem}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDealItem(null)}
+      >
+        <Pressable
+          onPress={() => setDealItem(null)}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: c.background,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              paddingHorizontal: 20,
+              paddingTop: 18,
+              paddingBottom: insets.bottom + 20,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                marginBottom: 4,
+              }}
+            >
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Badge
+                  label="Deal"
+                  bg={c.primary}
+                  fg={c.primaryForeground}
+                />
+                <Text
+                  style={{
+                    fontFamily: "Inter_700Bold",
+                    fontSize: 18,
+                    color: c.foreground,
+                    marginTop: 8,
+                  }}
+                >
+                  {dealItem ? parseItemName(dealItem.name).baseName : ""}
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: "Inter_400Regular",
+                    fontSize: 13,
+                    color: c.mutedForeground,
+                    marginTop: 2,
+                  }}
+                >
+                  What&apos;s included
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setDealItem(null)}
+                hitSlop={10}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: c.muted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Feather name="x" size={18} color={c.foreground} />
+              </Pressable>
+            </View>
+
+            <View
+              style={{
+                marginTop: 12,
+                backgroundColor: c.card,
+                borderRadius: c.radius,
+                borderWidth: 1,
+                borderColor: c.border,
+                paddingHorizontal: 14,
+              }}
+            >
+              {(dealItem?.dealItems ?? []).map((d, i) => (
+                <View
+                  key={i}
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    paddingVertical: 12,
+                    borderTopWidth: i === 0 ? 0 : 1,
+                    borderTopColor: c.border,
+                  }}
+                >
+                  <View style={{ flex: 1, paddingRight: 10 }}>
+                    {d.title ? (
+                      <Text
+                        style={{
+                          fontFamily: "Inter_400Regular",
+                          fontSize: 11,
+                          letterSpacing: 0.3,
+                          textTransform: "uppercase",
+                          color: c.mutedForeground,
+                          marginBottom: 2,
+                        }}
+                      >
+                        {d.title}
+                      </Text>
+                    ) : null}
+                    <Text
+                      style={{
+                        fontFamily: "Inter_600SemiBold",
+                        fontSize: 15,
+                        color: c.foreground,
+                      }}
+                    >
+                      {d.option || "—"}
+                    </Text>
+                  </View>
+                  {d.price ? (
+                    <Text
+                      style={{
+                        fontFamily: "Inter_600SemiBold",
+                        fontSize: 13,
+                        color: c.mutedForeground,
+                      }}
+                    >
+                      + {money(d.price)}
+                    </Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Modal>
   );
 }

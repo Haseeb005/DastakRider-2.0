@@ -105,6 +105,8 @@ export const GetAvailableOrdersResponseItem = zod.object({
   "id": zod.string(),
   "restaurantName": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "martLatitude": zod.number().nullish(),
+  "martLongitude": zod.number().nullish(),
   "phone": zod.string().nullish(),
   "status": zod.string(),
   "total": zod.number(),
@@ -114,7 +116,13 @@ export const GetAvailableOrdersResponseItem = zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
   "price": zod.number(),
-  "size": zod.string().nullish()
+  "size": zod.string().nullish(),
+  "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
+  "dealItems": zod.array(zod.object({
+  "title": zod.string().nullish(),
+  "option": zod.string().nullish(),
+  "price": zod.number().optional()
+})).optional().describe('For deal products, the included choices (from selectedFlavours).')
 })).optional(),
   "userName": zod.string().nullish(),
   "city": zod.string().nullish(),
@@ -155,6 +163,8 @@ export const GetActiveOrdersResponseItem = zod.object({
   "id": zod.string(),
   "restaurantName": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "martLatitude": zod.number().nullish(),
+  "martLongitude": zod.number().nullish(),
   "phone": zod.string().nullish(),
   "status": zod.string(),
   "total": zod.number(),
@@ -164,7 +174,13 @@ export const GetActiveOrdersResponseItem = zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
   "price": zod.number(),
-  "size": zod.string().nullish()
+  "size": zod.string().nullish(),
+  "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
+  "dealItems": zod.array(zod.object({
+  "title": zod.string().nullish(),
+  "option": zod.string().nullish(),
+  "price": zod.number().optional()
+})).optional().describe('For deal products, the included choices (from selectedFlavours).')
 })).optional(),
   "userName": zod.string().nullish(),
   "city": zod.string().nullish(),
@@ -209,6 +225,8 @@ export const GetOrderHistoryResponseItem = zod.object({
   "id": zod.string(),
   "restaurantName": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "martLatitude": zod.number().nullish(),
+  "martLongitude": zod.number().nullish(),
   "phone": zod.string().nullish(),
   "status": zod.string(),
   "total": zod.number(),
@@ -218,7 +236,13 @@ export const GetOrderHistoryResponseItem = zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
   "price": zod.number(),
-  "size": zod.string().nullish()
+  "size": zod.string().nullish(),
+  "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
+  "dealItems": zod.array(zod.object({
+  "title": zod.string().nullish(),
+  "option": zod.string().nullish(),
+  "price": zod.number().optional()
+})).optional().describe('For deal products, the included choices (from selectedFlavours).')
 })).optional(),
   "userName": zod.string().nullish(),
   "city": zod.string().nullish(),
@@ -263,6 +287,8 @@ export const AcceptOrderResponse = zod.object({
   "id": zod.string(),
   "restaurantName": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "martLatitude": zod.number().nullish(),
+  "martLongitude": zod.number().nullish(),
   "phone": zod.string().nullish(),
   "status": zod.string(),
   "total": zod.number(),
@@ -272,7 +298,13 @@ export const AcceptOrderResponse = zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
   "price": zod.number(),
-  "size": zod.string().nullish()
+  "size": zod.string().nullish(),
+  "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
+  "dealItems": zod.array(zod.object({
+  "title": zod.string().nullish(),
+  "option": zod.string().nullish(),
+  "price": zod.number().optional()
+})).optional().describe('For deal products, the included choices (from selectedFlavours).')
 })).optional(),
   "userName": zod.string().nullish(),
   "city": zod.string().nullish(),
@@ -317,6 +349,8 @@ export const MarkOrderArrivedResponse = zod.object({
   "id": zod.string(),
   "restaurantName": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "martLatitude": zod.number().nullish(),
+  "martLongitude": zod.number().nullish(),
   "phone": zod.string().nullish(),
   "status": zod.string(),
   "total": zod.number(),
@@ -326,7 +360,13 @@ export const MarkOrderArrivedResponse = zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
   "price": zod.number(),
-  "size": zod.string().nullish()
+  "size": zod.string().nullish(),
+  "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
+  "dealItems": zod.array(zod.object({
+  "title": zod.string().nullish(),
+  "option": zod.string().nullish(),
+  "price": zod.number().optional()
+})).optional().describe('For deal products, the included choices (from selectedFlavours).')
 })).optional(),
   "userName": zod.string().nullish(),
   "city": zod.string().nullish(),
@@ -374,6 +414,8 @@ export const UpdateOrderStatusResponse = zod.object({
   "id": zod.string(),
   "restaurantName": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "martLatitude": zod.number().nullish(),
+  "martLongitude": zod.number().nullish(),
   "phone": zod.string().nullish(),
   "status": zod.string(),
   "total": zod.number(),
@@ -383,7 +425,13 @@ export const UpdateOrderStatusResponse = zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
   "price": zod.number(),
-  "size": zod.string().nullish()
+  "size": zod.string().nullish(),
+  "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
+  "dealItems": zod.array(zod.object({
+  "title": zod.string().nullish(),
+  "option": zod.string().nullish(),
+  "price": zod.number().optional()
+})).optional().describe('For deal products, the included choices (from selectedFlavours).')
 })).optional(),
   "userName": zod.string().nullish(),
   "city": zod.string().nullish(),

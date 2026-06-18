@@ -635,6 +635,12 @@ function toNum(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function toNumOrNull(v: any): number | null {
+  if (v == null || v === "") return null;
+  const n = parseFloat(String(v));
+  return Number.isFinite(n) ? n : null;
+}
+
 function fmtTime(v: any): string | null {
   if (!v) return null;
   const d = v instanceof Date ? v : new Date(v);
@@ -649,6 +655,15 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
         quantity: Number(p.count) || 1,
         price: toNum(p.price ?? p.net),
         size: p.size || p.variation || null,
+        type: p.type || null,
+        // For deal products, the included choices live in selectedFlavours.
+        dealItems: Array.isArray(p.selectedFlavours)
+          ? p.selectedFlavours.map((f: any) => ({
+              title: f.title || null,
+              option: f.option || null,
+              price: toNum(f.flavourPrice),
+            }))
+          : [],
       }))
     : [];
   const total = toNum(doc.orderTotal);
@@ -666,6 +681,8 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
     id: String(doc._id),
     restaurantName: doc.martName || null,
     address: doc.address || null,
+    martLatitude: toNumOrNull(doc.martLatitude),
+    martLongitude: toNumOrNull(doc.martLongitude),
     phone: doc.phone || null,
     status: doc.status,
     total,

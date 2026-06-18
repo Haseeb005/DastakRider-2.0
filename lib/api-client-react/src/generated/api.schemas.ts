@@ -13,12 +13,27 @@ export interface OkResponse {
   ok: boolean;
 }
 
+export interface DealItem {
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  option?: string | null;
+  price?: number;
+}
+
 export interface OrderItem {
   name: string;
   quantity: number;
   price: number;
   /** @nullable */
   size?: string | null;
+  /**
+     * Product type from the order, e.g. "single" or "deal".
+     * @nullable
+     */
+  type?: string | null;
+  /** For deal products, the included choices (from selectedFlavours). */
+  dealItems?: DealItem[];
 }
 
 export interface Rider {
@@ -52,6 +67,10 @@ export interface RiderOrder {
   restaurantName?: string | null;
   /** @nullable */
   address?: string | null;
+  /** @nullable */
+  martLatitude?: number | null;
+  /** @nullable */
+  martLongitude?: number | null;
   /** @nullable */
   phone?: string | null;
   status: string;

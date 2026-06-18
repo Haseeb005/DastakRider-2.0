@@ -14,6 +14,8 @@ The rider app talks to the **real Dastak production MongoDB** (`MONGODB_URI`, db
 **Orders** (`orders` collection) link to a rider via `riderId` (string of the rider user's ObjectId hex), plus `riderName`, `riderPhone`. Orders have no separate `id` field — use `_id` (ObjectId).
 - Status flow: `Pending` → `Rider Accepted` → `Rider Picked Up` → `Delivered` (also `Rejected`, and typo variants `Rejectes`/`Rejjected`). These exact strings matter for queries.
 - Rider earning per order is `riderFare` (number), fallback `deliveryCharges` (often a string). Order value is `orderTotal`. Line items are in `products[]` (`productName`, `count`, `price`).
+- Each `products[]` element has `type: "single" | "deal"`. For `type:"deal"`, the included choices live in `selectedFlavours: [{title, option, flavourPrice}]` (up to ~9). There is no separate deal-contents object — `selectedFlavours` IS the "what's in the deal" list.
+- Customer order notes/instructions are stored ONLY in the order's `comment` field (e.g. "2 Roti Extra"). Other note-like names (`note`, `instructions`, `orderNote`, …) are never populated — always read `comment`.
 - Mart = restaurant: `martName`, `martPhone`, `martAddress`, `martLatitude/Longitude`; customer = `name`, `phone`, `address`, `latitude/longitude`. `selfDelivery: true` means the mart delivers — exclude from available list.
 
 **Why:** the rider app was originally written against an invented `riders`/`passwordHash` schema and lowercase statuses (`placed`/`confirmed`/`delivered`), so no real rider could log in and no real order matched. Backend (`artifacts/api-server/src/routes/rider.ts`) and frontend status logic must use the real schema above.

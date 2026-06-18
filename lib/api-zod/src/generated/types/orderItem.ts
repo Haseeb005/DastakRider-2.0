@@ -5,6 +5,7 @@
  * Dastak Rider App API
  * OpenAPI spec version: 0.1.0
  */
+import type { DealItem } from './dealItem';
 
 export interface OrderItem {
   name: string;
@@ -12,4 +13,11 @@ export interface OrderItem {
   price: number;
   /** @nullable */
   size?: string | null;
+  /**
+     * Product type from the order, e.g. "single" or "deal".
+     * @nullable
+     */
+  type?: string | null;
+  /** For deal products, the included choices (from selectedFlavours). */
+  dealItems?: DealItem[];
 }

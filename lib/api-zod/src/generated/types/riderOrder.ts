@@ -15,6 +15,10 @@ export interface RiderOrder {
   /** @nullable */
   address?: string | null;
   /** @nullable */
+  martLatitude?: number | null;
+  /** @nullable */
+  martLongitude?: number | null;
+  /** @nullable */
   phone?: string | null;
   status: string;
   total: number;

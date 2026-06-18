@@ -8,6 +8,7 @@
 
 export * from './availabilityInput';
 export * from './availabilityResponse';
+export * from './dealItem';
 export * from './earningsSummary';
 export * from './getOrderHistoryParams';
 export * from './getOrderHistoryPeriod';
