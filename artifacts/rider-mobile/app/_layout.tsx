@@ -37,7 +37,17 @@ setAuthTokenGetter(async () => {
   }
 });
 
-const queryClient = new QueryClient();
+// Keep every screen in sync with the live MongoDB: poll on an interval and
+// refetch on reconnect. Per-query intervals still override these defaults.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchInterval: 15_000,
+      refetchOnReconnect: true,
+      staleTime: 5_000,
+    },
+  },
+});
 
 function RootLayoutNav() {
   const { token, isReady } = useAuth();
