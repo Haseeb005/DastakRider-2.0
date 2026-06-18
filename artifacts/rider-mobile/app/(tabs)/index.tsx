@@ -104,7 +104,7 @@ export default function AvailableScreen() {
       <ScreenHeader
         title="Available"
         subtitle={
-          isOnline ? "Naye orders ka intezaar" : "Online ho kar orders dekhein"
+          isOnline ? "Waiting for new orders" : "Go online to see orders"
         }
         right={onlineSwitch}
       />
@@ -132,8 +132,8 @@ export default function AvailableScreen() {
               color: "#FFFFFF",
             }}
           >
-            {newCount} naya order
-            {newCount === 1 ? "" : "s"} aaya hai!
+            {newCount} new order
+            {newCount === 1 ? "" : "s"} just arrived!
           </Text>
           <Feather name="x" size={18} color="#FFFFFF" />
         </Pressable>
@@ -172,7 +172,7 @@ export default function AvailableScreen() {
                 textAlign: "center",
               }}
             >
-              Aap abhi offline hain
+              You are currently offline
             </Text>
             <Text
               style={{
@@ -183,10 +183,10 @@ export default function AvailableScreen() {
                 lineHeight: 20,
               }}
             >
-              Orders receive karne ke liye online ho jayein.
+              Go online to start receiving orders.
             </Text>
             <Button
-              label="Online ho jayein"
+              label="Go online"
               icon="power"
               variant="success"
               loading={availabilityM.isPending}
@@ -215,7 +215,7 @@ export default function AvailableScreen() {
           renderItem={({ item }) => (
             <OrderCard order={item} onPress={() => setSelected(item)}>
               <Button
-                label="Order accept karein"
+                label="Accept order"
                 icon="check"
                 onPress={() => accept(item)}
                 loading={acceptM.isPending && acceptM.variables?.orderId === item.id}
@@ -226,8 +226,8 @@ export default function AvailableScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="inbox"
-              title="Koi available order nahi"
-              subtitle="Naye orders yahan turant nazar aayenge."
+              title="No available orders"
+              subtitle="New orders will appear here instantly."
             />
           }
         />

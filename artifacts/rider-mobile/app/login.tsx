@@ -1,30 +1,13 @@
 import { Feather } from "@expo/vector-icons";
-import {
-  useLoginRider,
-  useRegisterRider,
-} from "@workspace/api-client-react";
+import { useLoginRider } from "@workspace/api-client-react";
 import React, { useState } from "react";
-import { Platform, Pressable, Text, TextInput, View } from "react-native";
+import { Platform, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
-
-const CITIES = [
-  "Lahore",
-  "Karachi",
-  "Islamabad",
-  "Rawalpindi",
-  "Faisalabad",
-  "Multan",
-  "Peshawar",
-  "Gujranwala",
-  "Sialkot",
-];
-
-const VEHICLES = ["Motorcycle", "Bicycle", "Car"];
 
 function Field({
   label,
@@ -80,109 +63,34 @@ function Field({
   );
 }
 
-function Chips({
-  options,
-  value,
-  onChange,
-}: {
-  options: string[];
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const c = useColors();
-  return (
-    <View
-      style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 }}
-    >
-      {options.map((opt) => {
-        const active = value === opt;
-        return (
-          <Pressable
-            key={opt}
-            onPress={() => onChange(opt)}
-            style={{
-              paddingHorizontal: 14,
-              paddingVertical: 9,
-              borderRadius: 999,
-              backgroundColor: active ? c.primary : c.card,
-              borderWidth: 1,
-              borderColor: active ? c.primary : c.border,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: "Inter_500Medium",
-                fontSize: 13,
-                color: active ? "#FFFFFF" : c.foreground,
-              }}
-            >
-              {opt}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 export default function LoginScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { signIn } = useAuth();
-  const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState<string | null>(null);
 
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [city, setCity] = useState(CITIES[0]);
-  const [vehicleType, setVehicleType] = useState(VEHICLES[0]);
 
   const loginM = useLoginRider();
-  const registerM = useRegisterRider();
-  const pending = loginM.isPending || registerM.isPending;
+  const pending = loginM.isPending;
 
   const handleSubmit = () => {
     setError(null);
     if (!phone.trim() || !password.trim()) {
-      setError("Phone aur password zaroori hai.");
+      setError("Phone and password are required.");
       return;
     }
-    if (mode === "login") {
-      loginM.mutate(
-        { data: { phone: phone.trim(), password } },
-        {
-          onSuccess: (rider) => {
-            if (rider.token) signIn(rider.token);
-            else setError("Token nahi mila. Dobara koshish karein.");
-          },
-          onError: () => setError("Phone ya password ghalat hai."),
+    loginM.mutate(
+      { data: { phone: phone.trim(), password } },
+      {
+        onSuccess: (rider) => {
+          if (rider.token) signIn(rider.token);
+          else setError("No token received. Please try again.");
         },
-      );
-    } else {
-      if (!name.trim()) {
-        setError("Apna naam likhein.");
-        return;
-      }
-      registerM.mutate(
-        {
-          data: {
-            name: name.trim(),
-            phone: phone.trim(),
-            password,
-            city,
-            vehicleType,
-          },
-        },
-        {
-          onSuccess: (rider) => {
-            if (rider.token) signIn(rider.token);
-            else setError("Registration ho gaya, ab login karein.");
-          },
-          onError: () => setError("Registration fail hua. Phone pehle se mojood ho sakta hai."),
-        },
-      );
-    }
+        onError: () => setError("Incorrect phone or password."),
+      },
+    );
   };
 
   return (
@@ -227,61 +135,9 @@ export default function LoginScreen() {
             marginTop: 4,
           }}
         >
-          {mode === "login"
-            ? "Apne account mein login karein"
-            : "Naya rider account banayein"}
+          Sign in to your account
         </Text>
       </View>
-
-      <View
-        style={{
-          flexDirection: "row",
-          backgroundColor: c.muted,
-          borderRadius: c.radius,
-          padding: 4,
-          marginBottom: 22,
-        }}
-      >
-        {(["login", "register"] as const).map((m) => {
-          const active = mode === m;
-          return (
-            <Pressable
-              key={m}
-              onPress={() => {
-                setMode(m);
-                setError(null);
-              }}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                borderRadius: c.radius - 4,
-                backgroundColor: active ? c.card : "transparent",
-                alignItems: "center",
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: "Inter_600SemiBold",
-                  fontSize: 14,
-                  color: active ? c.foreground : c.mutedForeground,
-                }}
-              >
-                {m === "login" ? "Login" : "Register"}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {mode === "register" ? (
-        <Field
-          label="Pura naam"
-          value={name}
-          onChangeText={setName}
-          placeholder="Ahmed Ali"
-          autoCapitalize="words"
-        />
-      ) : null}
 
       <Field
         label="Phone number"
@@ -297,37 +153,6 @@ export default function LoginScreen() {
         placeholder="••••••••"
         secureTextEntry
       />
-
-      {mode === "register" ? (
-        <>
-          <Text
-            style={{
-              fontFamily: "Inter_500Medium",
-              fontSize: 13,
-              color: c.foreground,
-              marginBottom: 6,
-            }}
-          >
-            Sheher
-          </Text>
-          <Chips options={CITIES} value={city} onChange={setCity} />
-          <Text
-            style={{
-              fontFamily: "Inter_500Medium",
-              fontSize: 13,
-              color: c.foreground,
-              marginBottom: 6,
-            }}
-          >
-            Sawari
-          </Text>
-          <Chips
-            options={VEHICLES}
-            value={vehicleType}
-            onChange={setVehicleType}
-          />
-        </>
-      ) : null}
 
       {error ? (
         <View
@@ -351,7 +176,7 @@ export default function LoginScreen() {
       ) : null}
 
       <Button
-        label={mode === "login" ? "Login" : "Account banayein"}
+        label="Login"
         onPress={handleSubmit}
         loading={pending}
         icon="arrow-right"

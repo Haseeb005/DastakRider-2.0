@@ -23,16 +23,16 @@ import { useColors } from "@/hooks/useColors";
 import { money } from "@/lib/format";
 
 const PERIODS: { key: Period; label: string }[] = [
-  { key: GetOrderHistoryPeriod.today, label: "Aaj" },
-  { key: GetOrderHistoryPeriod.week, label: "Hafta" },
-  { key: GetOrderHistoryPeriod.month, label: "Mahina" },
-  { key: GetOrderHistoryPeriod.all, label: "Sab" },
+  { key: GetOrderHistoryPeriod.today, label: "Today" },
+  { key: GetOrderHistoryPeriod.week, label: "Week" },
+  { key: GetOrderHistoryPeriod.month, label: "Month" },
+  { key: GetOrderHistoryPeriod.all, label: "All" },
 ];
 
 const PERIOD_HEADING: Record<Period, string> = {
-  today: "Aaj ki",
-  week: "Is hafte ki",
-  month: "Is mahine ki",
+  today: "Today's",
+  week: "This week's",
+  month: "This month's",
   all: "Total",
 };
 
@@ -148,7 +148,7 @@ export default function HistoryScreen() {
             color: "rgba(255,255,255,0.85)",
           }}
         >
-          Total kamai
+          Total earnings
         </Text>
         <Text
           style={{
@@ -174,17 +174,17 @@ export default function HistoryScreen() {
 
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 16 }}>
         <MiniStat
-          label="Aaj"
+          label="Today"
           value={money(e?.todayEarnings)}
           sub={`${e?.todayDeliveries ?? 0} orders`}
         />
         <MiniStat
-          label="Hafta"
+          label="Week"
           value={money(e?.weekEarnings)}
           sub={`${e?.weekDeliveries ?? 0} orders`}
         />
         <MiniStat
-          label="Mahina"
+          label="Month"
           value={money(e?.monthEarnings)}
           sub={`${e?.monthDeliveries ?? 0} orders`}
         />
@@ -247,7 +247,7 @@ export default function HistoryScreen() {
               color: c.mutedForeground,
             }}
           >
-            Kamai
+            Earnings
           </Text>
           <Text
             style={{
@@ -319,7 +319,7 @@ export default function HistoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
-      <ScreenHeader title="History" subtitle="Aapki kamai aur deliveries" />
+      <ScreenHeader title="History" subtitle="Your earnings and deliveries" />
       <FlatList
         data={orders}
         keyExtractor={(o) => o.id}
@@ -345,8 +345,8 @@ export default function HistoryScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="clock"
-            title="Koi delivery nahi"
-            subtitle="Is period mein koi mukammal delivery nahi mili."
+            title="No deliveries"
+            subtitle="No completed deliveries in this period."
           />
         }
       />

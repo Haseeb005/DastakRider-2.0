@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetRiderMe,
   getGetRiderMeQueryKey,
-  useRegisterRider,
   useLoginRider,
   useLogoutRider,
   useUpdateRiderAvailability,
@@ -56,7 +55,6 @@ import {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type RiderView = "available" | "active" | "history" | "profile";
-type AuthView = "login" | "register";
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 // Real Dastak order status flow:
@@ -92,18 +90,6 @@ function timeAgo(dateStr?: string) {
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
-
-const CITIES = [
-  "Lahore",
-  "Karachi",
-  "Islamabad",
-  "Rawalpindi",
-  "Faisalabad",
-  "Multan",
-  "Peshawar",
-  "Quetta",
-  "Sargodha",
-];
 
 // Parse a deal item name like "Burger Deal (Coleslaw, Small Drink, Fries)" into a
 // base name + the list of selections inside the parentheses.
@@ -235,69 +221,36 @@ function useOrderAlert(orders: RiderOrder[], isOnline: boolean) {
   return { newCount, triggerTest, stopAlert };
 }
 
-// ── Login / Register ──────────────────────────────────────────────────────────
+// ── Login ─────────────────────────────────────────────────────────────────────
 
 function LoginForm() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [view, setView] = useState<AuthView>("login");
   const [form, setForm] = useState({
-    name: "",
     phone: "",
     password: "",
-    city: "Lahore",
-    vehicleType: "bike",
-    confirmPassword: "",
   });
 
   const loginMutation = useLoginRider();
-  const registerMutation = useRegisterRider();
   const set = (k: string) => (e: any) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const pending = loginMutation.isPending || registerMutation.isPending;
+  const pending = loginMutation.isPending;
 
   const onSuccess = () => qc.invalidateQueries({ queryKey: getGetRiderMeQueryKey() });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (view === "login") {
-      loginMutation.mutate(
-        { data: { phone: form.phone, password: form.password } },
-        {
-          onSuccess,
-          onError: (err: any) =>
-            toast({
-              title: "Login failed",
-              description: err?.message || "Invalid phone or password",
-              variant: "destructive",
-            }),
-        }
-      );
-    } else {
-      if (form.password !== form.confirmPassword) {
-        toast({ title: "Passwords don't match", variant: "destructive" });
-        return;
+    loginMutation.mutate(
+      { data: { phone: form.phone, password: form.password } },
+      {
+        onSuccess,
+        onError: (err: any) =>
+          toast({
+            title: "Login failed",
+            description: err?.message || "Invalid phone or password",
+            variant: "destructive",
+          }),
       }
-      registerMutation.mutate(
-        {
-          data: {
-            name: form.name,
-            phone: form.phone,
-            password: form.password,
-            city: form.city,
-            vehicleType: form.vehicleType,
-          },
-        },
-        {
-          onSuccess,
-          onError: (err: any) =>
-            toast({
-              title: "Registration failed",
-              description: err?.message || "Could not create account",
-              variant: "destructive",
-            }),
-        }
-      );
-    }
+    );
   };
 
   return (
@@ -312,55 +265,10 @@ function LoginForm() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-6">
-          <div className="flex rounded-xl bg-gray-100 p-1 mb-6">
-            {(["login", "register"] as AuthView[]).map((v) => (
-              <button
-                key={v}
-                type="button"
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
-                  view === v ? "bg-white shadow text-orange-600" : "text-gray-500"
-                }`}
-                onClick={() => setView(v)}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Log In</h2>
+          <p className="text-sm text-gray-500 mb-6">Sign in to your account</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {view === "register" && (
-              <>
-                <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-1">Full Name</label>
-                  <Input placeholder="Ali Hassan" value={form.name} onChange={set("name")} required />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-1">City</label>
-                    <select
-                      className="w-full h-10 px-3 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                      value={form.city}
-                      onChange={set("city")}
-                    >
-                      {CITIES.map((c) => (
-                        <option key={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-1">Vehicle</label>
-                    <select
-                      className="w-full h-10 px-3 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                      value={form.vehicleType}
-                      onChange={set("vehicleType")}
-                    >
-                      <option value="bike">Bike</option>
-                      <option value="car">Car</option>
-                    </select>
-                  </div>
-                </div>
-              </>
-            )}
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Phone Number</label>
               <Input placeholder="0300-1234567" value={form.phone} onChange={set("phone")} required />
@@ -375,30 +283,12 @@ function LoginForm() {
                 required
               />
             </div>
-            {view === "register" && (
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">Confirm Password</label>
-                <Input
-                  type="password"
-                  placeholder="Repeat password"
-                  value={form.confirmPassword}
-                  onChange={set("confirmPassword")}
-                  required
-                />
-              </div>
-            )}
             <Button
               type="submit"
               className="w-full py-3 text-base bg-orange-500 hover:bg-orange-600 text-white"
               disabled={pending}
             >
-              {pending
-                ? view === "login"
-                  ? "Logging in..."
-                  : "Creating account..."
-                : view === "login"
-                  ? "Log In"
-                  : "Create Account"}
+              {pending ? "Logging in..." : "Log In"}
             </Button>
           </form>
         </div>

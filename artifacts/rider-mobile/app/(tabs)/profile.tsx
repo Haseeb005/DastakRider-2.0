@@ -151,7 +151,7 @@ export default function ProfileScreen() {
   };
 
   const confirmLogout = () => {
-    Alert.alert("Logout?", "Aap apne account se logout ho jayenge.", [
+    Alert.alert("Logout?", "You will be signed out of your account.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Logout",
@@ -272,7 +272,7 @@ export default function ProfileScreen() {
                 color: c.foreground,
               }}
             >
-              {isOnline ? "Online — orders le rahe hain" : "Offline"}
+              {isOnline ? "Online — receiving orders" : "Offline"}
             </Text>
           </View>
           <Switch
@@ -288,13 +288,13 @@ export default function ProfileScreen() {
           <CollectionCard
             label="Cash in hand"
             value={money(rider.pendingCollection)}
-            note="Active orders se jama"
+            note="Collected from active orders"
             tone="warning"
           />
           <CollectionCard
-            label="Company ko dena"
+            label="Owed to company"
             value={money(rider.unpaidCollection)}
-            note="Abhi tak unpaid"
+            note="Unpaid so far"
             tone="info"
           />
         </View>
@@ -312,13 +312,13 @@ export default function ProfileScreen() {
         >
           <InfoRow icon="phone" label="Phone" value={rider.phone} />
           <View style={{ height: 1, backgroundColor: c.border }} />
-          <InfoRow icon="map-pin" label="Sheher" value={rider.city} />
+          <InfoRow icon="map-pin" label="City" value={rider.city} />
           <View style={{ height: 1, backgroundColor: c.border }} />
-          <InfoRow icon="truck" label="Sawari" value={rider.vehicleType} />
+          <InfoRow icon="truck" label="Vehicle" value={rider.vehicleType} />
           <View style={{ height: 1, backgroundColor: c.border }} />
           <InfoRow
             icon="dollar-sign"
-            label="Total kamai"
+            label="Total earnings"
             value={money(rider.totalEarnings)}
           />
         </View>

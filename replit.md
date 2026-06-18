@@ -45,7 +45,8 @@ Food-delivery rider apps for Pakistan: a web rider app and an Expo mobile app, b
 
 ## User preferences
 
-- The user writes in Roman Urdu — respond in Roman Urdu. App UI copy should also be in Roman Urdu.
+- All app UI copy must be in English only — no Urdu / Roman Urdu or any other language in fields, labels, or messages.
+- No self-registration: riders cannot register from the web or mobile app (login only).
 
 ## Gotchas
 

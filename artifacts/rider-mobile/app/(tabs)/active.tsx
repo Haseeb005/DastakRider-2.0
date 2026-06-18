@@ -80,8 +80,8 @@ export default function ActiveScreen() {
 
   const deliver = (order: RiderOrder) => {
     Alert.alert(
-      "Order deliver karein?",
-      "Tasdeeq karein ke order customer ko de diya hai.",
+      "Deliver order?",
+      "Confirm you have handed the order to the customer.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -103,7 +103,7 @@ export default function ActiveScreen() {
     if (order.status === "Rider Picked Up") {
       return (
         <Button
-          label="Delivered mark karein"
+          label="Mark as delivered"
           icon="check-circle"
           variant="success"
           loading={statusBusy}
@@ -115,7 +115,7 @@ export default function ActiveScreen() {
     if (order.status === "Rider Accepted" && !order.riderArrived) {
       return (
         <Button
-          label="Restaurant pohanch gaya"
+          label="Arrived at restaurant"
           icon="map-pin"
           variant="info"
           loading={arrivedBusy}
@@ -126,7 +126,7 @@ export default function ActiveScreen() {
     }
     return (
       <Button
-        label="Pick up ho gaya"
+        label="Picked up"
         icon="shopping-bag"
         loading={statusBusy}
         onPress={() => pickUp(order)}
@@ -141,8 +141,8 @@ export default function ActiveScreen() {
         title="Active"
         subtitle={
           orders.length > 0
-            ? `${orders.length} delivery jari hai`
-            : "Koi delivery jari nahi"
+            ? `${orders.length} delivery in progress`
+            : "No active deliveries"
         }
       />
 
@@ -175,7 +175,7 @@ export default function ActiveScreen() {
               color: c.successForeground,
             }}
           >
-            Live location customer ke saath share ho rahi hai
+            Sharing live location with the customer
           </Text>
         </View>
       ) : null}
@@ -204,8 +204,8 @@ export default function ActiveScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="navigation"
-            title="Koi active delivery nahi"
-            subtitle="Available tab se order accept karein."
+            title="No active deliveries"
+            subtitle="Accept an order from the Available tab."
           />
         }
       />
