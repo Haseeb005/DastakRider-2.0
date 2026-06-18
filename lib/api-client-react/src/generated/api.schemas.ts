@@ -68,6 +68,10 @@ export interface RiderOrder {
   /** @nullable */
   address?: string | null;
   /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+  /** @nullable */
   martLatitude?: number | null;
   /** @nullable */
   martLongitude?: number | null;

@@ -407,6 +407,10 @@ components:
           type: ["string", "null"]
         address:
           type: ["string", "null"]
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
         martLatitude:
           type: ["number", "null"]
         martLongitude:

@@ -74,6 +74,47 @@ export function num(n: number | undefined | null): number {
   return Number(n ?? 0);
 }
 
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+/**
+ * Formats an ISO timestamp into Pakistan local time (PKT = UTC+5, no DST).
+ * Returns separate date and time strings, or null when the input is invalid.
+ * Done manually because Hermes' Intl timezone support is unreliable on Expo.
+ */
+export function formatDateTime(
+  iso: string | null | undefined,
+): { date: string; time: string } | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return null;
+  const d = new Date(ms + 5 * 60 * 60 * 1000);
+  const day = d.getUTCDate();
+  const month = MONTHS[d.getUTCMonth()];
+  const year = d.getUTCFullYear();
+  let h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return {
+    date: `${day} ${month} ${year}`,
+    time: `${h}:${String(m).padStart(2, "0")} ${ampm}`,
+  };
+}
+
 const COD_TYPES = ["cod", "cash"];
 
 export function isCOD(paymentType: string | undefined | null): boolean {

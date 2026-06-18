@@ -681,6 +681,8 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
     id: String(doc._id),
     restaurantName: doc.martName || null,
     address: doc.address || null,
+    latitude: toNumOrNull(doc.latitude),
+    longitude: toNumOrNull(doc.longitude),
     martLatitude: toNumOrNull(doc.martLatitude),
     martLongitude: toNumOrNull(doc.martLongitude),
     phone: doc.phone || null,

@@ -146,6 +146,23 @@ export function OrderDetailModal({
 
   const canNavigate = hasCoords || !!order.martAddress || !!order.restaurantName;
 
+  const hasCustomerCoords =
+    typeof order.latitude === "number" &&
+    typeof order.longitude === "number";
+
+  const openCustomerMaps = () => {
+    const query = hasCustomerCoords
+      ? `${order.latitude},${order.longitude}`
+      : [order.userName, order.address].filter(Boolean).join(" ");
+    if (!query) return;
+    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      query,
+    )}`;
+    Linking.openURL(url).catch(() => {});
+  };
+
+  const canNavigateCustomer = hasCustomerCoords || !!order.address;
+
   return (
     <Modal
       visible={visible}
@@ -353,6 +370,38 @@ export function OrderDetailModal({
                 </Text>
               </Pressable>
             ) : null}
+            {canNavigateCustomer ? (
+              <Pressable
+                onPress={openCustomerMaps}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  marginTop: 12,
+                  alignSelf: "flex-start",
+                  backgroundColor: c.primary,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <Feather
+                  name="navigation"
+                  size={15}
+                  color={c.primaryForeground}
+                />
+                <Text
+                  style={{
+                    fontFamily: "Inter_700Bold",
+                    fontSize: 13,
+                    color: c.primaryForeground,
+                  }}
+                >
+                  Open in Google Maps
+                </Text>
+              </Pressable>
+            ) : null}
           </Section>
 
           {order.comment ? (
@@ -486,6 +535,9 @@ export function OrderDetailModal({
           <Section title="Payment">
             <Row label="Subtotal" value={money(order.subtotal)} />
             <Row label="Delivery fee" value={money(order.deliveryFee)} />
+            {order.platformFee ? (
+              <Row label="Platform fee" value={money(order.platformFee)} />
+            ) : null}
             {order.discount ? (
               <Row
                 label="Discount"

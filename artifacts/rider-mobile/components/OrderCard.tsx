@@ -5,7 +5,13 @@ import { Pressable, Text, View } from "react-native";
 
 import { Badge } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
-import { isCOD, money, statusColors, statusLabel } from "@/lib/format";
+import {
+  formatDateTime,
+  isCOD,
+  money,
+  statusColors,
+  statusLabel,
+} from "@/lib/format";
 
 function initials(name?: string | null): string {
   const n = (name ?? "").trim();
@@ -38,6 +44,7 @@ export function OrderCard({
   const itemCount =
     order.items?.reduce((s, i) => s + (i.quantity || 0), 0) ?? 0;
   const cod = isCOD(order.paymentType);
+  const dt = formatDateTime(order.createdAt);
 
   return (
     <Pressable
@@ -54,6 +61,29 @@ export function OrderCard({
         },
       ]}
     >
+      {/* Timestamp: when the order came in (PKT) */}
+      {dt ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            marginBottom: 12,
+          }}
+        >
+          <Feather name="clock" size={13} color={c.mutedForeground} />
+          <Text
+            style={{
+              fontFamily: "Inter_500Medium",
+              fontSize: 12.5,
+              color: c.mutedForeground,
+            }}
+          >
+            {dt.date} · {dt.time}
+          </Text>
+        </View>
+      ) : null}
+
       {/* Top: status + payment badges, with fare on the right */}
       <View
         style={{

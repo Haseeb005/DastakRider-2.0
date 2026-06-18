@@ -30,6 +30,8 @@ import { Button, EmptyState, Loading } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useOrderAlert } from "@/lib/alert";
 
+const EMPTY_ORDERS: RiderOrder[] = [];
+
 function StatusDot({
   online,
   dotColor,
@@ -118,9 +120,9 @@ export default function AvailableScreen() {
       refetchInterval: isOnline ? 10000 : false,
     },
   });
-  const orders = ordersQ.data ?? [];
+  const orders = ordersQ.data ?? EMPTY_ORDERS;
 
-  const { newCount, clearNew, stopAlert } = useOrderAlert(orders, isOnline);
+  const { newCount, clearNew } = useOrderAlert(orders, isOnline);
 
   const availabilityM = useUpdateRiderAvailability();
   const acceptM = useAcceptOrder();
@@ -137,8 +139,9 @@ export default function AvailableScreen() {
   };
 
   const accept = (order: RiderOrder) => {
-    // Accepting within the alert window must silence the beep immediately.
-    stopAlert();
+    // Accepting within the alert window must silence the beep and hide the
+    // new-order banner immediately.
+    clearNew();
     acceptM.mutate(
       { orderId: order.id },
       {

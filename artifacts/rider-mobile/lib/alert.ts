@@ -57,46 +57,26 @@ export function playOrderAlert(): () => void {
   return () => clearInterval(id);
 }
 
+const AUTO_HIDE_MS = 12000;
+
 /**
  * Tracks seen order IDs; seeds on first load (no alert), then alerts when new
- * orders appear while online. Mirrors the web app's useOrderAlert.
+ * orders appear while online. The banner auto-hides after a timeout, when the
+ * rider accepts (clearNew), or when the new orders leave the available list.
  */
 export function useOrderAlert(orders: { id: string }[], isOnline: boolean) {
   const seen = useRef<Set<string>>(new Set());
   const seeded = useRef(false);
   const stopRef = useRef<null | (() => void)>(null);
-  const [newCount, setNewCount] = useState(0);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [newIds, setNewIds] = useState<string[]>([]);
 
-  useEffect(() => {
-    if (!isOnline) {
-      seeded.current = false;
-      seen.current = new Set();
-      if (stopRef.current) {
-        stopRef.current();
-        stopRef.current = null;
-      }
-      setNewCount(0);
-      return;
+  const clearTimer = () => {
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
     }
-    if (!seeded.current) {
-      orders.forEach((o) => seen.current.add(o.id));
-      seeded.current = true;
-      return;
-    }
-    const fresh = orders.filter((o) => !seen.current.has(o.id));
-    if (fresh.length > 0) {
-      fresh.forEach((o) => seen.current.add(o.id));
-      setNewCount((c) => c + fresh.length);
-      if (stopRef.current) stopRef.current();
-      stopRef.current = playOrderAlert();
-    }
-  }, [orders, isOnline]);
-
-  useEffect(() => {
-    return () => {
-      if (stopRef.current) stopRef.current();
-    };
-  }, []);
+  };
 
   const stopAlert = () => {
     if (stopRef.current) {
@@ -105,10 +85,62 @@ export function useOrderAlert(orders: { id: string }[], isOnline: boolean) {
     }
   };
 
+  useEffect(() => {
+    if (!isOnline) {
+      seeded.current = false;
+      seen.current = new Set();
+      stopAlert();
+      clearTimer();
+      // Return the same array when already empty so React bails out and we
+      // don't loop on the new `[]` identity from `ordersQ.data ?? []`.
+      setNewIds((prev) => (prev.length === 0 ? prev : []));
+      return;
+    }
+    const presentIds = new Set(orders.map((o) => o.id));
+    if (!seeded.current) {
+      orders.forEach((o) => seen.current.add(o.id));
+      seeded.current = true;
+      return;
+    }
+    const fresh = orders
+      .filter((o) => !seen.current.has(o.id))
+      .map((o) => o.id);
+    // Prune any previously-new orders that left the list (accepted by
+    // someone, expired, …) and merge in the freshly arrived ones. Return the
+    // previous array unchanged when the result is identical so React bails out
+    // of the render instead of looping on a new array instance every poll.
+    setNewIds((prev) => {
+      const kept = prev.filter((id) => presentIds.has(id));
+      const merged = Array.from(new Set([...kept, ...fresh]));
+      const same =
+        merged.length === prev.length &&
+        merged.every((id, i) => id === prev[i]);
+      return same ? prev : merged;
+    });
+    if (fresh.length > 0) {
+      fresh.forEach((id) => seen.current.add(id));
+      stopAlert();
+      stopRef.current = playOrderAlert();
+      clearTimer();
+      hideTimer.current = setTimeout(() => {
+        stopAlert();
+        setNewIds([]);
+      }, AUTO_HIDE_MS);
+    }
+  }, [orders, isOnline]);
+
+  useEffect(() => {
+    return () => {
+      stopAlert();
+      clearTimer();
+    };
+  }, []);
+
   const clearNew = () => {
-    setNewCount(0);
+    clearTimer();
     stopAlert();
+    setNewIds([]);
   };
 
-  return { newCount, clearNew, stopAlert };
+  return { newCount: newIds.length, clearNew, stopAlert };
 }
