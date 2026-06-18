@@ -55,7 +55,16 @@ async function findRiderById(id: string) {
   return usersCol().findOne({ _id, type: "rider" });
 }
 
+function riderRating(user: any): { rating: number; ratingCount: number } {
+  const rating = Number(user?.rating) || 0;
+  const ratingCount = Array.isArray(user?.reviews)
+    ? user.reviews.length
+    : Number(user?.ratingCount) || 0;
+  return { rating, ratingCount };
+}
+
 function safeRider(user: any) {
+  const { rating, ratingCount } = riderRating(user);
   return {
     id: String(user._id),
     name: user.name || null,
@@ -65,8 +74,58 @@ function safeRider(user: any) {
     isOnline: !!user.isOnline,
     totalEarnings: 0,
     totalDeliveries: Number(user.orderCount) || 0,
-    rating: 0,
-    ratingCount: 0,
+    rating,
+    ratingCount,
+  };
+}
+
+// Aggregate a rider's delivered-order earnings (riderFare, fallback deliveryCharges)
+// into total / today / this-week buckets. Shared by /rider/me and /rider/earnings.
+async function computeEarnings(riderId: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+
+  const fareExpr = {
+    $convert: {
+      input: { $ifNull: ["$riderFare", "$deliveryCharges"] },
+      to: "double",
+      onError: 0,
+      onNull: 0,
+    },
+  };
+  const group = { _id: null, count: { $sum: 1 }, earnings: { $sum: fareExpr } };
+
+  const [agg] = await ordersCol()
+    .aggregate([
+      { $match: { riderId, status: DELIVERED_STATUS } },
+      {
+        $facet: {
+          total: [{ $group: group }],
+          today: [{ $match: { updatedAt: { $gte: today } } }, { $group: group }],
+          week: [{ $match: { updatedAt: { $gte: weekStart } } }, { $group: group }],
+        },
+      },
+    ])
+    .toArray();
+
+  const pick = (arr: any[]) => ({
+    earnings: Math.round(arr?.[0]?.earnings || 0),
+    count: arr?.[0]?.count || 0,
+  });
+  const total = pick(agg?.total);
+  const todayStats = pick(agg?.today);
+  const week = pick(agg?.week);
+
+  return {
+    totalEarnings: total.earnings,
+    totalDeliveries: total.count,
+    todayEarnings: todayStats.earnings,
+    todayDeliveries: todayStats.count,
+    weekEarnings: week.earnings,
+    weekDeliveries: week.count,
   };
 }
 
@@ -149,7 +208,12 @@ router.get("/rider/me", async (req: any, res: any) => {
       (req.session as any).riderId = undefined;
       return res.status(401).json({ message: "Rider not found" });
     }
-    res.json(safeRider(rider));
+    const earn = await computeEarnings(riderId);
+    res.json({
+      ...safeRider(rider),
+      totalEarnings: earn.totalEarnings,
+      totalDeliveries: earn.totalDeliveries || Number(rider.orderCount) || 0,
+    });
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
@@ -314,53 +378,10 @@ router.get("/rider/earnings", async (req: any, res: any) => {
     const rider = await findRiderById(riderId);
     if (!rider) return res.status(404).json({ message: "Rider not found" });
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    weekStart.setHours(0, 0, 0, 0);
+    const earn = await computeEarnings(riderId);
+    const { rating, ratingCount } = riderRating(rider);
 
-    const fareExpr = {
-      $convert: {
-        input: { $ifNull: ["$riderFare", "$deliveryCharges"] },
-        to: "double",
-        onError: 0,
-        onNull: 0,
-      },
-    };
-    const group = { _id: null, count: { $sum: 1 }, earnings: { $sum: fareExpr } };
-
-    const [agg] = await ordersCol()
-      .aggregate([
-        { $match: { riderId, status: DELIVERED_STATUS } },
-        {
-          $facet: {
-            total: [{ $group: group }],
-            today: [{ $match: { updatedAt: { $gte: today } } }, { $group: group }],
-            week: [{ $match: { updatedAt: { $gte: weekStart } } }, { $group: group }],
-          },
-        },
-      ])
-      .toArray();
-
-    const pick = (arr: any[]) => ({
-      earnings: Math.round(arr?.[0]?.earnings || 0),
-      count: arr?.[0]?.count || 0,
-    });
-    const total = pick(agg?.total);
-    const todayStats = pick(agg?.today);
-    const week = pick(agg?.week);
-
-    res.json({
-      totalEarnings: total.earnings,
-      totalDeliveries: total.count,
-      todayEarnings: todayStats.earnings,
-      todayDeliveries: todayStats.count,
-      weekEarnings: week.earnings,
-      weekDeliveries: week.count,
-      rating: 0,
-      ratingCount: 0,
-    });
+    res.json({ ...earn, rating, ratingCount });
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
