@@ -29,4 +29,5 @@ export interface RiderOrder {
   riderId?: string | null;
   /** @nullable */
   riderName?: string | null;
+  riderArrived?: boolean;
 }

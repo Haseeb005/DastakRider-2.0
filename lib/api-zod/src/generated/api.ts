@@ -109,7 +109,8 @@ export const GetAvailableOrdersResponseItem = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish(),
   "riderId": zod.string().nullish(),
-  "riderName": zod.string().nullish()
+  "riderName": zod.string().nullish(),
+  "riderArrived": zod.boolean().optional()
 })
 export const GetAvailableOrdersResponse = zod.array(GetAvailableOrdersResponseItem)
 
@@ -135,7 +136,8 @@ export const GetActiveOrdersResponseItem = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish(),
   "riderId": zod.string().nullish(),
-  "riderName": zod.string().nullish()
+  "riderName": zod.string().nullish(),
+  "riderArrived": zod.boolean().optional()
 })
 export const GetActiveOrdersResponse = zod.array(GetActiveOrdersResponseItem)
 
@@ -161,7 +163,8 @@ export const GetOrderHistoryResponseItem = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish(),
   "riderId": zod.string().nullish(),
-  "riderName": zod.string().nullish()
+  "riderName": zod.string().nullish(),
+  "riderArrived": zod.boolean().optional()
 })
 export const GetOrderHistoryResponse = zod.array(GetOrderHistoryResponseItem)
 
@@ -191,7 +194,39 @@ export const AcceptOrderResponse = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish(),
   "riderId": zod.string().nullish(),
-  "riderName": zod.string().nullish()
+  "riderName": zod.string().nullish(),
+  "riderArrived": zod.boolean().optional()
+})
+
+
+/**
+ * Records an additive checkpoint that the rider reached the restaurant. The canonical order status stays "Rider Accepted"; only riderArrived is set.
+ * @summary Mark that the rider has arrived at the restaurant
+ */
+export const MarkOrderArrivedParams = zod.object({
+  "orderId": zod.coerce.string()
+})
+
+export const MarkOrderArrivedResponse = zod.object({
+  "id": zod.string(),
+  "restaurantName": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "status": zod.string(),
+  "total": zod.number(),
+  "deliveryFee": zod.number(),
+  "subtotal": zod.number(),
+  "items": zod.array(zod.object({
+  "name": zod.string(),
+  "quantity": zod.number(),
+  "price": zod.number()
+})).optional(),
+  "userName": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string().nullish(),
+  "riderId": zod.string().nullish(),
+  "riderName": zod.string().nullish(),
+  "riderArrived": zod.boolean().optional()
 })
 
 
@@ -224,7 +259,8 @@ export const UpdateOrderStatusResponse = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string().nullish(),
   "riderId": zod.string().nullish(),
-  "riderName": zod.string().nullish()
+  "riderName": zod.string().nullish(),
+  "riderArrived": zod.boolean().optional()
 })
 
 

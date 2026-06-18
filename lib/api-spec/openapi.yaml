@@ -189,6 +189,30 @@ paths:
         "409":
           description: Order already taken
 
+  /rider/orders/{orderId}/arrived:
+    post:
+      operationId: markOrderArrived
+      tags: [orders]
+      summary: Mark that the rider has arrived at the restaurant
+      description: >-
+        Records an additive checkpoint that the rider reached the restaurant.
+        The canonical order status stays "Rider Accepted"; only riderArrived is set.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiderOrder"
+        "409":
+          description: Order not assigned to you or wrong state
+
   /rider/orders/{orderId}/status:
     put:
       operationId: updateOrderStatus
@@ -327,6 +351,8 @@ components:
           type: ["string", "null"]
         riderName:
           type: ["string", "null"]
+        riderArrived:
+          type: boolean
       required:
         - id
         - status

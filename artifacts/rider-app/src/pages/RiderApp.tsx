@@ -15,6 +15,7 @@ import {
   getGetOrderHistoryQueryKey,
   useAcceptOrder,
   useUpdateOrderStatus,
+  useMarkOrderArrived,
   useGetRiderEarnings,
   getGetRiderEarningsQueryKey,
   type Rider,
@@ -275,6 +276,7 @@ function OrderCard({
   order,
   onAccept,
   onStatusUpdate,
+  onArrived,
   showAccept,
   showStatus,
   busy,
@@ -282,23 +284,47 @@ function OrderCard({
   order: RiderOrder;
   onAccept?: () => void;
   onStatusUpdate?: (status: string) => void;
+  onArrived?: () => void;
   showAccept?: boolean;
   showStatus?: boolean;
   busy?: boolean;
 }) {
-  const nextStatus: Record<string, { label: string; next: string; color: string }> = {
-    "Rider Accepted": {
+  // Active progression: Accepted → (Arrived at Restaurant) → Picked Up → Delivered.
+  // "Arrived" is an additive checkpoint; the canonical order status stays "Rider Accepted".
+  let action:
+    | { label: string; color: string; kind: "arrived" }
+    | { label: string; color: string; kind: "status"; next: string }
+    | undefined;
+  if (order.status === "Rider Accepted" && !order.riderArrived) {
+    action = {
+      label: "Arrived at Restaurant",
+      color: "bg-orange-500 hover:bg-orange-600",
+      kind: "arrived",
+    };
+  } else if (order.status === "Rider Accepted" && order.riderArrived) {
+    action = {
       label: "Picked Up — On My Way",
-      next: "Rider Picked Up",
       color: "bg-blue-600 hover:bg-blue-700",
-    },
-    "Rider Picked Up": {
+      kind: "status",
+      next: "Rider Picked Up",
+    };
+  } else if (order.status === "Rider Picked Up") {
+    action = {
       label: "Mark as Delivered ✓",
-      next: "Delivered",
       color: "bg-green-600 hover:bg-green-700",
-    },
-  };
-  const action = nextStatus[order.status];
+      kind: "status",
+      next: "Delivered",
+    };
+  }
+
+  // When arrived but not yet picked up, reflect the "At Restaurant" checkpoint in the badge.
+  const atRestaurant = order.status === "Rider Accepted" && !!order.riderArrived;
+  const badgeLabel = atRestaurant
+    ? "At Restaurant"
+    : STATUS_LABELS[order.status] || order.status;
+  const badgeColor = atRestaurant
+    ? "bg-orange-100 text-orange-800"
+    : STATUS_COLORS[order.status] || "bg-gray-100 text-gray-700";
 
   return (
     <Card className="overflow-hidden border-0 shadow-md bg-white">
@@ -309,12 +335,8 @@ function OrderCard({
               <h3 className="font-bold text-gray-900 truncate">{order.restaurantName || "Restaurant"}</h3>
               <p className="text-xs text-gray-400 mt-0.5">{timeAgo(order.createdAt)}</p>
             </div>
-            <Badge
-              className={`ml-2 shrink-0 text-xs border-0 ${
-                STATUS_COLORS[order.status] || "bg-gray-100 text-gray-700"
-              }`}
-            >
-              {STATUS_LABELS[order.status] || order.status}
+            <Badge className={`ml-2 shrink-0 text-xs border-0 ${badgeColor}`}>
+              {badgeLabel}
             </Badge>
           </div>
 
@@ -388,10 +410,12 @@ function OrderCard({
           </div>
         )}
 
-        {showStatus && action && onStatusUpdate && (
+        {showStatus && action && (
           <div className="px-4 pb-4">
             <Button
-              onClick={() => onStatusUpdate(action.next)}
+              onClick={() =>
+                action.kind === "arrived" ? onArrived?.() : onStatusUpdate?.(action.next)
+              }
               disabled={busy}
               className={`w-full text-white font-semibold ${action.color}`}
             >
@@ -509,6 +533,21 @@ function ActiveDelivery() {
   });
 
   const statusMutation = useUpdateOrderStatus();
+  const arrivedMutation = useMarkOrderArrived();
+
+  const handleArrived = (orderId: string) => {
+    arrivedMutation.mutate(
+      { orderId },
+      {
+        onSuccess: () => {
+          toast({ title: "At restaurant", description: "Pick up the order, then tap when on your way." });
+          qc.invalidateQueries({ queryKey: getGetActiveOrdersQueryKey() });
+        },
+        onError: (e: any) =>
+          toast({ title: "Error", description: e?.message || "Could not update", variant: "destructive" }),
+      }
+    );
+  };
 
   const handleStatus = (orderId: string, status: string) => {
     statusMutation.mutate(
@@ -556,8 +595,9 @@ function ActiveDelivery() {
             key={order.id}
             order={order}
             showStatus
-            busy={statusMutation.isPending}
+            busy={statusMutation.isPending || arrivedMutation.isPending}
             onStatusUpdate={(status) => handleStatus(order.id, status)}
+            onArrived={() => handleArrived(order.id)}
           />
         ))
       )}

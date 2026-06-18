@@ -782,6 +782,77 @@ export const useAcceptOrder = <TError = ErrorType<void>,
       return useMutation(getAcceptOrderMutationOptions(options));
     }
 
+export const getMarkOrderArrivedUrl = (orderId: string,) => {
+
+
+
+
+  return `/api/rider/orders/${orderId}/arrived`
+}
+
+/**
+ * Records an additive checkpoint that the rider reached the restaurant. The canonical order status stays "Rider Accepted"; only riderArrived is set.
+ * @summary Mark that the rider has arrived at the restaurant
+ */
+export const markOrderArrived = async (orderId: string, options?: RequestInit): Promise<RiderOrder> => {
+
+  return customFetch<RiderOrder>(getMarkOrderArrivedUrl(orderId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getMarkOrderArrivedMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markOrderArrived>>, TError,{orderId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markOrderArrived>>, TError,{orderId: string}, TContext> => {
+
+const mutationKey = ['markOrderArrived'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markOrderArrived>>, {orderId: string}> = (props) => {
+          const {orderId} = props ?? {};
+
+          return  markOrderArrived(orderId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkOrderArrivedMutationResult = NonNullable<Awaited<ReturnType<typeof markOrderArrived>>>
+
+    export type MarkOrderArrivedMutationError = ErrorType<void>
+
+    /**
+ * @summary Mark that the rider has arrived at the restaurant
+ */
+export const useMarkOrderArrived = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markOrderArrived>>, TError,{orderId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markOrderArrived>>,
+        TError,
+        {orderId: string},
+        TContext
+      > => {
+      return useMutation(getMarkOrderArrivedMutationOptions(options));
+    }
+
 export const getUpdateOrderStatusUrl = (orderId: string,) => {
 
 

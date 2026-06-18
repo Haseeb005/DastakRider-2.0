@@ -339,6 +339,33 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
   }
 });
 
+// Mark arrived at restaurant — additive checkpoint, canonical status stays "Rider Accepted"
+router.post("/rider/orders/:orderId/arrived", async (req: any, res: any) => {
+  try {
+    const riderId = requireRiderId(req, res);
+    if (!riderId) return;
+    let orderObjectId: ObjectId;
+    try {
+      orderObjectId = new ObjectId(req.params.orderId);
+    } catch {
+      return res.status(400).json({ message: "Invalid order id" });
+    }
+    const updated = await ordersCol().findOneAndUpdate(
+      { _id: orderObjectId, riderId, status: "Rider Accepted" },
+      { $set: { riderArrived: true, riderArrivedTime: new Date(), updatedAt: new Date() } },
+      { returnDocument: "after" }
+    );
+    if (!updated)
+      return res
+        .status(409)
+        .json({ message: "Order not assigned to you, or not in the accepted state." });
+    res.json(normalizeOrder(updated));
+  } catch (e: any) {
+    req.log.error(e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
 // Update order status
 router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
   try {
@@ -353,16 +380,25 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
     } catch {
       return res.status(400).json({ message: "Invalid order id" });
     }
-    const requiredPrev = status === "Rider Picked Up" ? "Rider Accepted" : "Rider Picked Up";
+    // Enforce the 3-step progression server-side: a rider must mark "Arrived at
+    // Restaurant" (riderArrived) before picking up. This guards against stale
+    // clients or direct API calls skipping the checkpoint.
+    const filter: Record<string, any> =
+      status === "Rider Picked Up"
+        ? { _id: orderObjectId, riderId, status: "Rider Accepted", riderArrived: true }
+        : { _id: orderObjectId, riderId, status: "Rider Picked Up" };
     const updated = await ordersCol().findOneAndUpdate(
-      { _id: orderObjectId, riderId, status: requiredPrev },
+      filter,
       { $set: { status, updatedAt: new Date() } },
       { returnDocument: "after" }
     );
-    if (!updated)
-      return res
-        .status(409)
-        .json({ message: "Invalid status transition, or order not assigned to you." });
+    if (!updated) {
+      const message =
+        status === "Rider Picked Up"
+          ? "Mark 'Arrived at Restaurant' first, or order not assigned to you."
+          : "Invalid status transition, or order not assigned to you.";
+      return res.status(409).json({ message });
+    }
     res.json(normalizeOrder(updated));
   } catch (e: any) {
     req.log.error(e);
@@ -424,6 +460,7 @@ function normalizeOrder(doc: any) {
           : null,
     riderId: doc.riderId || null,
     riderName: doc.riderName || null,
+    riderArrived: !!doc.riderArrived,
   };
 }
 
