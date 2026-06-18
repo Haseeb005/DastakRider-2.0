@@ -26,7 +26,7 @@ const TABS: {
 }[] = [
   {
     name: "index",
-    title: "Available",
+    title: "Orders",
     feather: "package",
     sf: "shippingbox",
     sfSelected: "shippingbox.fill",

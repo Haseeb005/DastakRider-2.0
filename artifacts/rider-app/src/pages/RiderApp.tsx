@@ -791,7 +791,7 @@ function AvailableOrders({ rider }: { rider: Rider }) {
       )}
 
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-gray-900">Available Orders</h2>
+        <h2 className="text-lg font-bold text-gray-900">Orders</h2>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"

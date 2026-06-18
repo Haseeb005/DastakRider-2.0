@@ -78,24 +78,47 @@ export default function AvailableScreen() {
     );
   };
 
-  const onlineSwitch = (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-      <Text
+  const refresh = () => {
+    Haptics.selectionAsync().catch(() => {});
+    meQ.refetch();
+    ordersQ.refetch();
+  };
+
+  const headerRight = (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <Pressable
+        onPress={refresh}
+        hitSlop={8}
         style={{
-          fontFamily: "Inter_600SemiBold",
-          fontSize: 13,
-          color: isOnline ? c.success : c.mutedForeground,
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: c.muted,
+          alignItems: "center",
+          justifyContent: "center",
         }}
+        accessibilityLabel="Refresh orders"
       >
-        {isOnline ? "Online" : "Offline"}
-      </Text>
-      <Switch
-        value={isOnline}
-        onValueChange={toggleOnline}
-        disabled={availabilityM.isPending}
-        trackColor={{ false: c.input, true: c.success }}
-        thumbColor="#FFFFFF"
-      />
+        <Feather name="refresh-cw" size={16} color={c.foreground} />
+      </Pressable>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Text
+          style={{
+            fontFamily: "Inter_600SemiBold",
+            fontSize: 13,
+            color: isOnline ? c.success : c.mutedForeground,
+          }}
+        >
+          {isOnline ? "Online" : "Offline"}
+        </Text>
+        <Switch
+          value={isOnline}
+          onValueChange={toggleOnline}
+          disabled={availabilityM.isPending}
+          trackColor={{ false: c.input, true: c.success }}
+          thumbColor="#FFFFFF"
+        />
+      </View>
     </View>
   );
 
@@ -104,11 +127,9 @@ export default function AvailableScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <ScreenHeader
-        title="Available"
-        subtitle={
-          isOnline ? "Waiting for new orders" : "Go online to see orders"
-        }
-        right={onlineSwitch}
+        title="Orders"
+        subtitle={meQ.data?.name ?? (isOnline ? "Waiting for new orders" : "Go online to see orders")}
+        right={headerRight}
       />
 
       {newCount > 0 ? (
