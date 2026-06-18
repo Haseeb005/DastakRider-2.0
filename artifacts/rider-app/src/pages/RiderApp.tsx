@@ -435,14 +435,21 @@ function RiderOrderDetailModal({
             <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" /> Timeline
             </h4>
-            <DetailRow label="Placed" value={formatDateTime(order.createdAt)} />
+            {/* Placed (createdAt is always a real timestamp) */}
+            {order.createdAt && (
+              <div>
+                <p className="text-sm font-medium text-gray-900">Placed</p>
+                <p className="text-xs text-gray-400">{formatDateTime(order.createdAt)}</p>
+              </div>
+            )}
             {order.actions && order.actions.length > 0
               ? order.actions.map((a, i) => (
-                  <DetailRow
-                    key={i}
-                    label={a.action || "Update"}
-                    value={[a.time, a.name].filter(Boolean).join(" · ")}
-                  />
+                  <div key={i}>
+                    <p className="text-sm font-medium text-gray-900">
+                      {[a.action || "Update", a.name].filter(Boolean).join(" · ")}
+                    </p>
+                    {a.time && <p className="text-xs text-gray-400">{a.time}</p>}
+                  </div>
                 ))
               : (
                 <>
