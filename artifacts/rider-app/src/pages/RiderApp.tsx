@@ -61,9 +61,9 @@ type RiderView = "available" | "active" | "history" | "profile";
 //   Pending → Rider Accepted → Rider Picked Up → Delivered  (or Rejected)
 
 const STATUS_LABELS: Record<string, string> = {
-  Pending: "Waiting Pickup",
-  "Admin Accepted": "Ready to Pick",
-  "Rider Accepted": "Accepted",
+  Pending: "New Order",
+  "Admin Accepted": "New Order",
+  "Rider Accepted": "Heading to Restaurant",
   "Rider Picked Up": "On the Way",
   Delivered: "Delivered",
   Rejected: "Rejected",

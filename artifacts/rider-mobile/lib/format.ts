@@ -17,7 +17,7 @@ export function parseItemName(fullName: string): {
 
 export const STATUS_LABELS: Record<string, string> = {
   Pending: "New Order",
-  "Admin Accepted": "Ready to Pick",
+  "Admin Accepted": "New Order",
   "Rider Accepted": "Heading to Restaurant",
   "Rider Picked Up": "On the Way",
   Delivered: "Delivered",
