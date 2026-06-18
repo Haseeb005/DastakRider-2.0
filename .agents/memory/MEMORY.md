@@ -1,4 +1,5 @@
 - [Dastak DB schema](dastak-db-schema.md) — rider app uses the REAL prod Mongo: riders are `users` with `type:"rider"` (plaintext passwords), orders use capitalized statuses + `_id`/`riderId`/`riderFare`.
 - [Dastak shared-DB safety + GPS authz](dastak-shared-db-safety.md) — additive-only writes to shared orders/users (no canonical-status/counter writes); GPS push needs ownership+in-transit guard; PKT=UTC+5 no DST.
 - [Dastak rider status contract](dastak-rider-status-contract.md) — status PUT needs EXACT "Rider Picked Up"/"Delivered" + mandatory /arrived (riderArrived:true) before pickup; web & mobile must mirror.
+- [Dastak rider fare source](dastak-rider-fare.md) — rider fare = current `tillNoonFare` (earnings = deliveries × it); never use `deliveryCharges` as pay; all dates show in Asia/Karachi (GMT+5).
 - [Dastak monorepo type quirks](dastak-monorepo-types.md) — Expo pins @types/react 19.1.x vs catalog 19.2.x (expected); rider-app calendar.tsx typecheck error is pre-existing, NOT from the mobile artifact.

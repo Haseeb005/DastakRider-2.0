@@ -111,6 +111,7 @@ function formatDateTime(dateStr?: string | null) {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return String(dateStr);
   return d.toLocaleString("en-PK", {
+    timeZone: "Asia/Karachi",
     day: "numeric",
     month: "short",
     hour: "numeric",
