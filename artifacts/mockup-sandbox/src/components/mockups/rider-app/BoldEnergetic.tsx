@@ -76,21 +76,24 @@ export default function BoldEnergetic() {
   };
 
   return (
-    <div className="w-full h-full bg-[#F4F6F8] font-sans flex flex-col relative overflow-hidden" style={{ fontFamily: "'Outfit', sans-serif" }}>
+    <div className="w-full h-full bg-[#F4F6F8] font-sans flex flex-col relative overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
-        
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
         .bg-brand {
-          background-color: #FF5A00;
+          background-color: #DB143C;
         }
         .text-brand {
-          color: #FF5A00;
+          color: #DB143C;
         }
         .border-brand {
-          border-color: #FF5A00;
+          border-color: #DB143C;
+        }
+        .fill-brand {
+          fill: #DB143C;
         }
         .shadow-brand {
-          box-shadow: 0 10px 25px -5px rgba(255, 90, 0, 0.4);
+          box-shadow: 0 10px 25px -5px rgba(219, 20, 60, 0.4);
         }
       `}</style>
 
@@ -238,12 +241,12 @@ export default function BoldEnergetic() {
                   
                   <button 
                     onClick={() => handleAccept(order.id)}
-                    className="bg-gray-900 hover:bg-black text-white px-6 py-3.5 rounded-xl font-bold flex items-center gap-2 transition-transform active:scale-95"
+                    className="bg-brand hover:opacity-90 text-white px-6 py-3.5 rounded-full font-bold flex items-center gap-2 transition-all active:scale-95 shadow-brand"
                   >
                     {acceptedOrders.includes(order.id) ? (
-                      <>Accepted <CheckCircle2 size={18} strokeWidth={3} className="text-green-400" /></>
+                      <>Accepted <CheckCircle2 size={18} strokeWidth={3} className="text-white" /></>
                     ) : (
-                      <>Accept Order <ArrowRight size={18} strokeWidth={3} className="text-brand" /></>
+                      <>Accept Order <ArrowRight size={18} strokeWidth={3} className="text-white" /></>
                     )}
                   </button>
                 </div>
