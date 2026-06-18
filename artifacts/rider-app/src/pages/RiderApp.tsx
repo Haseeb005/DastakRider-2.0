@@ -1229,7 +1229,7 @@ function RiderProfile({ rider }: { rider: Rider }) {
               <p className="font-semibold text-gray-900">Availability</p>
               <p className="text-sm text-gray-500 mt-0.5">
                 {rider.isOnline
-                  ? "You are online and visible to customers"
+                  ? "Online — receiving orders"
                   : "You are offline — go online to receive orders"}
               </p>
             </div>
