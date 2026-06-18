@@ -235,6 +235,48 @@ export default function AvailableScreen() {
               tintColor={c.primary}
             />
           }
+          ListHeaderComponent={
+            orders.length > 0 ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                  paddingHorizontal: 2,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: "Inter_700Bold",
+                    fontSize: 18,
+                    color: c.foreground,
+                  }}
+                >
+                  Available Orders
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: c.primary,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 999,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: "Inter_700Bold",
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                      color: "#FFFFFF",
+                    }}
+                  >
+                    LIVE
+                  </Text>
+                </View>
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => (
             <OrderCard order={item} onPress={() => setSelected(item)}>
               <Button

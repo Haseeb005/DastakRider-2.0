@@ -7,6 +7,18 @@ import { Badge } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { isCOD, money, statusColors, statusLabel } from "@/lib/format";
 
+function initials(name?: string | null): string {
+  const n = (name ?? "").trim();
+  if (!n) return "?";
+  const words = n.split(/\s+/).filter(Boolean);
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return words
+    .slice(0, 3)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
+
 export function OrderCard({
   order,
   onPress,
@@ -33,139 +45,226 @@ export function OrderCard({
       style={({ pressed }) => [
         {
           backgroundColor: c.card,
-          borderRadius: c.radius,
+          borderRadius: 24,
           borderWidth: 1,
           borderColor: c.border,
-          padding: 16,
-          marginBottom: 12,
-          opacity: pressed ? 0.92 : 1,
+          padding: 18,
+          marginBottom: 16,
+          opacity: pressed ? 0.95 : 1,
         },
       ]}
     >
+      {/* Top: status + payment badges, with fare on the right */}
       <View
         style={{
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "flex-start",
-          marginBottom: 10,
+          marginBottom: 18,
         }}
       >
-        <View style={{ flex: 1, paddingRight: 10 }}>
-          <Text
-            numberOfLines={1}
-            style={{
-              fontFamily: "Inter_700Bold",
-              fontSize: 16,
-              color: c.foreground,
-            }}
-          >
-            {order.restaurantName || "Restaurant"}
-          </Text>
-          {order.orderNum ? (
-            <Text
-              style={{
-                fontFamily: "Inter_400Regular",
-                fontSize: 12,
-                color: c.mutedForeground,
-                marginTop: 2,
-              }}
-            >
-              #{order.orderNum}
-            </Text>
-          ) : null}
+        <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <Badge label={badgeLabel} bg={sc.bg} fg={sc.fg} />
+          <Badge
+            label={cod ? "COD" : order.paymentType || "Online"}
+            bg={cod ? c.purpleBg : c.infoBg}
+            fg={cod ? c.purple : c.info}
+          />
         </View>
-        <Badge label={badgeLabel} bg={sc.bg} fg={sc.fg} />
-      </View>
-
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <Feather name="map-pin" size={14} color={c.mutedForeground} />
-        <Text
-          numberOfLines={1}
-          style={{
-            flex: 1,
-            fontFamily: "Inter_400Regular",
-            fontSize: 13,
-            color: c.foreground,
-          }}
-        >
-          {order.address || "—"}
-        </Text>
-      </View>
-
-      {order.zone || order.distance ? (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-            marginTop: 6,
-          }}
-        >
-          <Feather name="navigation" size={13} color={c.mutedForeground} />
-          <Text
-            numberOfLines={1}
-            style={{
-              flex: 1,
-              fontFamily: "Inter_400Regular",
-              fontSize: 12,
-              color: c.mutedForeground,
-            }}
-          >
-            {[order.zone, order.distance].filter(Boolean).join(" · ")}
-          </Text>
-        </View>
-      ) : null}
-
-      <View
-        style={{
-          height: 1,
-          backgroundColor: c.border,
-          marginVertical: 12,
-        }}
-      />
-
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "flex-end",
-        }}
-      >
-        <View>
-          <Text
-            style={{
-              fontFamily: "Inter_400Regular",
-              fontSize: 11,
-              color: c.mutedForeground,
-              marginBottom: 2,
-            }}
-          >
-            Your fare
-          </Text>
+        <View style={{ alignItems: "flex-end", paddingLeft: 10 }}>
           <Text
             style={{
               fontFamily: "Inter_700Bold",
-              fontSize: 19,
-              color: c.success,
+              fontSize: 10,
+              letterSpacing: 1,
+              color: c.mutedForeground,
+              textTransform: "uppercase",
+              marginBottom: 1,
+            }}
+          >
+            Your Fare
+          </Text>
+          <Text
+            style={{
+              fontFamily: "Inter_800ExtraBold",
+              fontSize: 24,
+              color: c.primary,
             }}
           >
             {money(order.riderFare)}
           </Text>
         </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <Text
+      </View>
+
+      {/* Route timeline */}
+      <View style={{ position: "relative" }}>
+        {/* Connector line behind the tiles */}
+        <View
+          style={{
+            position: "absolute",
+            left: 21,
+            top: 22,
+            bottom: 22,
+            width: 2,
+            backgroundColor: c.border,
+            borderRadius: 1,
+          }}
+        />
+
+        {/* Pickup */}
+        <View
+          style={{ flexDirection: "row", gap: 12, marginBottom: 14 }}
+        >
+          <View
             style={{
-              fontFamily: "Inter_400Regular",
-              fontSize: 11,
-              color: c.mutedForeground,
-              marginBottom: 2,
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: c.primary,
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            Order total
+            <Text
+              style={{
+                fontFamily: "Inter_800ExtraBold",
+                fontSize: 13,
+                color: "#FFFFFF",
+              }}
+            >
+              {initials(order.restaurantName)}
+            </Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontFamily: "Inter_700Bold",
+                fontSize: 10,
+                letterSpacing: 0.8,
+                color: c.mutedForeground,
+                textTransform: "uppercase",
+                marginBottom: 1,
+              }}
+            >
+              Pickup
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={{
+                fontFamily: "Inter_700Bold",
+                fontSize: 16,
+                color: c.foreground,
+              }}
+            >
+              {order.restaurantName || "Restaurant"}
+            </Text>
+            {order.orderNum ? (
+              <Text
+                style={{
+                  fontFamily: "Inter_400Regular",
+                  fontSize: 12,
+                  color: c.mutedForeground,
+                }}
+              >
+                #{order.orderNum}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        {/* Dropoff */}
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: c.muted,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Feather name="map-pin" size={20} color={c.mutedForeground} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontFamily: "Inter_700Bold",
+                fontSize: 10,
+                letterSpacing: 0.8,
+                color: c.mutedForeground,
+                textTransform: "uppercase",
+                marginBottom: 1,
+              }}
+            >
+              Dropoff
+            </Text>
+            <Text
+              numberOfLines={2}
+              style={{
+                fontFamily: "Inter_700Bold",
+                fontSize: 15,
+                color: c.foreground,
+                lineHeight: 20,
+              }}
+            >
+              {order.address || "—"}
+            </Text>
+            {order.zone || order.distance ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  marginTop: 2,
+                }}
+              >
+                <Feather name="navigation" size={12} color={c.primary} />
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontFamily: "Inter_600SemiBold",
+                    fontSize: 12,
+                    color: c.primary,
+                  }}
+                >
+                  {[order.zone, order.distance].filter(Boolean).join(" · ")}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </View>
+
+      {/* Footer: customer bill + items, dashed divider */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginTop: 16,
+          paddingTop: 16,
+          borderTopWidth: 1,
+          borderTopColor: c.border,
+          borderStyle: "dashed",
+        }}
+      >
+        <View>
+          <Text
+            style={{
+              fontFamily: "Inter_700Bold",
+              fontSize: 10,
+              letterSpacing: 0.8,
+              color: c.mutedForeground,
+              textTransform: "uppercase",
+              marginBottom: 1,
+            }}
+          >
+            Customer Bill
           </Text>
           <Text
             style={{
-              fontFamily: "Inter_600SemiBold",
+              fontFamily: "Inter_700Bold",
               fontSize: 15,
               color: c.foreground,
             }}
@@ -173,54 +272,12 @@ export function OrderCard({
             {money(order.total)}
           </Text>
         </View>
-      </View>
-
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-          marginTop: 12,
-        }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            backgroundColor: cod ? c.warningBg : c.muted,
-            paddingHorizontal: 9,
-            paddingVertical: 4,
-            borderRadius: 8,
-          }}
-        >
-          <Feather
-            name={cod ? "dollar-sign" : "credit-card"}
-            size={12}
-            color={cod ? c.warning : c.mutedForeground}
-          />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+          <Feather name="shopping-bag" size={13} color={c.mutedForeground} />
           <Text
             style={{
               fontFamily: "Inter_500Medium",
-              fontSize: 11,
-              color: cod ? c.warning : c.mutedForeground,
-            }}
-          >
-            {cod ? "Cash on delivery" : order.paymentType || "Paid online"}
-          </Text>
-        </View>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-          }}
-        >
-          <Feather name="shopping-bag" size={12} color={c.mutedForeground} />
-          <Text
-            style={{
-              fontFamily: "Inter_500Medium",
-              fontSize: 11,
+              fontSize: 12,
               color: c.mutedForeground,
             }}
           >

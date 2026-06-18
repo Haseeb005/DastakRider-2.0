@@ -66,8 +66,8 @@ export function Button({
       style={({ pressed }) => [
         {
           backgroundColor: bg[variant],
-          borderRadius: c.radius,
-          paddingVertical: 13,
+          borderRadius: 999,
+          paddingVertical: 14,
           paddingHorizontal: 18,
           flexDirection: "row",
           alignItems: "center",
