@@ -1028,9 +1028,6 @@ function DeliveryHistory() {
     { query: { queryKey: getGetOrderHistoryQueryKey({ period }) } },
   );
 
-  const pending = earnings?.pendingCollection ?? 0;
-  const unpaid = earnings?.unpaidCollection ?? 0;
-
   const periodLabel =
     period === "today" ? "Today"
       : period === "week" ? "This Week"
@@ -1040,24 +1037,6 @@ function DeliveryHistory() {
   return (
     <div className="p-4 space-y-4">
       <h2 className="text-lg font-bold text-gray-900">Earnings & History</h2>
-
-      {/* Cash collection */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="border-0 shadow-md overflow-hidden">
-          <div className="bg-gradient-to-br from-red-500 to-orange-500 p-4 text-white">
-            <p className="text-xs opacity-90 mb-1">Active Collection</p>
-            <p className="text-3xl font-bold">{formatMoney(pending)}</p>
-            <p className="text-xs opacity-80 mt-2">Cash in hand</p>
-          </div>
-        </Card>
-        <Card className="border-0 shadow-md overflow-hidden">
-          <div className="bg-gradient-to-br from-rose-400 to-red-400 p-4 text-white">
-            <p className="text-xs opacity-90 mb-1">Pending Collection</p>
-            <p className="text-3xl font-bold">{formatMoney(unpaid)}</p>
-            <p className="text-xs opacity-80 mt-2">Unpaid to company</p>
-          </div>
-        </Card>
-      </div>
 
       {/* Period filter */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
