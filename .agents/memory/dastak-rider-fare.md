@@ -3,33 +3,33 @@ name: Dastak rider fare source
 description: How a rider's per-order fare and earnings are computed, and why deliveryCharges must never be used as pay.
 ---
 
-# Rider fare = the rider's `tillNoonFare`
+# Rider fare = per-order snapshot; current rate only for pre-accept orders
 
 `tillNoonFare` is an admin-set per-delivery fare (Rs) stored on each rider USER doc
 (`users`, `type:"rider"`), NOT on orders. ~500/507 riders have it (e.g. 60/70/140).
-The accept endpoint snapshots `rider.tillNoonFare` onto the order as `riderFare`.
+The accept endpoint snapshots `rider.tillNoonFare` onto the order as `riderFare`,
+locking the rate at accept time.
 
-**Rule:** a rider's fare for ANY order = their current `tillNoonFare`. Earnings =
-delivered count × `tillNoonFare`. Fall back to the order's stored `riderFare`
-snapshot only when the rider has no `tillNoonFare`, then to 0.
+**Rule (payout-correct):** a rider's fare for an order is the per-order snapshot
+`order.riderFare`. The rider's CURRENT `tillNoonFare` is used ONLY as a fallback
+for pre-accept "available" orders (which have no snapshot yet). Earnings = sum of
+stored `riderFare` over delivered orders — NOT count × current rate. So changing a
+rider's rate never re-values past deliveries. ~99.6% of delivered orders carry a
+snapshot; the ~811 that don't are ancient 2021 orders with zero charge → count as 0.
 
-**Why:** the user explicitly asked to "always get order fare from tillNoonFare".
-`tillNoonFare` is the canonical per-delivery rate; the stored `riderFare` snapshots
-are historically unreliable (some were derived from the customer charge).
+**Why:** the user first asked to "always get fare from tillNoonFare" (we used the
+current rate everywhere), then explicitly switched to: snapshot for history/earnings,
+current rate only for new/available orders — to keep historical payouts correct when
+admins change a rate.
 
-**Never use `deliveryCharges` as rider pay** — it is the CUSTOMER's delivery charge,
-not the rider's fare. It was removed from all fare fallbacks (normalizeOrder +
-computeEarnings).
+**Never use `deliveryCharges` as rider pay** — it is the CUSTOMER's delivery charge.
+Removed from all fare fallbacks.
 
-**How to apply:** in `artifacts/api-server/src/routes/rider.ts`, all rider-facing
-endpoints fetch the rider and pass `Number(rider.tillNoonFare)||0` into
-`normalizeOrder(doc, override)`; `computeEarnings(riderId, tillNoonFare)` sums
-`{$literal: tillNoonFare}` per delivered order when it's >0.
-
-**Tradeoff (flagged to user):** because earnings use the CURRENT `tillNoonFare`,
-changing a rider's rate retroactively re-values their entire history. If payout
-correctness ever matters, switch history/earnings to the stored `riderFare`
-snapshot and keep the current-rate override only for pre-accept "available" orders.
+**How to apply:** in `artifacts/api-server/src/routes/rider.ts`,
+`normalizeOrder(doc, currentRateFallback?)` returns `riderFare = snapshot>0 ?
+snapshot : fallback`. ONLY the `/available` endpoint passes the fallback
+(`Number(rider.tillNoonFare)||0`); active/history/accept/arrived/status pass nothing
+(snapshot-only). `computeEarnings(riderId)` sums `$ifNull:["$riderFare",0]`.
 
 # Timezone
 
