@@ -1,13 +1,13 @@
 /**
  * Dastak Rider — design tokens.
- * Brand primary mirrors the web app's --primary: hsl(16 100% 50%) => #FF4400.
+ * Brand primary mirrors the DastakMart website: crimson #DB143C (hsl 348 83% 47%).
  */
 
 const colors = {
   light: {
     // Legacy aliases
     text: "#0A0A0A",
-    tint: "#FF4400",
+    tint: "#DB143C",
 
     // Core surfaces
     background: "#F6F7F9",
@@ -17,8 +17,8 @@ const colors = {
     card: "#FFFFFF",
     cardForeground: "#0A0A0A",
 
-    // Primary brand (orange-red)
-    primary: "#FF4400",
+    // Primary brand (DastakMart crimson)
+    primary: "#DB143C",
     primaryForeground: "#FFFFFF",
 
     // Secondary
@@ -29,9 +29,9 @@ const colors = {
     muted: "#EEEFF2",
     mutedForeground: "#6B7280",
 
-    // Accent (light orange tint)
-    accent: "#FFF1EC",
-    accentForeground: "#D63A00",
+    // Accent (light crimson tint)
+    accent: "#FDE7EC",
+    accentForeground: "#A30F2C",
 
     // Destructive
     destructive: "#EF4444",
