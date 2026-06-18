@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   getGetActiveOrdersQueryKey,
   getGetAvailableOrdersQueryKey,
@@ -21,15 +21,17 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OrderCard } from "@/components/OrderCard";
 import { OrderDetailModal } from "@/components/OrderDetailModal";
-import { Button, EmptyState, Loading, ScreenHeader } from "@/components/ui";
+import { Button, EmptyState, Loading } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useOrderAlert } from "@/lib/alert";
 
 export default function AvailableScreen() {
   const c = useColors();
+  const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const [selected, setSelected] = useState<RiderOrder | null>(null);
 
@@ -84,81 +86,171 @@ export default function AvailableScreen() {
     ordersQ.refetch();
   };
 
-  const headerRight = (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-      <Pressable
-        onPress={refresh}
-        hitSlop={8}
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 18,
-          backgroundColor: c.muted,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-        accessibilityLabel="Refresh orders"
-      >
-        <Feather name="refresh-cw" size={16} color={c.foreground} />
-      </Pressable>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <Text
-          style={{
-            fontFamily: "Inter_600SemiBold",
-            fontSize: 13,
-            color: isOnline ? c.success : c.mutedForeground,
-          }}
-        >
-          {isOnline ? "Online" : "Offline"}
-        </Text>
-        <Switch
-          value={isOnline}
-          onValueChange={toggleOnline}
-          disabled={availabilityM.isPending}
-          trackColor={{ false: c.input, true: c.success }}
-          thumbColor="#FFFFFF"
-        />
-      </View>
-    </View>
-  );
-
   if (meQ.isLoading) return <Loading />;
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
-      <ScreenHeader
-        title="Orders"
-        subtitle={meQ.data?.name ?? (isOnline ? "Waiting for new orders" : "Go online to see orders")}
-        right={headerRight}
-      />
+      <View
+        style={{
+          backgroundColor: c.card,
+          paddingTop: Platform.OS === "web" ? 24 : insets.top + 12,
+          paddingHorizontal: 20,
+          paddingBottom: 16,
+          borderBottomLeftRadius: 24,
+          borderBottomRightRadius: 24,
+          shadowColor: "#000",
+          shadowOpacity: 0.05,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 3,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 14,
+          }}
+        >
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                marginBottom: 2,
+              }}
+            >
+              <MaterialCommunityIcons name="bike" size={15} color={c.primary} />
+              <Text
+                style={{
+                  fontFamily: "Inter_800ExtraBold",
+                  fontSize: 12,
+                  letterSpacing: 1,
+                  color: c.primary,
+                  textTransform: "uppercase",
+                }}
+              >
+                Dastak Rider
+              </Text>
+            </View>
+            <Text
+              numberOfLines={1}
+              style={{
+                fontFamily: "Inter_700Bold",
+                fontSize: 22,
+                color: c.foreground,
+              }}
+            >
+              {meQ.data?.name ?? "Rider"}
+            </Text>
+          </View>
+          <Pressable
+            onPress={refresh}
+            hitSlop={8}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: c.muted,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            accessibilityLabel="Refresh orders"
+          >
+            <Feather name="refresh-cw" size={18} color={c.foreground} />
+          </Pressable>
+        </View>
+
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backgroundColor: c.background,
+            borderRadius: 14,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderWidth: 1,
+            borderColor: c.border,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: 6,
+                backgroundColor: isOnline ? c.success : c.mutedForeground,
+              }}
+            />
+            <Text
+              style={{
+                fontFamily: "Inter_700Bold",
+                fontSize: 16,
+                color: isOnline ? c.success : c.mutedForeground,
+              }}
+            >
+              {isOnline ? "You are Online" : "You are Offline"}
+            </Text>
+          </View>
+          <Switch
+            value={isOnline}
+            onValueChange={toggleOnline}
+            disabled={availabilityM.isPending}
+            trackColor={{ false: c.input, true: c.success }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+      </View>
 
       {newCount > 0 ? (
         <Pressable
           onPress={clearNew}
           style={{
             marginHorizontal: 20,
-            marginBottom: 8,
+            marginTop: 16,
+            marginBottom: 4,
             backgroundColor: c.primary,
-            borderRadius: c.radius,
-            padding: 12,
+            borderRadius: 20,
+            padding: 14,
             flexDirection: "row",
             alignItems: "center",
-            gap: 10,
+            gap: 12,
           }}
         >
-          <Feather name="bell" size={18} color="#FFFFFF" />
-          <Text
+          <View
             style={{
-              flex: 1,
-              fontFamily: "Inter_600SemiBold",
-              fontSize: 14,
-              color: "#FFFFFF",
+              backgroundColor: "rgba(255,255,255,0.2)",
+              padding: 8,
+              borderRadius: 12,
             }}
           >
-            {newCount} new order
-            {newCount === 1 ? "" : "s"} just arrived!
-          </Text>
-          <Feather name="x" size={18} color="#FFFFFF" />
+            <Feather name="bell" size={20} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontFamily: "Inter_800ExtraBold",
+                fontSize: 16,
+                color: "#FFFFFF",
+              }}
+            >
+              {newCount} new order{newCount === 1 ? "" : "s"} arrived!
+            </Text>
+            <Text
+              style={{
+                fontFamily: "Inter_500Medium",
+                fontSize: 13,
+                color: "rgba(255,255,255,0.9)",
+                marginTop: 1,
+              }}
+            >
+              Tap accept quickly to secure them.
+            </Text>
+          </View>
+          <Feather name="x" size={20} color="rgba(255,255,255,0.85)" />
         </Pressable>
       ) : null}
 
