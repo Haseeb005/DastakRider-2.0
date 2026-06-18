@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Badge } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import {
+  formatDateTime,
   isCOD,
   money,
   parseItemName,
@@ -602,9 +603,35 @@ export function OrderDetailModal({
             </View>
           </Section>
 
-          {order.actions && order.actions.length > 0 ? (
+          {(order.createdAt || (order.actions && order.actions.length > 0)) ? (
             <Section title="Timeline">
-              {order.actions.map((a, idx) => (
+              {/* Always show when the order was placed */}
+              {(() => {
+                const placed = order.createdAt ? formatDateTime(order.createdAt) : null;
+                if (!placed) return null;
+                return (
+                  <View style={{ flexDirection: "row", gap: 10, paddingVertical: 6 }}>
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: c.primary,
+                        marginTop: 5,
+                      }}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: "Inter_500Medium", fontSize: 13, color: c.foreground }}>
+                        Placed
+                      </Text>
+                      <Text style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: c.mutedForeground }}>
+                        {placed.date}, {placed.time}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })()}
+              {order.actions?.map((a, idx) => (
                 <View
                   key={idx}
                   style={{

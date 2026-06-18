@@ -436,9 +436,21 @@ function RiderOrderDetailModal({
               <Clock className="w-3.5 h-3.5" /> Timeline
             </h4>
             <DetailRow label="Placed" value={formatDateTime(order.createdAt)} />
-            <DetailRow label="Accepted" value={formatDateTime(order.acceptedTime)} />
-            <DetailRow label="Picked up" value={formatDateTime(order.pickUpTime)} />
-            <DetailRow label="Delivered" value={formatDateTime(order.timeWhenDelivered)} />
+            {order.actions && order.actions.length > 0
+              ? order.actions.map((a, i) => (
+                  <DetailRow
+                    key={i}
+                    label={a.action || "Update"}
+                    value={[a.time, a.name].filter(Boolean).join(" · ")}
+                  />
+                ))
+              : (
+                <>
+                  <DetailRow label="Accepted" value={formatDateTime(order.acceptedTime)} />
+                  <DetailRow label="Picked up" value={formatDateTime(order.pickUpTime)} />
+                  <DetailRow label="Delivered" value={formatDateTime(order.timeWhenDelivered)} />
+                </>
+              )}
           </div>
 
           {/* Customer */}
