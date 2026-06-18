@@ -150,13 +150,25 @@ export default function ProfileScreen() {
     );
   };
 
+  const doLogout = () =>
+    logoutM.mutate(undefined, { onSettled: () => signOut() });
+
   const confirmLogout = () => {
+    // Alert.alert button callbacks don't fire on React Native Web, so fall back
+    // to window.confirm there; native uses the proper Alert dialog.
+    if (Platform.OS === "web") {
+      const ok =
+        typeof window === "undefined" ||
+        window.confirm("You will be signed out of your account.");
+      if (ok) doLogout();
+      return;
+    }
     Alert.alert("Logout?", "You will be signed out of your account.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Logout",
         style: "destructive",
-        onPress: () => logoutM.mutate(undefined, { onSettled: () => signOut() }),
+        onPress: doLogout,
       },
     ]);
   };
