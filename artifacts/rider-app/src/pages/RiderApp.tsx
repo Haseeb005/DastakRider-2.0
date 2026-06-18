@@ -1080,30 +1080,26 @@ function DeliveryHistory() {
           </Card>
 
           {/* Cash collection */}
-          {(pending > 0 || unpaid > 0) && (
-            <>
-              <Card className="border-0 shadow-md overflow-hidden">
-                <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-4 text-white">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Banknote className="w-4 h-4 opacity-80" />
-                    <p className="text-xs opacity-80">Cash to Deposit</p>
-                  </div>
-                  <p className="text-2xl font-bold">{formatMoney(pending)}</p>
-                  <p className="text-xs opacity-80 mt-1">COD collected from customers</p>
-                </div>
-              </Card>
-              <Card className="border-0 shadow-md overflow-hidden">
-                <div className="bg-gradient-to-br from-rose-500 to-rose-600 p-4 text-white">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Wallet className="w-4 h-4 opacity-80" />
-                    <p className="text-xs opacity-80">Unpaid to You</p>
-                  </div>
-                  <p className="text-2xl font-bold">{formatMoney(unpaid)}</p>
-                  <p className="text-xs opacity-80 mt-1">Fares pending settlement</p>
-                </div>
-              </Card>
-            </>
-          )}
+          <Card className="border-0 shadow-md overflow-hidden">
+            <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-4 text-white">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Banknote className="w-4 h-4 opacity-80" />
+                <p className="text-xs opacity-80">Active Collection</p>
+              </div>
+              <p className="text-2xl font-bold">{formatMoney(pending)}</p>
+              <p className="text-xs opacity-80 mt-1">Cash in Hand</p>
+            </div>
+          </Card>
+          <Card className="border-0 shadow-md overflow-hidden">
+            <div className="bg-gradient-to-br from-rose-500 to-rose-600 p-4 text-white">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Wallet className="w-4 h-4 opacity-80" />
+                <p className="text-xs opacity-80">Pending Collection</p>
+              </div>
+              <p className="text-2xl font-bold">{formatMoney(unpaid)}</p>
+              <p className="text-xs opacity-80 mt-1">Unpaid to Company</p>
+            </div>
+          </Card>
 
           {earnings.rating > 0 && (
             <Card className="border-0 shadow-md col-span-2 overflow-hidden">
@@ -1316,28 +1312,28 @@ function RiderProfile({ rider }: { rider: Rider }) {
       </Card>
 
       {/* Cash collection */}
-      {((rider.pendingCollection ?? 0) > 0 || (rider.unpaidCollection ?? 0) > 0) && (
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="border-0 shadow-sm bg-white">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Banknote className="w-4 h-4 text-amber-500" />
-                <p className="text-xs text-gray-500">Cash to Deposit</p>
-              </div>
-              <p className="text-xl font-bold text-amber-600">{formatMoney(rider.pendingCollection ?? 0)}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm bg-white">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Wallet className="w-4 h-4 text-rose-500" />
-                <p className="text-xs text-gray-500">Unpaid to You</p>
-              </div>
-              <p className="text-xl font-bold text-rose-600">{formatMoney(rider.unpaidCollection ?? 0)}</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="border-0 shadow-sm bg-white">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Banknote className="w-4 h-4 text-amber-500" />
+              <p className="text-xs text-gray-500">Active Collection</p>
+            </div>
+            <p className="text-xl font-bold text-amber-600">{formatMoney(rider.pendingCollection ?? 0)}</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">Cash in Hand</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm bg-white">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Wallet className="w-4 h-4 text-rose-500" />
+              <p className="text-xs text-gray-500">Pending Collection</p>
+            </div>
+            <p className="text-xl font-bold text-rose-600">{formatMoney(rider.unpaidCollection ?? 0)}</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">Unpaid to Company</p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Account info */}
       <Card className="border-0 shadow-sm bg-white">
