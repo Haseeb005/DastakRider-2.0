@@ -822,6 +822,9 @@ function OrderCard({
         >
           <div className="flex items-start justify-between mb-3">
             <div className="flex-1 min-w-0">
+              {order.orderNum && (
+                <p className="text-xs font-semibold text-gray-400">Order #{order.orderNum}</p>
+              )}
               <h3 className="font-bold text-gray-900 truncate">{order.restaurantName || "Restaurant"}</h3>
               <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
                 <Clock className="w-3 h-3 shrink-0" />
