@@ -4,18 +4,20 @@ import {
   useGetActiveOrders,
 } from "@workspace/api-client-react";
 import type { SFSymbol } from "expo-symbols";
-import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
-import { SymbolView } from "expo-symbols";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
 
 type FeatherName = React.ComponentProps<typeof Feather>["name"];
+
+type TabBarProps = Parameters<
+  NonNullable<React.ComponentProps<typeof Tabs>["tabBar"]>
+>[0];
 
 const TABS: {
   name: string;
@@ -67,13 +69,8 @@ function NativeTabLayout() {
   );
 }
 
-function ClassicTabLayout() {
-  const colors = useColors();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const isIOS = Platform.OS === "ios";
-  const isWeb = Platform.OS === "web";
-
+function CustomTabBar({ state, navigation, insets }: TabBarProps) {
+  const c = useColors();
   const { token } = useAuth();
   const activeQ = useGetActiveOrders({
     query: {
@@ -85,53 +82,120 @@ function ClassicTabLayout() {
   const activeCount = activeQ.data?.length ?? 0;
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
-        headerShown: false,
-        tabBarLabelStyle: { fontFamily: "Inter_500Medium", fontSize: 11 },
-        tabBarStyle: {
-          position: "absolute",
-          backgroundColor: isIOS ? "transparent" : colors.background,
-          borderTopWidth: isWeb ? 1 : 0,
-          borderTopColor: colors.border,
-          elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
-        },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView
-              intensity={100}
-              tint={isDark ? "dark" : "light"}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : isWeb ? (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: colors.background },
-              ]}
-            />
-          ) : null,
+    <View
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        flexDirection: "row",
+        backgroundColor: c.card,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingTop: 10,
+        paddingBottom: Math.max(insets.bottom, 14),
+        paddingHorizontal: 12,
+        shadowColor: "#000",
+        shadowOpacity: 0.06,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: -6 },
+        elevation: 12,
       }}
     >
+      {state.routes.map((route, index) => {
+        const meta = TABS.find((t) => t.name === route.name);
+        if (!meta) return null;
+
+        const isFocused = state.index === index;
+        const color = isFocused ? c.primary : c.mutedForeground;
+        const showBadge = route.name === "active" && activeCount > 0;
+
+        const onPress = () => {
+          const event = navigation.emit({
+            type: "tabPress",
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
+          }
+        };
+
+        return (
+          <Pressable
+            key={route.key}
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityState={isFocused ? { selected: true } : {}}
+            accessibilityLabel={meta.title}
+            style={{ flex: 1, alignItems: "center", paddingTop: 8 }}
+          >
+            {isFocused ? (
+              <View
+                style={{
+                  position: "absolute",
+                  top: -2,
+                  width: 28,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: c.primary,
+                }}
+              />
+            ) : null}
+            <View>
+              <Feather name={meta.feather} size={24} color={color} />
+              {showBadge ? (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -6,
+                    right: -10,
+                    minWidth: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: c.primary,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 10,
+                      fontFamily: "Inter_700Bold",
+                    }}
+                  >
+                    {activeCount}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <Text
+              style={{
+                marginTop: 4,
+                fontSize: 11,
+                color,
+                fontFamily: isFocused ? "Inter_700Bold" : "Inter_500Medium",
+              }}
+            >
+              {meta.title}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function ClassicTabLayout() {
+  return (
+    <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
       {TABS.map((t) => (
-        <Tabs.Screen
-          key={t.name}
-          name={t.name}
-          options={{
-            title: t.title,
-            tabBarBadge:
-              t.name === "active" && activeCount > 0 ? activeCount : undefined,
-            tabBarIcon: ({ color }) =>
-              isIOS ? (
-                <SymbolView name={t.sf} tintColor={color} size={24} />
-              ) : (
-                <Feather name={t.feather} size={22} color={color} />
-              ),
-          }}
-        />
+        <Tabs.Screen key={t.name} name={t.name} options={{ title: t.title }} />
       ))}
     </Tabs>
   );
