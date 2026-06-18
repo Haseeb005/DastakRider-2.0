@@ -50,7 +50,7 @@ Food-delivery rider apps for Pakistan: a web rider app and an Expo mobile app, b
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- The API server has **no watch/hot-reload**: its `dev` script is `build && start` (esbuild bundles `dist/` once, then runs the bundle). After editing anything under `artifacts/api-server/src`, you MUST restart the `artifacts/api-server: API Server` workflow, or it keeps serving stale code — a correct fix will look broken (e.g. a `normalizeOrder` change silently not applied).
 
 ## Pointers
 
