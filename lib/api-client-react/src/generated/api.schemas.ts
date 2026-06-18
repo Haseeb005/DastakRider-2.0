@@ -56,6 +56,7 @@ export interface RiderOrder {
   phone?: string | null;
   status: string;
   total: number;
+  /** Customer-facing delivery charge on the bill. NOT the rider's pay — use riderFare for the rider's earnings. */
   deliveryFee: number;
   subtotal: number;
   items?: OrderItem[];
@@ -77,6 +78,7 @@ export interface RiderOrder {
   orderNum?: string | null;
   /** @nullable */
   comment?: string | null;
+  /** The rider's payout for this order (per-order snapshot locked at accept time). This is the rider's earnings, distinct from deliveryFee. */
   riderFare?: number;
   tip?: number;
   discount?: number;

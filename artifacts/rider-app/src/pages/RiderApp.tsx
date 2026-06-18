@@ -323,32 +323,41 @@ function RiderOrderDetailModal({
 }) {
   const isCod = (order.paymentType || "").toLowerCase().includes("cod") ||
     (order.paymentType || "").toLowerCase().includes("cash");
+  const isDelivered = order.status === "Delivered";
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative w-full max-w-md max-h-[88vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl">
         <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
           <div className="min-w-0">
-            <h3 className="font-bold text-gray-900 truncate">{order.restaurantName || "Order"}</h3>
             {order.orderNum && <p className="text-xs text-gray-400">Order #{order.orderNum}</p>}
+            <h3 className="font-bold text-gray-900 truncate">{order.restaurantName || "Order"}</h3>
+            {(order.city || order.zone) && (
+              <p className="text-xs text-gray-500 truncate">
+                {[order.city, order.zone].filter(Boolean).join(" · ")}
+              </p>
+            )}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 shrink-0">
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
-        </div>
-
-        <div className="p-4 space-y-4">
-          {/* Status + payment */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 shrink-0">
             <Badge className={`border-0 text-xs ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-700"}`}>
               {STATUS_LABELS[order.status] || order.status}
             </Badge>
-            {order.paymentType && (
-              <Badge className={`border-0 text-xs ${isCod ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
-                {isCod ? <Banknote className="w-3 h-3 mr-1 inline" /> : <CreditCard className="w-3 h-3 mr-1 inline" />}
-                {order.paymentType}
-              </Badge>
-            )}
+            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 shrink-0">
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Timeline */}
+          <div className="space-y-1.5">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" /> Timeline
+            </h4>
+            <DetailRow label="Placed" value={formatDateTime(order.createdAt)} />
+            <DetailRow label="Accepted" value={formatDateTime(order.acceptedTime)} />
+            <DetailRow label="Picked up" value={formatDateTime(order.pickUpTime)} />
+            <DetailRow label="Delivered" value={formatDateTime(order.timeWhenDelivered)} />
           </div>
 
           {/* Customer */}
@@ -359,26 +368,34 @@ function RiderOrderDetailModal({
                 <User className="w-4 h-4 text-orange-500 shrink-0" /> {order.userName}
               </div>
             )}
-            {order.address && (
-              <div className="flex items-start gap-2 text-sm text-gray-700">
-                <MapPin className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" /> {order.address}
-              </div>
-            )}
             {order.phone && (
               <div className="flex items-center gap-2 text-sm">
                 <Phone className="w-4 h-4 text-orange-500 shrink-0" />
                 <a href={`tel:${order.phone}`} className="text-blue-600 font-medium">{order.phone}</a>
               </div>
             )}
+            {order.address && (
+              <div className="flex items-start gap-2 text-sm text-gray-700">
+                <MapPin className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" /> {order.address}
+              </div>
+            )}
+            {order.distance && (
+              <p className="text-xs text-gray-400 pl-6">{order.distance} km away</p>
+            )}
           </div>
 
           {/* Restaurant */}
-          {(order.martAddress || order.martPhone) && (
+          {(order.restaurantName || order.martAddress || order.martPhone) && (
             <div className="space-y-1.5">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Restaurant</h4>
+              {order.restaurantName && (
+                <div className="flex items-center gap-2 text-sm text-gray-700">
+                  <Store className="w-4 h-4 text-orange-500 shrink-0" /> {order.restaurantName}
+                </div>
+              )}
               {order.martAddress && (
                 <div className="flex items-start gap-2 text-sm text-gray-700">
-                  <Store className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" /> {order.martAddress}
+                  <MapPin className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" /> {order.martAddress}
                 </div>
               )}
               {order.martPhone && (
@@ -420,26 +437,54 @@ function RiderOrderDetailModal({
             </div>
           )}
 
-          {/* Bill summary */}
+          {/* Price Breakdown */}
           <div className="bg-gray-50 rounded-lg p-3 space-y-2">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1.5">
-              <Receipt className="w-3.5 h-3.5" /> Bill
+              <Receipt className="w-3.5 h-3.5" /> Price Breakdown
             </h4>
-            <DetailRow label="Order Total" value={formatMoney(order.total)} />
-            <DetailRow label="Your Earning" value={<span className="text-green-600">{formatMoney(order.riderFare || order.deliveryFee)}</span>} />
-            {(order.tip ?? 0) > 0 && <DetailRow label="Tip" value={formatMoney(order.tip ?? 0)} />}
+            <DetailRow label="Subtotal" value={formatMoney(order.subtotal)} />
+            {(order.deliveryFee ?? 0) > 0 && (
+              <DetailRow label="Delivery Fee" value={formatMoney(order.deliveryFee)} />
+            )}
             {(order.discount ?? 0) > 0 && (
               <DetailRow label="Discount" value={`- ${formatMoney(order.discount ?? 0)}`} />
             )}
-            {order.distance && <DetailRow label="Distance" value={`${order.distance} km`} />}
-            {order.zone && <DetailRow label="Zone" value={order.zone} />}
-            {isCod && (
-              <DetailRow
-                label="Cash to collect"
-                value={<span className="text-amber-700">{formatMoney(order.total)}</span>}
-              />
+            {(order.platformFee ?? 0) > 0 && (
+              <DetailRow label="Platform Fee" value={formatMoney(order.platformFee ?? 0)} />
             )}
-            {order.paidToRider && <DetailRow label="Settled" value="Paid to you ✓" />}
+            {(order.tip ?? 0) > 0 && <DetailRow label="Tip" value={formatMoney(order.tip ?? 0)} />}
+            <div className="border-t border-gray-200 pt-2">
+              <DetailRow label="Total" value={<span className="font-bold text-gray-900">{formatMoney(order.total)}</span>} />
+            </div>
+          </div>
+
+          {/* Payment */}
+          {order.paymentType && (
+            <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Payment</h4>
+              <div className="flex items-center justify-between gap-2">
+                <Badge className={`border-0 text-xs ${isCod ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+                  {isCod ? <Banknote className="w-3 h-3 mr-1 inline" /> : <CreditCard className="w-3 h-3 mr-1 inline" />}
+                  {order.paymentType}
+                </Badge>
+                <span className={`text-sm font-medium ${isCod ? "text-amber-700" : "text-emerald-700"}`}>
+                  {isCod
+                    ? `${formatMoney(order.total)} ${isDelivered ? "collected" : "to collect"}`
+                    : "Paid online"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Your Fare */}
+          <div className="rounded-lg p-3 bg-green-50 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-green-700/70">Your Fare</p>
+              <p className="text-lg font-bold text-green-700">{formatMoney(order.riderFare)}</p>
+            </div>
+            <Badge className={`border-0 text-xs ${order.paidToRider ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+              {order.paidToRider ? "Paid" : "Pending"}
+            </Badge>
           </div>
 
           {order.comment && (
@@ -449,24 +494,13 @@ function RiderOrderDetailModal({
             </div>
           )}
 
-          {/* Timeline */}
-          <div className="space-y-1.5">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" /> Timeline
-            </h4>
-            <DetailRow label="Placed" value={formatDateTime(order.createdAt)} />
-            <DetailRow label="Accepted" value={formatDateTime(order.acceptedTime)} />
-            <DetailRow label="Picked up" value={formatDateTime(order.pickUpTime)} />
-            <DetailRow label="Delivered" value={formatDateTime(order.timeWhenDelivered)} />
-          </div>
-
           {order.actions && order.actions.length > 0 && (
             <div className="space-y-1">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Activity Log</h4>
               {order.actions.map((a, i) => (
-                <div key={i} className="flex justify-between text-xs text-gray-500">
+                <div key={i} className="flex justify-between gap-3 text-xs text-gray-500">
                   <span>{a.action}{a.name ? ` — ${a.name}` : ""}</span>
-                  <span>{a.time}</span>
+                  <span className="text-right shrink-0">{a.time}</span>
                 </div>
               ))}
             </div>
@@ -640,7 +674,7 @@ function OrderCard({
             <div className="text-right">
               <p className="text-xs text-gray-400">Your Earning</p>
               <p className="font-bold text-green-600 text-lg">
-                {formatMoney(order.riderFare || order.deliveryFee || 50)}
+                {formatMoney(order.riderFare)}
               </p>
             </div>
           </div>
@@ -1031,7 +1065,7 @@ function DeliveryHistory() {
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-bold text-green-600">{formatMoney(order.riderFare || order.deliveryFee || 50)}</p>
+                  <p className="font-bold text-green-600">{formatMoney(order.riderFare)}</p>
                   <p className="text-xs text-gray-400">{formatMoney(order.total)} order</p>
                 </div>
               </CardContent>

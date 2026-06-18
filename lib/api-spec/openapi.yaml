@@ -397,6 +397,7 @@ components:
           type: number
         deliveryFee:
           type: number
+          description: Customer-facing delivery charge on the bill. NOT the rider's pay — use riderFare for the rider's earnings.
         subtotal:
           type: number
         items:
@@ -423,6 +424,7 @@ components:
           type: ["string", "null"]
         riderFare:
           type: number
+          description: The rider's payout for this order (per-order snapshot locked at accept time). This is the rider's earnings, distinct from deliveryFee.
         tip:
           type: number
         discount:

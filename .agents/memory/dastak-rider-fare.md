@@ -23,7 +23,11 @@ current rate only for new/available orders — to keep historical payouts correc
 admins change a rate.
 
 **Never use `deliveryCharges` as rider pay** — it is the CUSTOMER's delivery charge.
-Removed from all fare fallbacks.
+The normalized `deliveryFee` field = `doc.deliveryCharges` (customer bill line, e.g.
+140), which is DISTINCT from `riderFare` (rider payout, e.g. 120). UI "Delivery Fee"
+shows `deliveryFee`; rider earnings ("Your Fare"/"Your Earning") must ONLY come from
+`riderFare` — never fall back to `deliveryFee`. The order-detail bill is
+Subtotal + Delivery Fee + Platform Fee = Total (subtotal = total − deliveryCharges).
 
 **How to apply:** in `artifacts/api-server/src/routes/rider.ts`,
 `normalizeOrder(doc, currentRateFallback?)` returns `riderFare = snapshot>0 ?

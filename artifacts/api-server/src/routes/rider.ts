@@ -657,7 +657,8 @@ function normalizeOrder(doc: any, currentRateFallback?: number) {
     phone: doc.phone || null,
     status: doc.status,
     total,
-    deliveryFee: riderFare,
+    // Customer-facing delivery charge on the bill — NOT the rider's pay (riderFare).
+    deliveryFee: toNum(doc.deliveryCharges),
     riderFare,
     subtotal: Math.max(total - toNum(doc.deliveryCharges), 0) || total,
     items,
