@@ -1,4 +1,4 @@
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import {
   getGetActiveOrdersQueryKey,
   getGetAvailableOrdersQueryKey,
@@ -198,7 +198,7 @@ export default function AvailableScreen() {
                 marginBottom: 2,
               }}
             >
-              <MaterialCommunityIcons name="bike" size={15} color={c.primary} />
+              <Icon name="bike" size={15} color={c.primary} />
               <Text
                 style={{
                   fontFamily: "Inter_800ExtraBold",
@@ -235,7 +235,7 @@ export default function AvailableScreen() {
             }}
             accessibilityLabel="Refresh orders"
           >
-            <Feather name="refresh-cw" size={18} color={c.foreground} />
+            <Icon name="refresh-cw" size={18} color={c.foreground} />
           </Pressable>
         </View>
 
@@ -323,7 +323,7 @@ export default function AvailableScreen() {
               borderRadius: 12,
             }}
           >
-            <Feather name="bell" size={20} color="#FFFFFF" />
+            <Icon name="bell" size={20} color="#FFFFFF" />
           </View>
           <View style={{ flex: 1 }}>
             <Text
@@ -346,7 +346,7 @@ export default function AvailableScreen() {
               Tap accept quickly to secure them.
             </Text>
           </View>
-          <Feather name="x" size={20} color="rgba(255,255,255,0.85)" />
+          <Icon name="x" size={20} color="rgba(255,255,255,0.85)" />
         </Pressable>
       ) : null}
 
@@ -373,7 +373,7 @@ export default function AvailableScreen() {
                 justifyContent: "center",
               }}
             >
-              <Feather name="power" size={28} color={c.mutedForeground} />
+              <Icon name="power" size={28} color={c.mutedForeground} />
             </View>
             <Text
               style={{

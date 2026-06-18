@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import type { OrderItem, RiderOrder } from "@workspace/api-client-react";
 import React, { useState } from "react";
 import {
@@ -218,7 +218,7 @@ export function OrderDetailModal({
               justifyContent: "center",
             }}
           >
-            <Feather name="x" size={20} color={c.foreground} />
+            <Icon name="x" size={20} color={c.foreground} />
           </Pressable>
         </View>
 
@@ -268,7 +268,7 @@ export function OrderDetailModal({
                   marginTop: 8,
                 }}
               >
-                <Feather name="phone" size={14} color={c.primary} />
+                <Icon name="phone" size={14} color={c.primary} />
                 <Text
                   style={{
                     fontFamily: "Inter_600SemiBold",
@@ -296,7 +296,7 @@ export function OrderDetailModal({
                   borderRadius: 10,
                 }}
               >
-                <Feather
+                <Icon
                   name="navigation"
                   size={15}
                   color={c.primaryForeground}
@@ -358,7 +358,7 @@ export function OrderDetailModal({
                   marginTop: 8,
                 }}
               >
-                <Feather name="phone" size={14} color={c.primary} />
+                <Icon name="phone" size={14} color={c.primary} />
                 <Text
                   style={{
                     fontFamily: "Inter_600SemiBold",
@@ -386,7 +386,7 @@ export function OrderDetailModal({
                   borderRadius: 10,
                 }}
               >
-                <Feather
+                <Icon
                   name="navigation"
                   size={15}
                   color={c.primaryForeground}
@@ -409,7 +409,7 @@ export function OrderDetailModal({
               <View
                 style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}
               >
-                <Feather
+                <Icon
                   name="message-square"
                   size={16}
                   color={c.warning}
@@ -520,7 +520,7 @@ export function OrderDetailModal({
                           >
                             View what&apos;s included
                           </Text>
-                          <Feather
+                          <Icon
                             name="chevron-right"
                             size={14}
                             color={c.primary}
@@ -583,7 +583,7 @@ export function OrderDetailModal({
                 borderRadius: 10,
               }}
             >
-              <Feather
+              <Icon
                 name={cod ? "dollar-sign" : "credit-card"}
                 size={14}
                 color={cod ? c.warning : c.mutedForeground}
@@ -724,7 +724,7 @@ export function OrderDetailModal({
                   justifyContent: "center",
                 }}
               >
-                <Feather name="x" size={18} color={c.foreground} />
+                <Icon name="x" size={18} color={c.foreground} />
               </Pressable>
             </View>
 

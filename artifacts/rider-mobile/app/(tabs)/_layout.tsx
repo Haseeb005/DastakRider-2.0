@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Icon as AppIcon, type IconName } from "@/components/Icon";
 import {
   getGetActiveOrdersQueryKey,
   useGetActiveOrders,
@@ -13,8 +13,6 @@ import { Pressable, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
 
-type FeatherName = React.ComponentProps<typeof Feather>["name"];
-
 type TabBarProps = Parameters<
   NonNullable<React.ComponentProps<typeof Tabs>["tabBar"]>
 >[0];
@@ -22,7 +20,7 @@ type TabBarProps = Parameters<
 const TABS: {
   name: string;
   title: string;
-  feather: FeatherName;
+  feather: IconName;
   sf: SFSymbol;
   sfSelected: SFSymbol;
 }[] = [
@@ -143,7 +141,7 @@ function CustomTabBar({ state, navigation, insets }: TabBarProps) {
               />
             ) : null}
             <View>
-              <Feather name={meta.feather} size={24} color={color} />
+              <AppIcon name={meta.feather} size={24} color={color} />
               {showBadge ? (
                 <View
                   style={{

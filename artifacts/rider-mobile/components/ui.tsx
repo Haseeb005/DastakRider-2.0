@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Icon, type IconName } from "@/components/Icon";
 import React from "react";
 import {
   ActivityIndicator,
@@ -12,7 +12,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 
-type IconName = React.ComponentProps<typeof Feather>["name"];
 
 type BtnVariant =
   | "primary"
@@ -84,7 +83,7 @@ export function Button({
         <ActivityIndicator color={fg} />
       ) : (
         <>
-          {icon ? <Feather name={icon} size={18} color={fg} /> : null}
+          {icon ? <Icon name={icon} size={18} color={fg} /> : null}
           <Text
             style={{ color: fg, fontFamily: "Inter_600SemiBold", fontSize: 15 }}
           >
@@ -235,7 +234,7 @@ export function EmptyState({
           justifyContent: "center",
         }}
       >
-        <Feather name={icon} size={28} color={c.mutedForeground} />
+        <Icon name={icon} size={28} color={c.mutedForeground} />
       </View>
       <Text
         style={{

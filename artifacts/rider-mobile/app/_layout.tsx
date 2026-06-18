@@ -1,4 +1,3 @@
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -77,11 +76,6 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    // Preload every icon font we use so icons never render blank on first paint
-    // (on web the font otherwise loads asynchronously; on native an un-preloaded
-    // family can show as empty boxes).
-    ...Feather.font,
-    ...MaterialCommunityIcons.font,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,

@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Icon, type IconName } from "@/components/Icon";
 import {
   getGetRiderMeQueryKey,
   useGetRiderMe,
@@ -27,7 +27,7 @@ function InfoRow({
   label,
   value,
 }: {
-  icon: React.ComponentProps<typeof Feather>["name"];
+  icon: IconName;
   label: string;
   value: string;
 }) {
@@ -51,7 +51,7 @@ function InfoRow({
           justifyContent: "center",
         }}
       >
-        <Feather name={icon} size={16} color={c.mutedForeground} />
+        <Icon name={icon} size={16} color={c.mutedForeground} />
       </View>
       <Text
         style={{
@@ -241,7 +241,7 @@ export default function ProfileScreen() {
               marginTop: 4,
             }}
           >
-            <Feather name="star" size={14} color={c.warning} />
+            <Icon name="star" size={14} color={c.warning} />
             <Text
               style={{
                 fontFamily: "Inter_500Medium",

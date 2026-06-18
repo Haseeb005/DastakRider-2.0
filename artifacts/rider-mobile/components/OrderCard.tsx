@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import type { RiderOrder } from "@workspace/api-client-react";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
@@ -71,7 +71,7 @@ export function OrderCard({
             marginBottom: 12,
           }}
         >
-          <Feather name="clock" size={13} color={c.mutedForeground} />
+          <Icon name="clock" size={13} color={c.mutedForeground} />
           <Text
             style={{
               fontFamily: "Inter_500Medium",
@@ -214,7 +214,7 @@ export function OrderCard({
               justifyContent: "center",
             }}
           >
-            <Feather name="map-pin" size={20} color={c.mutedForeground} />
+            <Icon name="map-pin" size={20} color={c.mutedForeground} />
           </View>
           <View style={{ flex: 1 }}>
             <Text
@@ -249,7 +249,7 @@ export function OrderCard({
                   marginTop: 2,
                 }}
               >
-                <Feather name="navigation" size={12} color={c.primary} />
+                <Icon name="navigation" size={12} color={c.primary} />
                 <Text
                   numberOfLines={1}
                   style={{
@@ -303,7 +303,7 @@ export function OrderCard({
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-          <Feather name="shopping-bag" size={13} color={c.mutedForeground} />
+          <Icon name="shopping-bag" size={13} color={c.mutedForeground} />
           <Text
             style={{
               fontFamily: "Inter_500Medium",

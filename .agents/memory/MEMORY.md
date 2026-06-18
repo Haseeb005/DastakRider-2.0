@@ -4,3 +4,4 @@
 - [Dastak rider fare source](dastak-rider-fare.md) — fare = rider's CURRENT `tillNoonFare` (overrides snapshot everywhere; earnings = count × tnf); `deliveryFee` = customer charge (≠ rider pay); dates in Asia/Karachi (GMT+5).
 - [Dastak monorepo type quirks](dastak-monorepo-types.md) — Expo pins @types/react 19.1.x vs catalog 19.2.x (expected); rider-app calendar.tsx typecheck error is pre-existing, NOT from the mobile artifact.
 - [DastakMart brand theme](dastakmart-branding.md) — brand is crimson #DB143C (hsl 348 83 47), white base, Inter, pill CTAs; NOT the old orange.
+- [Dastak mobile icons](dastak-mobile-icons.md) — Expo app uses lucide SVG icons (font icons rendered blank); add/change icons via components/Icon.tsx, not @expo/vector-icons.

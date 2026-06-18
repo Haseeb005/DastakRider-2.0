@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useLoginRider } from "@workspace/api-client-react";
 import React, { useState } from "react";
 import { Platform, Text, TextInput, View } from "react-native";
@@ -116,7 +116,7 @@ export default function LoginScreen() {
             marginBottom: 14,
           }}
         >
-          <Feather name="zap" size={34} color="#FFFFFF" />
+          <Icon name="zap" size={34} color="#FFFFFF" />
         </View>
         <Text
           style={{
