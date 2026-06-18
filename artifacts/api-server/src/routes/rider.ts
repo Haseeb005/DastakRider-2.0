@@ -137,7 +137,10 @@ function safeRider(user: any) {
 
 // ── Pakistan timezone helpers (UTC+5) ──────────────────────────────────────────
 // Start-of-period returned as a real UTC instant aligned to the PKT calendar, so
-// comparisons against stored timestamps (updatedAt/createdAt) are correct for PK.
+// comparisons against stored timestamps are correct for PK.
+// NOTE: period filtering uses `createdAt`, NOT `updatedAt` — every delivered order
+// in the shared prod DB shares one bulk-written `updatedAt`, so filtering on it
+// puts everything in "today" and makes Today/Week/Month all equal the overall total.
 const PKT_MS = 5 * 60 * 60 * 1000;
 
 function pktPeriodStart(kind: "day" | "week" | "month"): Date {
@@ -190,9 +193,9 @@ async function computeEarnings(riderId: string) {
       {
         $facet: {
           total: [{ $group: group }],
-          today: [{ $match: { updatedAt: { $gte: dayStart } } }, { $group: group }],
-          week: [{ $match: { updatedAt: { $gte: weekStart } } }, { $group: group }],
-          month: [{ $match: { updatedAt: { $gte: monthStart } } }, { $group: group }],
+          today: [{ $match: { createdAt: { $gte: dayStart } } }, { $group: group }],
+          week: [{ $match: { createdAt: { $gte: weekStart } } }, { $group: group }],
+          month: [{ $match: { createdAt: { $gte: monthStart } } }, { $group: group }],
         },
       },
     ])
@@ -394,19 +397,19 @@ router.get("/rider/orders/history", async (req: any, res: any) => {
     const riderId = requireRiderId(req, res);
     if (!riderId) return;
     const period = String(req.query.period || "all");
-    let docs = await ordersCol()
-      .find({ riderId, status: DELIVERED_STATUS })
-      .sort({ updatedAt: -1 })
+    // Filter by createdAt in the DB query (not updatedAt — it is bulk-written and
+    // identical across orders) so the row limit never drops in-period orders.
+    const query: any = { riderId, status: DELIVERED_STATUS };
+    if (period === "today" || period === "week" || period === "month") {
+      query.createdAt = {
+        $gte: pktPeriodStart(period === "today" ? "day" : period),
+      };
+    }
+    const docs = await ordersCol()
+      .find(query)
+      .sort({ createdAt: -1 })
       .limit(200)
       .toArray();
-    if (period === "today" || period === "week" || period === "month") {
-      const start = pktPeriodStart(period === "today" ? "day" : period).getTime();
-      docs = docs.filter((d: any) => {
-        const t = d.updatedAt || d.createdAt || d.date;
-        const dt = t instanceof Date ? t : new Date(t);
-        return !isNaN(dt.getTime()) && dt.getTime() >= start;
-      });
-    }
     res.json(docs.map(normalizeOrder));
   } catch (e: any) {
     req.log.error(e);
