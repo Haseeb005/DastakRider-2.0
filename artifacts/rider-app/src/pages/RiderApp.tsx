@@ -50,6 +50,7 @@ import {
   Volume2,
   Store,
   Receipt,
+  AlertTriangle,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -623,29 +624,56 @@ function ensureLocationPermission(): Promise<boolean> {
   });
 }
 
+type LocationShareStatus = "idle" | "sharing" | "error";
+
 // Continuously push the rider's GPS location for the order in transit while one
 // is picked up. In-memory on the server; the customer's tracking page reads it.
-function useLocationTracking(activeOrders: RiderOrder[]) {
+// Returns a status so the UI can warn the rider if sharing drops mid-delivery
+// (permission revoked, no GPS fix, or no fresh location for 30s).
+function useLocationTracking(activeOrders: RiderOrder[]): LocationShareStatus {
   const pushLocation = usePushRiderLocation();
   const inTransit = activeOrders.find((o) => o.status === "Rider Picked Up");
   const orderId = inTransit?.id;
   const pushRef = useRef(pushLocation.mutate);
   pushRef.current = pushLocation.mutate;
+  const [status, setStatus] = useState<LocationShareStatus>("idle");
 
   useEffect(() => {
-    if (!orderId || typeof navigator === "undefined" || !navigator.geolocation) return;
-    const send = (pos: GeolocationPosition) =>
+    if (!orderId || typeof navigator === "undefined" || !navigator.geolocation) {
+      setStatus("idle");
+      return;
+    }
+    setStatus("sharing");
+    let lastOk = Date.now();
+    let hasFixed = false;
+    const onOk = (pos: GeolocationPosition) => {
+      lastOk = Date.now();
+      hasFixed = true;
+      setStatus("sharing");
       pushRef.current({
         data: { orderId, lat: pos.coords.latitude, lng: pos.coords.longitude },
       });
+    };
+    const onErr = () => setStatus("error");
     // Send one immediately, then stream updates as the rider moves.
-    navigator.geolocation.getCurrentPosition(send, () => {}, { enableHighAccuracy: true });
-    const watchId = navigator.geolocation.watchPosition(send, () => {}, {
+    navigator.geolocation.getCurrentPosition(onOk, onErr, { enableHighAccuracy: true });
+    const watchId = navigator.geolocation.watchPosition(onOk, onErr, {
       enableHighAccuracy: true,
       maximumAge: 5_000,
     });
-    return () => navigator.geolocation.clearWatch(watchId);
+    // Once sharing has started, warn if no fresh fix arrives for a while. Gated
+    // on the first successful fix so a slow initial GPS lock isn't a false alarm.
+    const monitor = setInterval(() => {
+      if (hasFixed && Date.now() - lastOk > 60_000) setStatus("error");
+    }, 10_000);
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      clearInterval(monitor);
+      setStatus("idle");
+    };
   }, [orderId]);
+
+  return status;
 }
 
 // ── Order Card ────────────────────────────────────────────────────────────────
@@ -964,7 +992,7 @@ function AvailableOrders({ rider }: { rider: Rider }) {
 
 // ── Active Delivery Tab ───────────────────────────────────────────────────────
 
-function ActiveDelivery() {
+function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatus }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [selected, setSelected] = useState<RiderOrder | null>(null);
@@ -1040,15 +1068,24 @@ function ActiveDelivery() {
         </Button>
       </div>
 
-      {orders.some((o) => o.status === "Rider Picked Up") && (
-        <div className="flex items-center gap-2.5 rounded-xl bg-green-50 text-green-700 px-4 py-2.5">
-          <span className="relative flex h-2.5 w-2.5 shrink-0">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
-          </span>
-          <p className="text-sm font-medium">Sharing your live location with the customer</p>
-        </div>
-      )}
+      {orders.some((o) => o.status === "Rider Picked Up") &&
+        (locationStatus === "error" ? (
+          <div className="flex items-start gap-2.5 rounded-xl bg-red-50 text-red-700 px-4 py-2.5">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <p className="text-sm font-medium">
+              Live location sharing stopped — the customer can't track you. Re-enable
+              location access to keep sharing.
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2.5 rounded-xl bg-green-50 text-green-700 px-4 py-2.5">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
+            </span>
+            <p className="text-sm font-medium">Sharing your live location with the customer</p>
+          </div>
+        ))}
 
       {isLoading ? (
         <div className="h-48 bg-gray-100 rounded-xl animate-pulse" />
@@ -1402,6 +1439,7 @@ function RiderProfile({ rider }: { rider: Rider }) {
 
 export default function RiderApp() {
   const [view, setView] = useState<RiderView>("available");
+  const { toast } = useToast();
 
   const { data: rider, isLoading, isError } = useGetRiderMe({
     query: { queryKey: getGetRiderMeQueryKey(), retry: false },
@@ -1413,7 +1451,19 @@ export default function RiderApp() {
 
   // GPS tracking runs app-wide (not tab-scoped) so it keeps publishing while a
   // picked-up order is in transit, regardless of which tab the rider is on.
-  useLocationTracking(activeOrders);
+  const locationStatus = useLocationTracking(activeOrders);
+
+  // Alert the rider (on any tab) the moment live sharing drops mid-delivery.
+  useEffect(() => {
+    if (locationStatus === "error") {
+      toast({
+        title: "Live location sharing stopped",
+        description:
+          "The customer can't track your delivery. Re-enable location access to keep sharing.",
+        variant: "destructive",
+      });
+    }
+  }, [locationStatus, toast]);
 
   if (isLoading) {
     return (
@@ -1471,7 +1521,7 @@ export default function RiderApp() {
       {/* Content */}
       <main className="flex-1 overflow-auto pb-20">
         {view === "available" && <AvailableOrders rider={rider} />}
-        {view === "active" && <ActiveDelivery />}
+        {view === "active" && <ActiveDelivery locationStatus={locationStatus} />}
         {view === "history" && <DeliveryHistory />}
         {view === "profile" && <RiderProfile rider={rider} />}
       </main>

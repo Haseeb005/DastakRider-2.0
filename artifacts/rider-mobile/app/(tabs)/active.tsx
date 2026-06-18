@@ -10,7 +10,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -47,7 +47,17 @@ export default function ActiveScreen() {
 
   const trackId =
     orders.find((o) => o.status === "Rider Picked Up")?.id ?? null;
-  useLocationTracking(trackId);
+  const locationStatus = useLocationTracking(trackId);
+
+  // Alert the rider the moment live sharing drops mid-delivery.
+  useEffect(() => {
+    if (locationStatus === "error") {
+      Alert.alert(
+        "Live location sharing stopped",
+        "The customer can't track your delivery. Re-enable location access to keep sharing.",
+      );
+    }
+  }, [locationStatus]);
 
   const statusM = useUpdateOrderStatus();
   const arrivedM = useMarkOrderArrived();
@@ -167,7 +177,8 @@ export default function ActiveScreen() {
             flexDirection: "row",
             alignItems: "center",
             gap: 8,
-            backgroundColor: c.successBg,
+            backgroundColor:
+              locationStatus === "error" ? c.warningBg : c.successBg,
             borderRadius: c.radius,
             paddingHorizontal: 12,
             paddingVertical: 8,
@@ -178,17 +189,21 @@ export default function ActiveScreen() {
               width: 8,
               height: 8,
               borderRadius: 4,
-              backgroundColor: c.success,
+              backgroundColor:
+                locationStatus === "error" ? c.warning : c.success,
             }}
           />
           <Text
             style={{
               fontFamily: "Inter_500Medium",
               fontSize: 12,
-              color: c.successForeground,
+              color: locationStatus === "error" ? c.warning : c.successForeground,
+              flex: 1,
             }}
           >
-            Sharing live location with the customer
+            {locationStatus === "error"
+              ? "Live location sharing stopped — re-enable location so the customer can track you"
+              : "Sharing live location with the customer"}
           </Text>
         </View>
       ) : null}

@@ -32,3 +32,11 @@ Live-location sharing is FORCED at the pickup transition: a rider cannot move an
 **Why:** the server only accepts `/rider/location` pushes while an order is `"Rider Picked Up"`, so transit is exactly when customer tracking is consumed. Gating here guarantees tracking for every delivery without locking riders out of going online/browsing.
 
 **How to apply:** location sharing (`useLocationTracking`) and the "Sharing live location with the customer" banner must be scoped to the in-transit order ONLY (`status === "Rider Picked Up"`), on BOTH apps — do not fall back to `orders[0]`, or mobile pushes get rejected and the banner lies. Web streams via `watchPosition` (continuous), mobile via expo `watchPositionAsync`.
+
+## Detecting dropped location sharing
+
+`useLocationTracking` returns a status (`idle`/`sharing`/`error`) so the UI can warn (web toast + red banner, mobile Alert + warning banner) when sharing drops mid-delivery. Drop = geolocation error callback (permission revoked / position unavailable) OR a staleness monitor (no fresh fix for 60s).
+
+**Why:** the staleness monitor MUST be gated on a "first successful fix" flag — initializing `lastOk` to `Date.now()` and checking immediately false-positives when the initial GPS lock is slow (common indoors), warning the rider before any location was ever sent.
+
+**How to apply:** only flag a staleness `error` after at least one fix has arrived; keep the window generous (~60s, several missed push intervals). The warning effect fires on the `sharing → error` transition and won't repeat while it stays `error` (React bails on same-value `setState`), so no toast/alert spam within one outage.
