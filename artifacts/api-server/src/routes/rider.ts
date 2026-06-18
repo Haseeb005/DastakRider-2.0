@@ -1,9 +1,58 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { ObjectId } from "mongodb";
 import { usersCol, ordersCol } from "../lib/mongo";
 
 const router = Router();
+
+// ---------------------------------------------------------------------------
+// Bearer-token auth (additive — for the Expo mobile app).
+// Web clients keep using the existing session cookie. Mobile clients cannot
+// rely on cookies, so login/register also return an HMAC-signed token that
+// encodes the riderId. The token is verified on each request as a fallback
+// when no session riderId is present. No DB writes — purely stateless.
+// ---------------------------------------------------------------------------
+const TOKEN_SECRET: string =
+  process.env.SESSION_SECRET ??
+  (() => {
+    throw new Error(
+      "SESSION_SECRET is required to sign/verify rider bearer tokens",
+    );
+  })();
+
+function b64url(buf: Buffer): string {
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function signToken(riderId: string): string {
+  const payload = b64url(Buffer.from(riderId, "utf8"));
+  const sig = b64url(crypto.createHmac("sha256", TOKEN_SECRET).update(payload).digest());
+  return `${payload}.${sig}`;
+}
+
+function verifyToken(token: string): string | null {
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [payload, sig] = parts;
+  const expected = b64url(crypto.createHmac("sha256", TOKEN_SECRET).update(payload).digest());
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    return Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+function bearerRiderId(req: any): string {
+  const h = req.headers?.authorization || req.headers?.Authorization;
+  if (typeof h !== "string" || !h.toLowerCase().startsWith("bearer ")) return "";
+  const token = h.slice(7).trim();
+  if (!token) return "";
+  return verifyToken(token) || "";
+}
 
 // Real order status flow in the Dastak database:
 //   Pending -> Rider Accepted -> Rider Picked Up -> Delivered  (or Rejected)
@@ -34,7 +83,7 @@ function isDeleted(user: any): boolean {
 }
 
 function getRiderId(req: any): string {
-  return (req.session as any)?.riderId || "";
+  return (req.session as any)?.riderId || bearerRiderId(req) || "";
 }
 
 function requireRiderId(req: any, res: any): string | null {
@@ -214,7 +263,10 @@ router.post("/rider/register", async (req: any, res: any) => {
     const result = await col.insertOne(rider as any);
     (req.session as any).riderId = String(result.insertedId);
     await saveSession(req);
-    res.status(201).json(safeRider({ ...rider, _id: result.insertedId }));
+    res.status(201).json({
+      ...safeRider({ ...rider, _id: result.insertedId }),
+      token: signToken(String(result.insertedId)),
+    });
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
@@ -233,7 +285,7 @@ router.post("/rider/login", async (req: any, res: any) => {
       return res.status(401).json({ message: "Invalid phone number or password" });
     (req.session as any).riderId = String(rider._id);
     await saveSession(req);
-    res.json(safeRider(rider));
+    res.json({ ...safeRider(rider), token: signToken(String(rider._id)) });
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });

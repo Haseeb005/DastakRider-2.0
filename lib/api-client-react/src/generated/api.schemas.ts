@@ -36,6 +36,8 @@ export interface Rider {
   pendingCollection?: number;
   unpaidCollection?: number;
   tillNoonFare?: number;
+  /** HMAC bearer token, returned only by login/register for mobile clients */
+  token?: string;
 }
 
 export interface OrderAction {

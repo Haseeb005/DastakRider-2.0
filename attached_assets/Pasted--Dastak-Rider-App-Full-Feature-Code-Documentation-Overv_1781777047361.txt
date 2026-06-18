@@ -1,0 +1,600 @@
+# Dastak Rider App — Full Feature & Code Documentation
+
+## Overview
+
+The Dastak Rider App is a web-based delivery-partner interface available at `/rider`. It is built with React (TypeScript) on the frontend and Express.js on the backend. Riders log in with phone + password, go online/offline, pick up available orders, update delivery statuses, track earnings, and view delivery history.
+
+**URL:** `https://dastakbites.com/rider`  
+**Backend file:** `server/rider-routes.ts`  
+**Frontend file:** `client/src/pages/rider-app.tsx`  
+**Database:** MongoDB (`users` collection for riders, `orders` collection)
+
+---
+
+## 1. Authentication
+
+### Features
+- Login with phone number + password
+- Register as a new rider (name, phone, password, city, vehicle type)
+- Session-based authentication (server-side session cookie)
+- Logout clears the session
+
+### Backend Endpoints
+
+#### POST `/api/rider/login`
+```ts
+Body: { phone: string; password: string }
+Response: RiderProfile object
+
+// Checks users collection (type:"rider") first, then legacy riders collection
+// Stores riderId in session: "u_<mongoId>" for users, plain uuid for legacy
+```
+
+#### POST `/api/rider/register`
+```ts
+Body: {
+  name: string;
+  phone: string;
+  password: string;
+  city: "Lahore" | "Karachi" | "Islamabad" | "Rawalpindi" |
+        "Faisalabad" | "Multan" | "Peshawar" | "Quetta" | "Sargodha";
+  vehicleType: "bike" | "car";
+}
+Response: 201 + RiderProfile object
+
+// Stores in users collection with type:"rider"
+// Checks for duplicate phone numbers
+```
+
+#### POST `/api/rider/logout`
+```ts
+// Clears riderId from session
+Response: { ok: true }
+```
+
+### Frontend Code
+```tsx
+function LoginForm({ onSuccess }: { onSuccess: () => void }) {
+  const [view, setView] = useState<"login" | "register">("login");
+  const [form, setForm] = useState({
+    name: "", phone: "", password: "",
+    city: "Lahore", vehicleType: "bike", confirmPassword: "",
+  });
+
+  const loginMutation = useMutation({
+    mutationFn: (data) => apiRequest("POST", "/api/rider/login", data).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/rider/me"] }); onSuccess(); },
+  });
+
+  const registerMutation = useMutation({
+    mutationFn: (data) => apiRequest("POST", "/api/rider/register", data).then(r => r.json()),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/rider/me"] }); onSuccess(); },
+  });
+}
+```
+
+---
+
+## 2. Rider Profile
+
+### Features
+- View name, phone, city, vehicle type
+- See total deliveries and total earnings
+- See rating (average ★ score)
+- Toggle online/offline status with an animated toggle switch
+- View pending cash collection and unpaid amounts
+
+### Backend Endpoint
+
+#### GET `/api/rider/me`
+```ts
+// Requires: session riderId
+Response: {
+  id: string;
+  name: string;
+  phone: string;
+  city: string;
+  vehicleType: "bike" | "car";
+  isOnline: boolean;
+  totalEarnings: number;
+  totalDeliveries: number;
+  rating: number;          // default 5
+  ratingCount: number;
+  riderZones: string[];
+  pendingCollection: number;
+  unpaidCollection: number;
+  tillNoonFare: number;    // set by admin — rider's fare per delivery
+}
+```
+
+#### PUT `/api/rider/availability`
+```ts
+Body: { isOnline: boolean }
+Response: { ok: true; isOnline: boolean }
+
+// Updates isOnline flag and status:"idle" in the users collection
+```
+
+### MongoDB Document (users collection)
+```json
+{
+  "_id": ObjectId,
+  "name": "Ali Hassan",
+  "phone": "03001234567",
+  "password": "plaintext",
+  "type": "rider",
+  "city": "Lahore",
+  "vehicleType": "bike",
+  "isOnline": false,
+  "status": "idle",
+  "totalEarnings": 0,
+  "totalDeliveries": 0,
+  "orderCount": 0,
+  "rating": 5,
+  "ratingCount": 0,
+  "riderZones": ["DHA", "Gulberg"],
+  "pendingCollection": 0,
+  "unpaidCollection": 0,
+  "tillNoonFare": 80,
+  "createdAt": ISODate,
+  "updatedAt": ISODate
+}
+```
+
+---
+
+## 3. Available Orders Tab
+
+### Features
+- Lists all orders with status `"Admin Accepted"` that have no rider assigned yet
+- Filtered by rider's city and delivery zones (`riderZones`)
+- Tapping an order shows all details: customer name, address, phone, items, payment type, order total, rider fare
+- One-tap **Accept Order** button
+- Real-time audio alert when a new order appears (ascending arpeggio melody, plays for 10 seconds)
+- Browser push notification on new orders
+- Auto-refreshes every 10 seconds
+
+### Backend Endpoint
+
+#### GET `/api/rider/orders/available`
+```ts
+// Requires: session riderId
+// Filters: status="Admin Accepted", no riderId, matching city, matching zones
+Response: Array<{
+  id: string;
+  restaurantName: string;
+  restaurantId: string;
+  address: string;        // customer delivery address
+  phone: string;          // customer phone
+  status: "placed";
+  total: number;          // order total (Rs.)
+  deliveryFee: number;
+  riderFare: number;      // what rider earns for this order
+  subtotal: number;
+  items: Array<{ name: string; quantity: number; price: number; size?: string }>;
+  userName: string;
+  createdAt: string;
+  orderNum: string;
+  city: string;
+  distance: string;
+  martAddress: string;    // restaurant address
+  martPhone: string;      // restaurant phone
+  paymentType: "COD" | "JazzCash" | "EasyPaisa" | "Card";
+}>
+```
+
+#### POST `/api/rider/orders/:id/accept`
+```ts
+// Requires: session riderId
+// Checks order is still "Admin Accepted" (prevents double-accept)
+// Sets: status="Rider Accepted", riderId, riderName, riderPhone, riderFare, acceptedTime
+// Pushes action log entry
+Response: { ok: true; riderFare: number }
+```
+
+### Order Alert Sound (Web Audio API)
+```ts
+function playOrderAlert(): () => void {
+  const ctx = new AudioContext();
+  // Ascending arpeggio: E5 → G5 → B5 → E6 (major triad), ~14 cycles over 10 s
+  const melody = [
+    { freq: 659,  dur: 0.10 },   // E5
+    { freq: 784,  dur: 0.10 },   // G5
+    { freq: 988,  dur: 0.10 },   // B5
+    { freq: 1319, dur: 0.20 },   // E6
+  ];
+  // Schedules oscillators with gain envelopes; alternates "triangle"/"sine" timbre
+  return () => { ctx.close(); }; // call to stop early
+}
+```
+
+### useOrderAlert Hook
+```ts
+function useOrderAlert(orders: RiderOrder[], isOnline: boolean) {
+  // Tracks seen order IDs; on first load just seeds them (no alert)
+  // New IDs → plays alert + browser notification
+  // Returns: { newCount, triggerTest, stopAlert }
+}
+```
+
+---
+
+## 4. Active Deliveries Tab
+
+### Features
+- Shows all orders currently assigned to this rider that are not yet delivered
+- Two action buttons depending on current status:
+  - **"Admin Accepted" / "Rider Accepted"** → "Picked Up from Restaurant" button
+  - **"Rider Picked Up"** → "Mark as Delivered" button
+- Tapping an item shows full order details
+- Auto-refreshes every 10 seconds
+- Badge count on the bottom nav tab
+
+### Backend Endpoint
+
+#### GET `/api/rider/orders/active`
+```ts
+// Requires: session riderId
+// Returns orders where riderId=this rider AND status IN ["Admin Accepted","Rider Accepted","Rider Picked Up"]
+Response: Array<RiderOrder>  // same shape as available orders
+```
+
+#### PUT `/api/rider/orders/:id/status`
+```ts
+Body: { status: "rider_picked_up" | "delivered" }
+// Status mapping:
+//   rider_picked_up → "Rider Picked Up"  (pickup confirmed)
+//   delivered       → "Delivered"         (order complete)
+// On "Delivered":
+//   - Sets paidToRider: false
+//   - Sets timeWhenDelivered (PKT time string)
+//   - Increments rider's orderCount in users collection
+//   - Fires WebSocket live-update event so customer's order page refreshes
+Response: { ok: true }
+```
+
+### Status Flow
+```
+Admin Accepted
+     ↓  (rider accepts)
+Rider Accepted
+     ↓  (picked up from restaurant)
+Rider Picked Up
+     ↓  (delivered to customer)
+Delivered
+```
+
+### Frontend Status Labels & Colors
+```ts
+const STATUS_LABELS = {
+  placed:          "New Order",
+  admin_accepted:  "Admin Accepted",
+  rider_accepted:  "Heading to Restaurant",
+  rider_picked_up: "On the Way",
+  delivered:       "Delivered",
+};
+
+const STATUS_COLORS = {
+  placed:          "bg-yellow-100 text-yellow-800",
+  admin_accepted:  "bg-blue-100 text-blue-800",
+  rider_accepted:  "bg-orange-100 text-orange-800",
+  rider_picked_up: "bg-purple-100 text-purple-800",
+  delivered:       "bg-green-100 text-green-800",
+};
+```
+
+---
+
+## 5. Order Detail View (Item Detail Sheet)
+
+### Features
+- Tapping any order item opens a modal with full detail
+- Shows: base item name, quantity, size, price per unit, total price
+- **Deal detection**: items with selections formatted as `"Burger Deal (Coleslaw, Small Drink, Fries)"` are parsed and each selection shown as a numbered list
+- Separate display for online-paid vs COD orders
+
+### Parse Logic
+```ts
+function parseItemName(fullName: string): { baseName: string; selections: string[] } {
+  const match = fullName.match(/^(.*?)\s*\((.+)\)\s*$/);
+  if (match) {
+    return { baseName: match[1].trim(), selections: match[2].split(",").map(s => s.trim()) };
+  }
+  return { baseName: fullName, selections: [] };
+}
+// Example:
+// "Zinger Burger (Extra Sauce, No Pickles)" →
+//   baseName: "Zinger Burger"
+//   selections: ["Extra Sauce", "No Pickles"]
+```
+
+---
+
+## 6. Delivery History Tab
+
+### Features
+- View all completed (status = "Delivered") orders
+- Period filter: **Today / This Week / This Month / All Time**
+- Period totals row: cash collected (COD) + rider earnings
+- All-time earnings cards (today / week / month / total)
+- Cash collection summary (Active Collection = cash in hand, Pending = unpaid to company)
+- Tap any past order for full detail modal with timestamps, action log, payment info
+
+### Backend Endpoints
+
+#### GET `/api/rider/orders/history?period=today|week|month|all`
+```ts
+// Requires: session riderId
+// Returns up to 200 delivered orders sorted by date desc
+// Period filtering uses dateForSearching field (PKT midnight UTC dates)
+Response: Array<{
+  id: string;
+  restaurantName: string;
+  address: string;
+  phone: string;
+  city: string;
+  distance: string;
+  zone: string;
+  status: "delivered";
+  total: number;
+  deliveryFee: number;
+  riderFare: number;          // rider's earning for this delivery
+  platformFee: number;
+  vatAmount: number;
+  tip: number;
+  discount: number;
+  items: Array<{ name: string; quantity: number; price: number }>;
+  userName: string;
+  orderDate: string;          // "20 May 2026"
+  orderTime: string;          // "2:15 PM"
+  acceptedTime: string;
+  pickUpTime: string;
+  timeWhenDelivered: string;
+  paymentType: string;
+  comment: string;
+  paidToRider: boolean;       // true = admin has settled this order with rider
+  actions: Array<{ action: string; time: string; name: string }>;
+}>
+```
+
+#### GET `/api/rider/earnings`
+```ts
+// Requires: session riderId
+// Calculates earnings breakdowns from actual Delivered orders in DB
+Response: {
+  totalEarnings: number;     // sum of riderFare all time
+  totalDeliveries: number;
+  totalOrderAmount: number;  // COD orders only
+  todayEarnings: number;
+  todayDeliveries: number;
+  todayOrderAmount: number;
+  weekEarnings: number;
+  weekDeliveries: number;
+  weekOrderAmount: number;
+  monthEarnings: number;
+  monthDeliveries: number;
+  monthOrderAmount: number;
+  rating: number;
+  ratingCount: number;
+  pendingCollection: number;
+  unpaidCollection: number;
+}
+// Note: Online-paid orders (JazzCash, EasyPaisa, Card) excluded from order amount
+// totals since rider doesn't collect cash for those
+```
+
+### Pakistan Timezone Helpers
+```ts
+const PKT_MS = 5 * 60 * 60 * 1000; // UTC+5
+
+function pktMidnight(offsetDays = 0): Date {
+  // Returns UTC Date = midnight of today (or today+offset) in PKT
+}
+function pktWeekStart(): Date { /* Sunday of current PKT week */ }
+function pktMonthStart(): Date { /* 1st of current PKT month */ }
+```
+
+---
+
+## 7. GPS Location Tracking
+
+### Features
+- Rider app pushes GPS coordinates to the server while on a delivery
+- Customer's order tracking page receives real-time rider location
+- Location data expires after 60 seconds (stale detection)
+- In-memory store — no database required for location data
+
+### Backend Endpoints
+
+#### POST `/api/rider/location`
+```ts
+// Requires: session riderId
+Body: { orderId: string; lat: number; lng: number }
+// Stores in in-memory Map<orderId, { lat, lng, riderId, ts }>
+// Fires WebSocket event so customer map refreshes instantly
+Response: { ok: true }
+```
+
+#### GET `/api/orders/:id/rider-location`
+```ts
+// Public endpoint — called by the customer's order tracking page
+// Returns 404 if no location or if last update > 60 seconds ago
+Response: { lat: number; lng: number; ts: number }
+```
+
+### In-Memory Store
+```ts
+const riderLocations = new Map<string, {
+  lat: number;
+  lng: number;
+  riderId: string;
+  ts: number;  // Date.now() at time of update
+}>();
+```
+
+---
+
+## 8. Real-Time Updates (WebSocket)
+
+When a rider updates an order status or pushes GPS location, the server fires:
+```ts
+storage?.notifyChange?.({
+  collection: "orders" | "riderLocation",
+  operation: "update",
+  id: orderId
+});
+```
+This broadcasts to all connected WebSocket clients. The customer's browser receives this event and invalidates the relevant React Query cache keys, causing the order status and map to refresh without a page reload.
+
+---
+
+## 9. Data Models
+
+### Rider (Frontend Interface)
+```ts
+interface Rider {
+  id: string;
+  name: string;
+  phone: string;
+  city: string;
+  vehicleType: "bike" | "car";
+  isOnline: boolean;
+  totalEarnings: number;
+  totalDeliveries: number;
+  rating: number;
+  ratingCount: number;
+  pendingCollection: number;   // cash currently in hand
+  unpaidCollection: number;    // cash not yet paid back to company
+  tillNoonFare: number;        // per-delivery fare set by admin
+}
+```
+
+### Order (Frontend Interface)
+```ts
+interface RiderOrder {
+  id: string;
+  restaurantName: string;
+  restaurantId: string;
+  address: string;
+  phone: string;
+  status: string;
+  total: number;
+  deliveryFee: number;
+  subtotal: number;
+  riderFare: number;
+  platformFee?: number;
+  vatAmount?: number;
+  tip?: number;
+  discount?: number;
+  items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+    size?: string;
+  }>;
+  userName: string;
+  orderDate?: string;
+  orderTime?: string;
+  acceptedTime?: string;
+  pickUpTime?: string;
+  timeWhenDelivered?: string;
+  createdAt: string;
+  updatedAt?: string;
+  paymentType?: string;
+  city?: string;
+  distance?: string;
+  zone?: string;
+  martAddress?: string;
+  martPhone?: string;
+  comment?: string;
+  paidToRider?: boolean;
+  actions?: Array<{ action: string; time: string; name: string }>;
+}
+```
+
+---
+
+## 10. Frontend Component Tree
+
+```
+RiderApp (main export — /rider route)
+├── LoginForm          ← shown when not authenticated
+│   ├── login tab
+│   └── register tab
+└── Authenticated view
+    ├── Header (sticky — shows rider name + online/offline pill)
+    ├── AvailableOrders tab
+    │   ├── Online/Offline toggle
+    │   ├── New order alert banner (dismissible)
+    │   └── OrderCard[] (with Accept button)
+    ├── ActiveDelivery tab
+    │   └── OrderCard[] (with status update button)
+    ├── DeliveryHistory tab
+    │   ├── Earnings summary cards (today/week/month/all-time)
+    │   ├── Cash collection cards
+    │   ├── Period filter tabs
+    │   ├── Period totals row
+    │   └── History list → RiderOrderDetailModal on tap
+    ├── RiderProfile tab
+    │   ├── Profile card (name, phone, stats, rating)
+    │   ├── Availability toggle
+    │   └── Logout button
+    └── Bottom navigation (Orders / Active / History / Profile)
+```
+
+---
+
+## 11. Complete API Summary
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/rider/register` | None | Register new rider |
+| POST | `/api/rider/login` | None | Login with phone + password |
+| POST | `/api/rider/logout` | Session | Logout |
+| GET | `/api/rider/me` | Session | Get rider profile |
+| PUT | `/api/rider/availability` | Session | Toggle online/offline |
+| GET | `/api/rider/orders/available` | Session | List unassigned orders in rider's city/zones |
+| GET | `/api/rider/orders/active` | Session | List rider's active orders |
+| GET | `/api/rider/orders/history` | Session | List delivered orders (filterable by period) |
+| POST | `/api/rider/orders/:id/accept` | Session | Accept an available order |
+| PUT | `/api/rider/orders/:id/status` | Session | Update order status (picked_up / delivered) |
+| POST | `/api/rider/location` | Session | Push GPS coordinates for an order |
+| GET | `/api/orders/:id/rider-location` | None | Get rider's current location (for customer) |
+| GET | `/api/rider/earnings` | Session | Get earnings breakdown |
+
+---
+
+## 12. Admin Setup Requirements
+
+For a rider to receive orders, the admin must:
+
+1. **Set `riderZones`** — array of zone names matching the `zone` field on orders (e.g. `["DHA Phase 5", "Gulberg III"]`). Only orders in these zones appear in the rider's available list.
+2. **Set `tillNoonFare`** — the per-delivery fare (Rs.) the rider earns. This is copied onto the order when the rider accepts it.
+3. **Set order status to `"Admin Accepted"`** — orders only appear in the available list once admin has accepted them.
+
+---
+
+## 13. Security Notes
+
+- Rider sessions use the same Express session middleware as the customer app (cookie-based)
+- `riderId` stored in session as `"u_<mongoObjectId>"` for new riders
+- All rider endpoints call `requireRiderId()` which returns 401 if session is missing
+- Passwords stored as plain text in the `users` collection (should be upgraded to bcrypt)
+- Legacy `riders` collection uses bcrypt hashed passwords
+
+---
+
+## 14. How to Access
+
+**Development:** `http://localhost:5000/rider`  
+**Production:** `https://dastakbites.com/rider`
+
+The route is registered in `client/src/App.tsx`:
+```tsx
+<Route path="/rider" component={RiderApp} />
+```
+
+And protected from the PWA/navigation by the allowed paths list in `server/routes.ts`:
+```ts
+const ALLOWED_PATHS = ['/rider', '/dev-db', '/admin', ...];
+```

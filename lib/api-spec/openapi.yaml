@@ -365,6 +365,9 @@ components:
           type: number
         tillNoonFare:
           type: number
+        token:
+          type: string
+          description: HMAC bearer token, returned only by login/register for mobile clients
       required:
         - id
         - name

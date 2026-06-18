@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/rider-mobile/"
+title = "Dastak Rider"
+version = "1.0.0"
+id = "artifacts/rider-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/rider-mobile/" ]
+localPort = 23243
+
+[services.development]
+run = "pnpm --filter @workspace/rider-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/rider-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/rider-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "23243"
+BASE_PATH = "/rider-mobile/"

@@ -50,7 +50,8 @@ export const LoginRiderResponse = zod.object({
   "riderZones": zod.array(zod.string()).optional(),
   "pendingCollection": zod.number().optional(),
   "unpaidCollection": zod.number().optional(),
-  "tillNoonFare": zod.number().optional()
+  "tillNoonFare": zod.number().optional(),
+  "token": zod.string().optional().describe('HMAC bearer token, returned only by login\/register for mobile clients')
 })
 
 
@@ -79,7 +80,8 @@ export const GetRiderMeResponse = zod.object({
   "riderZones": zod.array(zod.string()).optional(),
   "pendingCollection": zod.number().optional(),
   "unpaidCollection": zod.number().optional(),
-  "tillNoonFare": zod.number().optional()
+  "tillNoonFare": zod.number().optional(),
+  "token": zod.string().optional().describe('HMAC bearer token, returned only by login\/register for mobile clients')
 })
 
 
