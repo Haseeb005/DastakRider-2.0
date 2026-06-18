@@ -4,6 +4,31 @@ import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 
 /**
+ * Request live-location permission from the rider. Resolves true only when the
+ * rider has granted access. Used to FORCE location sharing before a delivery can
+ * start, so the customer can always track the order in transit.
+ */
+export async function ensureLocationPermission(): Promise<boolean> {
+  if (Platform.OS === "web") {
+    const geo = (globalThis as any).navigator?.geolocation;
+    if (!geo?.getCurrentPosition) return false;
+    return new Promise((resolve) => {
+      geo.getCurrentPosition(
+        () => resolve(true),
+        () => resolve(false),
+        { enableHighAccuracy: true, timeout: 10000 },
+      );
+    });
+  }
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    return status === "granted";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * While an active order is in progress, push the rider's GPS coordinates to the
  * server (powers the customer's live tracking map). Native uses expo-location;
  * web falls back to the browser geolocation API.

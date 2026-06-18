@@ -24,3 +24,11 @@ The `/api/rider/orders/:orderId/status` PUT endpoint is strict. Any client (web 
 **Why:** the backend enforces the 3-step progression server-side to guard against stale clients / direct API calls. The web app encodes the same flow; mobile must mirror it for parity.
 
 **How to apply:** when building or debugging any rider status action, send exact statuses and always wire the arrived step before pickup. Reading only the mutation hook signature is not enough — read the route handler in `artifacts/api-server/src/routes/rider.ts`.
+
+## Forced live-location sharing
+
+Live-location sharing is FORCED at the pickup transition: a rider cannot move an order to `"Rider Picked Up"` unless they grant geolocation permission first (web: `getCurrentPosition` prompt; mobile: `Location.requestForegroundPermissionsAsync`). Denial blocks the transition with a message (web toast / mobile Alert) — no status mutation fires.
+
+**Why:** the server only accepts `/rider/location` pushes while an order is `"Rider Picked Up"`, so transit is exactly when customer tracking is consumed. Gating here guarantees tracking for every delivery without locking riders out of going online/browsing.
+
+**How to apply:** location sharing (`useLocationTracking`) and the "Sharing live location with the customer" banner must be scoped to the in-transit order ONLY (`status === "Rider Picked Up"`), on BOTH apps — do not fall back to `orders[0]`, or mobile pushes get rejected and the banner lies. Web streams via `watchPosition` (continuous), mobile via expo `watchPositionAsync`.

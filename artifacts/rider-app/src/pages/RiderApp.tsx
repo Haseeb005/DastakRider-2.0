@@ -607,7 +607,23 @@ function RiderOrderDetailModal({
   );
 }
 
-// Push the rider's GPS location for the order in transit, every ~15s, while one
+// Request live-location permission from the rider. Resolves true only when the
+// browser grants access. Used to FORCE location sharing before a delivery can
+// start, so the customer can always track the order in transit.
+function ensureLocationPermission(): Promise<boolean> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    return Promise.resolve(false);
+  }
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      () => resolve(true),
+      () => resolve(false),
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
+  });
+}
+
+// Continuously push the rider's GPS location for the order in transit while one
 // is picked up. In-memory on the server; the customer's tracking page reads it.
 function useLocationTracking(activeOrders: RiderOrder[]) {
   const pushLocation = usePushRiderLocation();
@@ -622,11 +638,13 @@ function useLocationTracking(activeOrders: RiderOrder[]) {
       pushRef.current({
         data: { orderId, lat: pos.coords.latitude, lng: pos.coords.longitude },
       });
+    // Send one immediately, then stream updates as the rider moves.
     navigator.geolocation.getCurrentPosition(send, () => {}, { enableHighAccuracy: true });
-    const id = setInterval(() => {
-      navigator.geolocation.getCurrentPosition(send, () => {}, { enableHighAccuracy: true });
-    }, 15_000);
-    return () => clearInterval(id);
+    const watchId = navigator.geolocation.watchPosition(send, () => {}, {
+      enableHighAccuracy: true,
+      maximumAge: 5_000,
+    });
+    return () => navigator.geolocation.clearWatch(watchId);
   }, [orderId]);
 }
 
@@ -976,7 +994,21 @@ function ActiveDelivery() {
     );
   };
 
-  const handleStatus = (orderId: string, status: string) => {
+  const handleStatus = async (orderId: string, status: string) => {
+    // Force live-location sharing: a delivery cannot start until the rider grants
+    // location access, so the customer can always track the order in transit.
+    if (status === "Rider Picked Up") {
+      const granted = await ensureLocationPermission();
+      if (!granted) {
+        toast({
+          title: "Location required",
+          description:
+            "Enable location sharing so the customer can track their delivery, then tap again.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     statusMutation.mutate(
       { orderId, data: { status } },
       {
@@ -1007,6 +1039,16 @@ function ActiveDelivery() {
           <RefreshCw className="w-4 h-4 mr-1" /> Refresh
         </Button>
       </div>
+
+      {orders.some((o) => o.status === "Rider Picked Up") && (
+        <div className="flex items-center gap-2.5 rounded-xl bg-green-50 text-green-700 px-4 py-2.5">
+          <span className="relative flex h-2.5 w-2.5 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
+          </span>
+          <p className="text-sm font-medium">Sharing your live location with the customer</p>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="h-48 bg-gray-100 rounded-xl animate-pulse" />

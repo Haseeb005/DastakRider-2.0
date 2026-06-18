@@ -25,7 +25,10 @@ import { OrderDetailModal } from "@/components/OrderDetailModal";
 import { Button, EmptyState, ScreenHeader } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
-import { useLocationTracking } from "@/lib/useLocationTracking";
+import {
+  ensureLocationPermission,
+  useLocationTracking,
+} from "@/lib/useLocationTracking";
 
 export default function ActiveScreen() {
   const c = useColors();
@@ -43,9 +46,7 @@ export default function ActiveScreen() {
   const orders = ordersQ.data ?? [];
 
   const trackId =
-    orders.find((o) => o.status === "Rider Picked Up")?.id ??
-    orders[0]?.id ??
-    null;
+    orders.find((o) => o.status === "Rider Picked Up")?.id ?? null;
   useLocationTracking(trackId);
 
   const statusM = useUpdateOrderStatus();
@@ -76,7 +77,19 @@ export default function ActiveScreen() {
     arrivedM.mutate({ orderId: order.id }, { onSuccess: onMutated });
   };
 
-  const pickUp = (order: RiderOrder) => setStatus(order, "Rider Picked Up");
+  const pickUp = async (order: RiderOrder) => {
+    // Force live-location sharing: a delivery cannot start until the rider grants
+    // location access, so the customer can always track the order in transit.
+    const granted = await ensureLocationPermission();
+    if (!granted) {
+      Alert.alert(
+        "Location required",
+        "Enable location sharing so the customer can track their delivery. Please allow location access to continue.",
+      );
+      return;
+    }
+    setStatus(order, "Rider Picked Up");
+  };
 
   const deliver = (order: RiderOrder) => {
     Alert.alert(
