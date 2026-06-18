@@ -11,13 +11,14 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
+  Easing,
   FlatList,
   Platform,
   Pressable,
   RefreshControl,
-  Switch,
   Text,
   View,
 } from "react-native";
@@ -28,6 +29,78 @@ import { OrderDetailModal } from "@/components/OrderDetailModal";
 import { Button, EmptyState, Loading } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useOrderAlert } from "@/lib/alert";
+
+function StatusDot({
+  online,
+  dotColor,
+  offColor,
+}: {
+  online: boolean;
+  dotColor: string;
+  offColor: string;
+}) {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!online) {
+      pulse.setValue(0);
+      return;
+    }
+    const anim = Animated.loop(
+      Animated.timing(pulse, {
+        toValue: 1,
+        duration: 1500,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [online, pulse]);
+
+  return (
+    <View
+      style={{
+        width: 14,
+        height: 14,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {online ? (
+        <Animated.View
+          style={{
+            position: "absolute",
+            width: 14,
+            height: 14,
+            borderRadius: 7,
+            backgroundColor: dotColor,
+            opacity: pulse.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.5, 0],
+            }),
+            transform: [
+              {
+                scale: pulse.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [1, 2.2],
+                }),
+              },
+            ],
+          }}
+        />
+      ) : null}
+      <View
+        style={{
+          width: 12,
+          height: 12,
+          borderRadius: 6,
+          backgroundColor: online ? dotColor : offColor,
+        }}
+      />
+    </View>
+  );
+}
 
 export default function AvailableScreen() {
   const c = useColors();
@@ -177,14 +250,7 @@ export default function AvailableScreen() {
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View
-              style={{
-                width: 12,
-                height: 12,
-                borderRadius: 6,
-                backgroundColor: isOnline ? c.success : c.mutedForeground,
-              }}
-            />
+            <StatusDot online={isOnline} dotColor={c.success} offColor={c.mutedForeground} />
             <Text
               style={{
                 fontFamily: "Inter_700Bold",
@@ -195,13 +261,40 @@ export default function AvailableScreen() {
               {isOnline ? "You are Online" : "You are Offline"}
             </Text>
           </View>
-          <Switch
-            value={isOnline}
-            onValueChange={toggleOnline}
+          <Pressable
+            onPress={() => {
+              if (!availabilityM.isPending) toggleOnline();
+            }}
             disabled={availabilityM.isPending}
-            trackColor={{ false: c.input, true: c.success }}
-            thumbColor="#FFFFFF"
-          />
+            accessibilityRole="switch"
+            accessibilityState={{ checked: isOnline, disabled: availabilityM.isPending }}
+            accessibilityLabel={isOnline ? "Go offline" : "Go online"}
+            style={{
+              width: 52,
+              height: 30,
+              borderRadius: 15,
+              backgroundColor: isOnline ? c.success : c.input,
+              padding: 3,
+              flexDirection: "row",
+              justifyContent: isOnline ? "flex-end" : "flex-start",
+              alignItems: "center",
+              opacity: availabilityM.isPending ? 0.6 : 1,
+            }}
+          >
+            <View
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 12,
+                backgroundColor: "#FFFFFF",
+                shadowColor: "#000",
+                shadowOpacity: 0.2,
+                shadowRadius: 2,
+                shadowOffset: { width: 0, height: 1 },
+                elevation: 2,
+              }}
+            />
+          </Pressable>
         </View>
       </View>
 
