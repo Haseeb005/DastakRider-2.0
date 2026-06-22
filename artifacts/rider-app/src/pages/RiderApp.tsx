@@ -971,7 +971,7 @@ function AvailableOrders({ rider }: { rider: Rider }) {
     query: {
       queryKey: getGetAvailableOrdersQueryKey(),
       refetchInterval: 10_000,
-      enabled: rider.isOnline,
+      enabled: rider.isOnline && rider.available !== false,
     },
   });
 

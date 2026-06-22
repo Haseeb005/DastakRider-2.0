@@ -123,8 +123,7 @@ function safeRider(user: any) {
     phone: user.phone || null,
     city: user.city || null,
     vehicleType: user.vehicleType || "bike",
-    // If admin has blocked the rider, treat them as offline regardless of their stored state.
-    isOnline: user.available === false ? false : !!user.isOnline,
+    isOnline: !!user.isOnline,
     available: user.available !== false,
     totalEarnings: 0,
     totalDeliveries: Number(user.orderCount) || 0,
