@@ -84,46 +84,21 @@ export function OrderCard({
         </View>
       ) : null}
 
-      {/* Top: status + payment badges, with fare on the right */}
+      {/* Top: status + payment badges */}
       <View
         style={{
           flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
+          flexWrap: "wrap",
+          gap: 8,
           marginBottom: 18,
         }}
       >
-        <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <Badge label={badgeLabel} bg={sc.bg} fg={sc.fg} />
-          <Badge
-            label={cod ? "COD" : order.paymentType || "Online"}
-            bg={cod ? c.purpleBg : c.infoBg}
-            fg={cod ? c.purple : c.info}
-          />
-        </View>
-        <View style={{ alignItems: "flex-end", paddingLeft: 10 }}>
-          <Text
-            style={{
-              fontFamily: "Inter_700Bold",
-              fontSize: 10,
-              letterSpacing: 1,
-              color: c.mutedForeground,
-              textTransform: "uppercase",
-              marginBottom: 1,
-            }}
-          >
-            Your Fare
-          </Text>
-          <Text
-            style={{
-              fontFamily: "Inter_800ExtraBold",
-              fontSize: 24,
-              color: c.primary,
-            }}
-          >
-            {money(order.riderFare)}
-          </Text>
-        </View>
+        <Badge label={badgeLabel} bg={sc.bg} fg={sc.fg} />
+        <Badge
+          label={cod ? "COD" : order.paymentType || "Online"}
+          bg={cod ? c.purpleBg : c.infoBg}
+          fg={cod ? c.purple : c.info}
+        />
       </View>
 
       {/* Route timeline */}
