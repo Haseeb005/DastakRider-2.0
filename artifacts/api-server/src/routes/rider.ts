@@ -123,7 +123,9 @@ function safeRider(user: any) {
     phone: user.phone || null,
     city: user.city || null,
     vehicleType: user.vehicleType || "bike",
-    isOnline: !!user.isOnline,
+    // If admin has blocked the rider, treat them as offline regardless of their stored state.
+    isOnline: user.available === false ? false : !!user.isOnline,
+    available: user.available !== false,
     totalEarnings: 0,
     totalDeliveries: Number(user.orderCount) || 0,
     rating,
@@ -339,6 +341,12 @@ router.put("/rider/availability", async (req: any, res: any) => {
     const { isOnline } = req.body;
     const rider = await findRiderById(riderId);
     if (!rider) return res.status(404).json({ message: "Rider not found" });
+    // Block going online if admin has disabled this rider (available: false).
+    if (isOnline && rider.available === false) {
+      return res.status(403).json({
+        message: "You are currently not available. Please contact admin.",
+      });
+    }
     await usersCol().updateOne(
       { _id: rider._id },
       { $set: { isOnline: !!isOnline, updatedAt: new Date() } }
@@ -359,6 +367,7 @@ router.get("/rider/orders/available", async (req: any, res: any) => {
     if (!riderId) return;
     const rider = await findRiderById(riderId);
     if (!rider) return res.status(404).json({ message: "Rider not found" });
+    if (rider.available === false) return res.json([]);
 
     const query: Record<string, any> = {
       status: AVAILABLE_STATUS,
@@ -437,6 +446,8 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
     if (!riderId) return;
     const rider = await findRiderById(riderId);
     if (!rider) return res.status(404).json({ message: "Rider not found" });
+    if (rider.available === false)
+      return res.status(403).json({ message: "You are currently not available. Please contact admin." });
     const activeCount = await ordersCol().countDocuments({
       riderId,
       status: { $in: ACTIVE_STATUSES },

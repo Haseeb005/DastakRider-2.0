@@ -1370,13 +1370,20 @@ function RiderProfile({ rider }: { rider: Rider }) {
   const toggleMutation = useUpdateRiderAvailability();
   const logoutMutation = useLogoutRider();
 
+  const canGoOnline = rider.available !== false;
+
   const handleToggle = (isOnline: boolean) => {
+    if (isOnline && !canGoOnline) return; // blocked by admin
     toggleMutation.mutate(
       { data: { isOnline } },
       {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: getGetRiderMeQueryKey() });
           toast({ title: isOnline ? "You're now Online 🟢" : "You're now Offline 🔴" });
+        },
+        onError: (err: any) => {
+          const msg = err?.response?.data?.message ?? err?.message ?? "Could not update status";
+          toast({ title: msg, variant: "destructive" });
         },
       }
     );
@@ -1437,16 +1444,19 @@ function RiderProfile({ rider }: { rider: Rider }) {
             <div>
               <p className="font-semibold text-gray-900">Availability</p>
               <p className="text-sm text-gray-500 mt-0.5">
-                {rider.isOnline
+                {!canGoOnline
+                  ? "Not available — contact admin"
+                  : rider.isOnline
                   ? "Online — receiving orders"
                   : "You are offline — go online to receive orders"}
               </p>
             </div>
             <button
               onClick={() => handleToggle(!rider.isOnline)}
-              disabled={toggleMutation.isPending}
+              disabled={toggleMutation.isPending || !canGoOnline}
+              title={!canGoOnline ? "Not available — contact admin" : undefined}
               className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus-visible:outline-none ${
-                rider.isOnline ? "bg-green-500" : "bg-gray-300"
+                !canGoOnline ? "bg-gray-200 cursor-not-allowed opacity-50" : rider.isOnline ? "bg-green-500" : "bg-gray-300"
               }`}
             >
               <span
@@ -1459,11 +1469,11 @@ function RiderProfile({ rider }: { rider: Rider }) {
 
           <div
             className={`mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
-              rider.isOnline ? "bg-green-50 text-green-700" : "bg-gray-50 text-gray-500"
+              !canGoOnline ? "bg-red-50 text-red-600" : rider.isOnline ? "bg-green-50 text-green-700" : "bg-gray-50 text-gray-500"
             }`}
           >
-            <Power className={`w-4 h-4 ${rider.isOnline ? "text-green-500" : "text-gray-400"}`} />
-            {rider.isOnline ? "Online — accepting orders" : "Offline"}
+            <Power className={`w-4 h-4 ${!canGoOnline ? "text-red-400" : rider.isOnline ? "text-green-500" : "text-gray-400"}`} />
+            {!canGoOnline ? "Not available — contact admin" : rider.isOnline ? "Online — accepting orders" : "Offline"}
           </div>
         </CardContent>
       </Card>

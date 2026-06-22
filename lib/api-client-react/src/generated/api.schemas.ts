@@ -51,6 +51,8 @@ export interface Rider {
   pendingCollection?: number;
   unpaidCollection?: number;
   tillNoonFare?: number;
+  /** Whether admin has enabled this rider to go online. false = blocked by admin. */
+  available?: boolean;
   /** HMAC bearer token, returned only by login/register for mobile clients */
   token?: string;
 }

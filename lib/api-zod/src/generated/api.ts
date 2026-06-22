@@ -51,6 +51,7 @@ export const LoginRiderResponse = zod.object({
   "pendingCollection": zod.number().optional(),
   "unpaidCollection": zod.number().optional(),
   "tillNoonFare": zod.number().optional(),
+  "available": zod.boolean().optional().describe('Whether admin has enabled this rider to go online. false = blocked by admin.'),
   "token": zod.string().optional().describe('HMAC bearer token, returned only by login\/register for mobile clients')
 })
 
@@ -81,6 +82,7 @@ export const GetRiderMeResponse = zod.object({
   "pendingCollection": zod.number().optional(),
   "unpaidCollection": zod.number().optional(),
   "tillNoonFare": zod.number().optional(),
+  "available": zod.boolean().optional().describe('Whether admin has enabled this rider to go online. false = blocked by admin.'),
   "token": zod.string().optional().describe('HMAC bearer token, returned only by login\/register for mobile clients')
 })
 
