@@ -135,13 +135,11 @@ export default function ProfileScreen() {
   const meQ = useGetRiderMe();
   const rider = meQ.data;
   const isOnline = !!rider?.isOnline;
-  const canGoOnline = rider?.available !== false;
 
   const availabilityM = useUpdateRiderAvailability();
   const logoutM = useLogoutRider();
 
   const toggleOnline = () => {
-    if (!isOnline && !canGoOnline) return; // blocked by admin, can't go online
     Haptics.selectionAsync().catch(() => {});
     availabilityM.mutate(
       { data: { isOnline: !isOnline } },
@@ -279,31 +277,20 @@ export default function ProfileScreen() {
                 backgroundColor: isOnline ? c.success : c.mutedForeground,
               }}
             />
-            <View>
-              <Text
-                style={{
-                  fontFamily: "Inter_600SemiBold",
-                  fontSize: 15,
-                  color: c.foreground,
-                }}
-              >
-                {!canGoOnline
-                  ? "Not available"
-                  : isOnline
-                  ? "Online — receiving orders"
-                  : "Offline"}
-              </Text>
-              {!canGoOnline && (
-                <Text style={{ fontFamily: "Inter_400Regular", fontSize: 12, color: c.destructive }}>
-                  Contact admin to be enabled
-                </Text>
-              )}
-            </View>
+            <Text
+              style={{
+                fontFamily: "Inter_600SemiBold",
+                fontSize: 15,
+                color: c.foreground,
+              }}
+            >
+              {isOnline ? "Online — receiving orders" : "Offline"}
+            </Text>
           </View>
           <Switch
             value={isOnline}
             onValueChange={toggleOnline}
-            disabled={availabilityM.isPending || (!isOnline && !canGoOnline)}
+            disabled={availabilityM.isPending}
             trackColor={{ false: c.input, true: c.success }}
             thumbColor="#FFFFFF"
           />

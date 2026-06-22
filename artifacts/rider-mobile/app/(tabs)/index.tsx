@@ -112,13 +112,12 @@ export default function AvailableScreen() {
 
   const meQ = useGetRiderMe();
   const isOnline = !!meQ.data?.isOnline;
-  const canGoOnline = meQ.data?.available !== false;
 
   const ordersQ = useGetAvailableOrders({
     query: {
       queryKey: getGetAvailableOrdersQueryKey(),
-      enabled: isOnline && canGoOnline,
-      refetchInterval: isOnline && canGoOnline ? 10000 : false,
+      enabled: isOnline,
+      refetchInterval: isOnline ? 10000 : false,
     },
   });
   const orders = ordersQ.data ?? EMPTY_ORDERS;
@@ -129,7 +128,6 @@ export default function AvailableScreen() {
   const acceptM = useAcceptOrder();
 
   const toggleOnline = () => {
-    if (!isOnline && !canGoOnline) return; // blocked by admin, can't go online
     Haptics.selectionAsync().catch(() => {});
     availabilityM.mutate(
       { data: { isOnline: !isOnline } },
@@ -256,30 +254,23 @@ export default function AvailableScreen() {
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <StatusDot online={isOnline} dotColor={c.success} offColor={c.mutedForeground} />
-            <View>
-              <Text
-                style={{
-                  fontFamily: "Inter_700Bold",
-                  fontSize: 16,
-                  color: isOnline ? c.success : c.mutedForeground,
-                }}
-              >
-                {isOnline ? "You are Online" : "You are Offline"}
-              </Text>
-              {!canGoOnline && (
-                <Text style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: c.destructive }}>
-                  Not available — contact admin
-                </Text>
-              )}
-            </View>
+            <Text
+              style={{
+                fontFamily: "Inter_700Bold",
+                fontSize: 16,
+                color: isOnline ? c.success : c.mutedForeground,
+              }}
+            >
+              {isOnline ? "You are Online" : "You are Offline"}
+            </Text>
           </View>
           <Pressable
             onPress={() => {
               if (!availabilityM.isPending) toggleOnline();
             }}
-            disabled={availabilityM.isPending || (!isOnline && !canGoOnline)}
+            disabled={availabilityM.isPending}
             accessibilityRole="switch"
-            accessibilityState={{ checked: isOnline, disabled: availabilityM.isPending || (!isOnline && !canGoOnline) }}
+            accessibilityState={{ checked: isOnline, disabled: availabilityM.isPending }}
             accessibilityLabel={isOnline ? "Go offline" : "Go online"}
             style={{
               width: 52,
@@ -290,7 +281,7 @@ export default function AvailableScreen() {
               flexDirection: "row",
               justifyContent: isOnline ? "flex-end" : "flex-start",
               alignItems: "center",
-              opacity: (availabilityM.isPending || (!isOnline && !canGoOnline)) ? 0.4 : 1,
+              opacity: availabilityM.isPending ? 0.6 : 1,
             }}
           >
             <View
