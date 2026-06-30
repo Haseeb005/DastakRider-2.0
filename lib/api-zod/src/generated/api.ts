@@ -118,13 +118,14 @@ export const GetAvailableOrdersResponseItem = zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
   "price": zod.number(),
-  "size": zod.string().nullish(),
+  "actualPrice": zod.number().optional().describe('Original price before any discount. When actualPrice > price the item is discounted.'),
+  "size": zod.string().nullish().describe('For single products, the size\/variation descriptor (e.g. \"Half\", \"Regular\").'),
+  "description": zod.string().nullish().describe('For deal products, the deal variant description from the order (e.g. \"1 Small Pizza\").'),
   "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
   "dealItems": zod.array(zod.object({
-  "title": zod.string().nullish(),
-  "option": zod.string().nullish(),
-  "price": zod.number().optional()
-})).optional().describe('For deal products, the included choices (from selectedFlavours).')
+  "flavour": zod.string().nullish().describe('The selected flavour name (e.g. \"Chicken BBQ\").'),
+  "size": zod.string().nullish().describe('The size for this flavour (e.g. \"Small\").')
+})).optional().describe('For deal products, the selected flavours\/choices.')
 })).optional(),
   "userName": zod.string().nullish(),
   "city": zod.string().nullish(),
@@ -178,13 +179,14 @@ export const GetActiveOrdersResponseItem = zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
   "price": zod.number(),
-  "size": zod.string().nullish(),
+  "actualPrice": zod.number().optional().describe('Original price before any discount. When actualPrice > price the item is discounted.'),
+  "size": zod.string().nullish().describe('For single products, the size\/variation descriptor (e.g. \"Half\", \"Regular\").'),
+  "description": zod.string().nullish().describe('For deal products, the deal variant description from the order (e.g. \"1 Small Pizza\").'),
   "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
   "dealItems": zod.array(zod.object({
-  "title": zod.string().nullish(),
-  "option": zod.string().nullish(),
-  "price": zod.number().optional()
-})).optional().describe('For deal products, the included choices (from selectedFlavours).')
+  "flavour": zod.string().nullish().describe('The selected flavour name (e.g. \"Chicken BBQ\").'),
+  "size": zod.string().nullish().describe('The size for this flavour (e.g. \"Small\").')
+})).optional().describe('For deal products, the selected flavours\/choices.')
 })).optional(),
   "userName": zod.string().nullish(),
   "city": zod.string().nullish(),
@@ -242,13 +244,14 @@ export const GetOrderHistoryResponseItem = zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
   "price": zod.number(),
-  "size": zod.string().nullish(),
+  "actualPrice": zod.number().optional().describe('Original price before any discount. When actualPrice > price the item is discounted.'),
+  "size": zod.string().nullish().describe('For single products, the size\/variation descriptor (e.g. \"Half\", \"Regular\").'),
+  "description": zod.string().nullish().describe('For deal products, the deal variant description from the order (e.g. \"1 Small Pizza\").'),
   "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
   "dealItems": zod.array(zod.object({
-  "title": zod.string().nullish(),
-  "option": zod.string().nullish(),
-  "price": zod.number().optional()
-})).optional().describe('For deal products, the included choices (from selectedFlavours).')
+  "flavour": zod.string().nullish().describe('The selected flavour name (e.g. \"Chicken BBQ\").'),
+  "size": zod.string().nullish().describe('The size for this flavour (e.g. \"Small\").')
+})).optional().describe('For deal products, the selected flavours\/choices.')
 })).optional(),
   "userName": zod.string().nullish(),
   "city": zod.string().nullish(),
@@ -306,13 +309,14 @@ export const AcceptOrderResponse = zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
   "price": zod.number(),
-  "size": zod.string().nullish(),
+  "actualPrice": zod.number().optional().describe('Original price before any discount. When actualPrice > price the item is discounted.'),
+  "size": zod.string().nullish().describe('For single products, the size\/variation descriptor (e.g. \"Half\", \"Regular\").'),
+  "description": zod.string().nullish().describe('For deal products, the deal variant description from the order (e.g. \"1 Small Pizza\").'),
   "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
   "dealItems": zod.array(zod.object({
-  "title": zod.string().nullish(),
-  "option": zod.string().nullish(),
-  "price": zod.number().optional()
-})).optional().describe('For deal products, the included choices (from selectedFlavours).')
+  "flavour": zod.string().nullish().describe('The selected flavour name (e.g. \"Chicken BBQ\").'),
+  "size": zod.string().nullish().describe('The size for this flavour (e.g. \"Small\").')
+})).optional().describe('For deal products, the selected flavours\/choices.')
 })).optional(),
   "userName": zod.string().nullish(),
   "city": zod.string().nullish(),
@@ -370,13 +374,14 @@ export const MarkOrderArrivedResponse = zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
   "price": zod.number(),
-  "size": zod.string().nullish(),
+  "actualPrice": zod.number().optional().describe('Original price before any discount. When actualPrice > price the item is discounted.'),
+  "size": zod.string().nullish().describe('For single products, the size\/variation descriptor (e.g. \"Half\", \"Regular\").'),
+  "description": zod.string().nullish().describe('For deal products, the deal variant description from the order (e.g. \"1 Small Pizza\").'),
   "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
   "dealItems": zod.array(zod.object({
-  "title": zod.string().nullish(),
-  "option": zod.string().nullish(),
-  "price": zod.number().optional()
-})).optional().describe('For deal products, the included choices (from selectedFlavours).')
+  "flavour": zod.string().nullish().describe('The selected flavour name (e.g. \"Chicken BBQ\").'),
+  "size": zod.string().nullish().describe('The size for this flavour (e.g. \"Small\").')
+})).optional().describe('For deal products, the selected flavours\/choices.')
 })).optional(),
   "userName": zod.string().nullish(),
   "city": zod.string().nullish(),
@@ -437,13 +442,14 @@ export const UpdateOrderStatusResponse = zod.object({
   "name": zod.string(),
   "quantity": zod.number(),
   "price": zod.number(),
-  "size": zod.string().nullish(),
+  "actualPrice": zod.number().optional().describe('Original price before any discount. When actualPrice > price the item is discounted.'),
+  "size": zod.string().nullish().describe('For single products, the size\/variation descriptor (e.g. \"Half\", \"Regular\").'),
+  "description": zod.string().nullish().describe('For deal products, the deal variant description from the order (e.g. \"1 Small Pizza\").'),
   "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
   "dealItems": zod.array(zod.object({
-  "title": zod.string().nullish(),
-  "option": zod.string().nullish(),
-  "price": zod.number().optional()
-})).optional().describe('For deal products, the included choices (from selectedFlavours).')
+  "flavour": zod.string().nullish().describe('The selected flavour name (e.g. \"Chicken BBQ\").'),
+  "size": zod.string().nullish().describe('The size for this flavour (e.g. \"Small\").')
+})).optional().describe('For deal products, the selected flavours\/choices.')
 })).optional(),
   "userName": zod.string().nullish(),
   "city": zod.string().nullish(),

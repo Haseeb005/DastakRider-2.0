@@ -534,43 +534,49 @@ function RiderOrderDetailModal({
                 Items ({order.items.length})
               </h4>
               {order.items.map((item, i) => {
-                const { baseName, selections } = parseItemName(item.name);
-                const isDeal =
-                  item.type === "deal" &&
+                const { baseName } = parseItemName(item.name);
+                const isDeal = item.type === "deal";
+                const hasDealDetails =
+                  isDeal &&
                   Array.isArray(item.dealItems) &&
                   item.dealItems.length > 0;
+                const isDiscounted =
+                  (item.actualPrice ?? item.price) > item.price;
                 return (
                   <div
                     key={i}
-                    onClick={isDeal ? () => setDealItem(item) : undefined}
+                    onClick={hasDealDetails ? () => setDealItem(item) : undefined}
                     className={`bg-gray-50 rounded-lg p-3 ${
-                      isDeal ? "cursor-pointer hover:bg-gray-100 transition-colors" : ""
+                      hasDealDetails ? "cursor-pointer hover:bg-gray-100 transition-colors" : ""
                     }`}
                   >
-                    <div className="flex justify-between text-sm font-medium text-gray-900">
-                      <span className="flex items-center gap-2">
-                        <span>
-                          {item.quantity}× {baseName}
-                        </span>
+                    <div className="flex justify-between items-start gap-3 text-sm font-medium text-gray-900">
+                      <span className="flex items-center gap-2 flex-wrap">
+                        <span>{item.quantity}× {baseName}</span>
                         {isDeal && (
                           <span className="rounded-full bg-brand-500 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
                             Deal
                           </span>
                         )}
                       </span>
-                      <span>{formatMoney(item.price * item.quantity)}</span>
+                      <span className="text-right shrink-0">
+                        {isDiscounted && (
+                          <span className="line-through text-gray-400 mr-1 text-xs">
+                            {formatMoney((item.actualPrice ?? item.price) * item.quantity)}
+                          </span>
+                        )}
+                        {formatMoney(item.price * item.quantity)}
+                      </span>
                     </div>
-                    {item.size && (
-                      <p className="mt-0.5 text-sm text-gray-700">{item.size}</p>
+                    {/* Single: size/variation */}
+                    {!isDeal && item.size && (
+                      <p className="mt-0.5 text-xs text-gray-500">{item.size}</p>
                     )}
-                    {selections.length > 0 && (
-                      <ol className="mt-1.5 ml-1 space-y-0.5 text-xs text-gray-500 list-decimal list-inside">
-                        {selections.map((s, j) => (
-                          <li key={j}>{s}</li>
-                        ))}
-                      </ol>
+                    {/* Deal: variant description e.g. "1 Small Pizza" */}
+                    {isDeal && item.description && (
+                      <p className="mt-0.5 text-xs text-gray-500">{item.description}</p>
                     )}
-                    {isDeal && (
+                    {hasDealDetails && (
                       <div className="mt-1.5 inline-flex items-center gap-0.5 text-xs font-semibold text-brand-600">
                         View what's included
                         <ChevronRight className="w-3.5 h-3.5" />
@@ -677,25 +683,9 @@ function RiderOrderDetailModal({
             </div>
             <div className="p-4 divide-y divide-gray-100">
               {(dealItem.dealItems ?? []).map((d, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between gap-3 py-2.5"
-                >
-                  <div className="min-w-0">
-                    {d.title && (
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                        {d.title}
-                      </p>
-                    )}
-                    <p className="text-sm font-semibold text-gray-900">
-                      {d.option || "—"}
-                    </p>
-                  </div>
-                  {!!d.price && (
-                    <span className="text-xs font-semibold text-gray-500 shrink-0">
-                      + {formatMoney(d.price)}
-                    </span>
-                  )}
+                <div key={i} className="py-2.5">
+                  <p className="text-sm font-semibold text-gray-900">{d.flavour || "—"}</p>
+                  {d.size && <p className="text-xs text-gray-400 mt-0.5">{d.size}</p>}
                 </div>
               ))}
             </div>

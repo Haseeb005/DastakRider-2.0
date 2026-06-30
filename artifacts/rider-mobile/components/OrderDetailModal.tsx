@@ -434,25 +434,29 @@ export function OrderDetailModal({
           {order.items && order.items.length > 0 ? (
             <Section title={`Items (${order.items.length})`}>
               {order.items.map((item, idx) => {
-                const { baseName, selections } = parseItemName(item.name);
-                const isDeal =
-                  item.type === "deal" &&
+                const { baseName } = parseItemName(item.name);
+                const isDeal = item.type === "deal";
+                const hasDealDetails =
+                  isDeal &&
                   Array.isArray(item.dealItems) &&
                   item.dealItems.length > 0;
+                const isDiscounted =
+                  (item.actualPrice ?? item.price) > item.price;
                 return (
                   <Pressable
                     key={idx}
-                    onPress={isDeal ? () => setDealItem(item) : undefined}
+                    onPress={hasDealDetails ? () => setDealItem(item) : undefined}
                     style={{
                       flexDirection: "row",
                       justifyContent: "space-between",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       paddingVertical: 8,
                       borderTopWidth: idx === 0 ? 0 : 1,
                       borderTopColor: c.border,
                     }}
                   >
                     <View style={{ flex: 1, paddingRight: 10 }}>
+                      {/* Name row */}
                       <View
                         style={{
                           flexDirection: "row",
@@ -478,32 +482,34 @@ export function OrderDetailModal({
                           />
                         ) : null}
                       </View>
-                      {item.size ? (
+                      {/* Single: size/variation descriptor */}
+                      {!isDeal && item.size ? (
                         <Text
                           style={{
-                            fontFamily: "Inter_500Medium",
+                            fontFamily: "Inter_400Regular",
                             fontSize: 12.5,
-                            color: c.foreground,
+                            color: c.mutedForeground,
                             marginTop: 3,
                           }}
                         >
                           {item.size}
                         </Text>
                       ) : null}
-                      {selections.map((sel, i) => (
+                      {/* Deal: variant description e.g. "1 Small Pizza" */}
+                      {isDeal && item.description ? (
                         <Text
-                          key={i}
                           style={{
                             fontFamily: "Inter_400Regular",
-                            fontSize: 12,
+                            fontSize: 12.5,
                             color: c.mutedForeground,
-                            marginTop: 2,
+                            marginTop: 3,
                           }}
                         >
-                          • {sel}
+                          {item.description}
                         </Text>
-                      ))}
-                      {isDeal ? (
+                      ) : null}
+                      {/* Deal tap hint */}
+                      {hasDealDetails ? (
                         <View
                           style={{
                             flexDirection: "row",
@@ -529,15 +535,30 @@ export function OrderDetailModal({
                         </View>
                       ) : null}
                     </View>
-                    <Text
-                      style={{
-                        fontFamily: "Inter_500Medium",
-                        fontSize: 13,
-                        color: c.foreground,
-                      }}
-                    >
-                      {money(item.price)}
-                    </Text>
+                    {/* Price column */}
+                    <View style={{ alignItems: "flex-end" }}>
+                      {isDiscounted ? (
+                        <Text
+                          style={{
+                            fontFamily: "Inter_400Regular",
+                            fontSize: 11,
+                            color: c.mutedForeground,
+                            textDecorationLine: "line-through",
+                          }}
+                        >
+                          {money((item.actualPrice ?? item.price) * item.quantity)}
+                        </Text>
+                      ) : null}
+                      <Text
+                        style={{
+                          fontFamily: "Inter_500Medium",
+                          fontSize: 13,
+                          color: c.foreground,
+                        }}
+                      >
+                        {money(item.price * item.quantity)}
+                      </Text>
+                    </View>
                   </Pressable>
                 );
               })}
@@ -769,48 +790,30 @@ export function OrderDetailModal({
                 <View
                   key={i}
                   style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
                     paddingVertical: 12,
                     borderTopWidth: i === 0 ? 0 : 1,
                     borderTopColor: c.border,
                   }}
                 >
-                  <View style={{ flex: 1, paddingRight: 10 }}>
-                    {d.title ? (
-                      <Text
-                        style={{
-                          fontFamily: "Inter_400Regular",
-                          fontSize: 11,
-                          letterSpacing: 0.3,
-                          textTransform: "uppercase",
-                          color: c.mutedForeground,
-                          marginBottom: 2,
-                        }}
-                      >
-                        {d.title}
-                      </Text>
-                    ) : null}
+                  <Text
+                    style={{
+                      fontFamily: "Inter_600SemiBold",
+                      fontSize: 15,
+                      color: c.foreground,
+                    }}
+                  >
+                    {d.flavour || "—"}
+                  </Text>
+                  {d.size ? (
                     <Text
                       style={{
-                        fontFamily: "Inter_600SemiBold",
-                        fontSize: 15,
-                        color: c.foreground,
-                      }}
-                    >
-                      {d.option || "—"}
-                    </Text>
-                  </View>
-                  {d.price ? (
-                    <Text
-                      style={{
-                        fontFamily: "Inter_600SemiBold",
-                        fontSize: 13,
+                        fontFamily: "Inter_400Regular",
+                        fontSize: 12,
                         color: c.mutedForeground,
+                        marginTop: 2,
                       }}
                     >
-                      + {money(d.price)}
+                      {d.size}
                     </Text>
                   ) : null}
                 </View>

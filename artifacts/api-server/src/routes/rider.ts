@@ -658,6 +658,9 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
         // (e.g. "Half", "Regular", "12 Pcs"), so it must not be used as the count.
         quantity: Number(p.count) || 1,
         price: toNum(p.price ?? p.net),
+        // Original pre-discount price. When actualPrice > price the item is discounted.
+        actualPrice: toNum(p.actualPrice ?? p.price ?? p.net),
+        // For single products: the size/variation string from the `quantity` DB field.
         size:
           p.size ||
           p.variation ||
@@ -667,13 +670,20 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
             ? p.quantity.trim()
             : null) ||
           null,
+        // For deal products: the deal variant description from the `quantity` DB field
+        // (e.g. "1 Small Pizza"). Kept separate from `size` to avoid confusion.
+        description:
+          p.type === "deal" &&
+          typeof p.quantity === "string" &&
+          p.quantity.trim()
+            ? p.quantity.trim()
+            : null,
         type: p.type || null,
-        // For deal products, the included choices live in selectedFlavours.
+        // selectedFlavours in MongoDB: [{flavour: string, size: string}]
         dealItems: Array.isArray(p.selectedFlavours)
           ? p.selectedFlavours.map((f: any) => ({
-              title: f.title || null,
-              option: f.option || null,
-              price: toNum(f.flavourPrice),
+              flavour: f.flavour || f.option || null,
+              size: f.size || null,
             }))
           : [],
       }))

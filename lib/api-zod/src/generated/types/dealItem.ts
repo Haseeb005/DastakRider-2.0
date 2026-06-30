@@ -7,9 +7,14 @@
  */
 
 export interface DealItem {
-  /** @nullable */
-  title?: string | null;
-  /** @nullable */
-  option?: string | null;
-  price?: number;
+  /**
+     * The selected flavour name (e.g. "Chicken BBQ").
+     * @nullable
+     */
+  flavour?: string | null;
+  /**
+     * The size for this flavour (e.g. "Small").
+     * @nullable
+     */
+  size?: string | null;
 }

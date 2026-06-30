@@ -14,25 +14,40 @@ export interface OkResponse {
 }
 
 export interface DealItem {
-  /** @nullable */
-  title?: string | null;
-  /** @nullable */
-  option?: string | null;
-  price?: number;
+  /**
+     * The selected flavour name (e.g. "Chicken BBQ").
+     * @nullable
+     */
+  flavour?: string | null;
+  /**
+     * The size for this flavour (e.g. "Small").
+     * @nullable
+     */
+  size?: string | null;
 }
 
 export interface OrderItem {
   name: string;
   quantity: number;
   price: number;
-  /** @nullable */
+  /** Original price before any discount. When actualPrice > price the item is discounted. */
+  actualPrice?: number;
+  /**
+     * For single products, the size/variation descriptor (e.g. "Half", "Regular").
+     * @nullable
+     */
   size?: string | null;
+  /**
+     * For deal products, the deal variant description from the order (e.g. "1 Small Pizza").
+     * @nullable
+     */
+  description?: string | null;
   /**
      * Product type from the order, e.g. "single" or "deal".
      * @nullable
      */
   type?: string | null;
-  /** For deal products, the included choices (from selectedFlavours). */
+  /** For deal products, the selected flavours/choices. */
   dealItems?: DealItem[];
 }
 

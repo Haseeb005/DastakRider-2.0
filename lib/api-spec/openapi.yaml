@@ -325,14 +325,21 @@ components:
           type: number
         price:
           type: number
+        actualPrice:
+          type: number
+          description: Original price before any discount. When actualPrice > price the item is discounted.
         size:
           type: ["string", "null"]
+          description: For single products, the size/variation descriptor (e.g. "Half", "Regular").
+        description:
+          type: ["string", "null"]
+          description: For deal products, the deal variant description from the order (e.g. "1 Small Pizza").
         type:
           type: ["string", "null"]
           description: Product type from the order, e.g. "single" or "deal".
         dealItems:
           type: array
-          description: For deal products, the included choices (from selectedFlavours).
+          description: For deal products, the selected flavours/choices.
           items:
             $ref: "#/components/schemas/DealItem"
       required:
@@ -343,12 +350,12 @@ components:
     DealItem:
       type: object
       properties:
-        title:
+        flavour:
           type: ["string", "null"]
-        option:
+          description: The selected flavour name (e.g. "Chicken BBQ").
+        size:
           type: ["string", "null"]
-        price:
-          type: number
+          description: The size for this flavour (e.g. "Small").
 
     Rider:
       type: object
