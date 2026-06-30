@@ -363,6 +363,7 @@ router.get("/rider/orders/available", async (req: any, res: any) => {
     const query: Record<string, any> = {
       status: AVAILABLE_STATUS,
       selfDelivery: { $ne: true },
+      orderType: { $ne: "PickUp" },
       $or: [{ riderId: { $exists: false } }, { riderId: null }, { riderId: "" }],
     };
     if (rider.city) query.city = rider.city;
