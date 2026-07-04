@@ -20,6 +20,8 @@ export interface Rider {
   riderZones?: string[];
   pendingCollection?: number;
   unpaidCollection?: number;
+  /** Max unpaidCollection allowed before the rider is blocked from accepting new orders. */
+  paymentLimit?: number;
   tillNoonFare?: number;
   /** HMAC bearer token, returned only by login/register for mobile clients */
   token?: string;

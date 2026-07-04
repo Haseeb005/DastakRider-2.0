@@ -13,6 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   Easing,
   FlatList,
@@ -151,6 +152,15 @@ export default function AvailableScreen() {
           ).catch(() => {});
           qc.invalidateQueries({ queryKey: getGetAvailableOrdersQueryKey() });
           qc.invalidateQueries({ queryKey: getGetActiveOrdersQueryKey() });
+        },
+        onError: (e: any) => {
+          Haptics.notificationAsync(
+            Haptics.NotificationFeedbackType.Error,
+          ).catch(() => {});
+          Alert.alert(
+            "Could not accept order",
+            e?.message || "Order may already be taken.",
+          );
         },
       },
     );

@@ -131,6 +131,7 @@ function safeRider(user: any) {
     riderZones: Array.isArray(user.riderZones) ? user.riderZones.filter(Boolean) : [],
     pendingCollection: Number(user.pendingCollection) || 0,
     unpaidCollection: Number(user.unpaidCollection) || 0,
+    paymentLimit: Number(user.paymentLimit) || 0,
     tillNoonFare: Number(user.tillNoonFare) || 0,
   };
 }
@@ -444,6 +445,18 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
     });
     if (activeCount > 0)
       return res.status(400).json({ message: "Complete your current delivery first." });
+    // Cash-collection gates (admin-owned fields, read-only here — never written by this route).
+    const pendingCollection = Number(rider.pendingCollection) || 0;
+    if (pendingCollection > 0)
+      return res.status(400).json({
+        message: "You have unsettled cash in hand from a previous delivery. Please hand it over before accepting a new order.",
+      });
+    const unpaidCollection = Number(rider.unpaidCollection) || 0;
+    const paymentLimit = Number(rider.paymentLimit) || 0;
+    if (paymentLimit > 0 && unpaidCollection >= paymentLimit)
+      return res.status(400).json({
+        message: "You've reached your cash collection limit. Please clear your pending payment with the company before accepting new orders.",
+      });
     let orderObjectId: ObjectId;
     try {
       orderObjectId = new ObjectId(req.params.orderId);

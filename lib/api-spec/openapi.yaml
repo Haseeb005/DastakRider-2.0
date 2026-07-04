@@ -388,6 +388,9 @@ components:
           type: number
         unpaidCollection:
           type: number
+        paymentLimit:
+          type: number
+          description: Max unpaidCollection allowed before the rider is blocked from accepting new orders.
         tillNoonFare:
           type: number
         token:
