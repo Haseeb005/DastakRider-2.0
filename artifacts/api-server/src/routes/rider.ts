@@ -445,15 +445,10 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
     });
     if (activeCount > 0)
       return res.status(400).json({ message: "Complete your current delivery first." });
-    // Cash-collection gates (admin-owned fields, read-only here — never written by this route).
+    // Cash-collection gate (admin-owned fields, read-only here — never written by this route).
     const pendingCollection = Number(rider.pendingCollection) || 0;
-    if (pendingCollection > 0)
-      return res.status(400).json({
-        message: "You have unsettled cash in hand from a previous delivery. Please hand it over before accepting a new order.",
-      });
-    const unpaidCollection = Number(rider.unpaidCollection) || 0;
     const paymentLimit = Number(rider.paymentLimit) || 0;
-    if (paymentLimit > 0 && unpaidCollection >= paymentLimit)
+    if (paymentLimit > 0 && pendingCollection >= paymentLimit)
       return res.status(400).json({
         message: "You've reached your cash collection limit. Please clear your pending payment with the company before accepting new orders.",
       });
