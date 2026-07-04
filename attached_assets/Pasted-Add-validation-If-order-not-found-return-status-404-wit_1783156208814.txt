@@ -1,0 +1,73 @@
+Add validation:
+If order not found, return status 404 with message Order not found.
+If rider not found, return status 404 with message Rider not found.
+Convert paymentLimit, pendingCollection, orderTotal, and active order totals safely using Number(value || 0).
+Fix collection limit logic:
+
+Replace direct checks like:
+
+if (riderCurrentOrdersTotal >= paymentLimit)
+
+and:
+
+if (pendingCollection >= paymentLimit)
+
+with:
+
+if (paymentLimit > 0 && riderCurrentOrdersTotal >= paymentLimit)
+
+and:
+
+if (paymentLimit > 0 && pendingCollection >= paymentLimit)
+Fix remaining limit check:
+
+Only calculate and apply remainingLimit if:
+
+paymentLimit > 0 && paymentType !== 'online'
+Online orders should not be blocked by COD collection limit.
+Fix active orders total:
+Active order total should only include COD orders, because online orders do not affect rider cash collection.
+For riderCurrentOrders, include orderTotal only where paymentType === 'COD'.
+Make sure the query selects paymentType orderTotal.
+Fix delivered current date total:
+currentDateOrders is already COD delivered orders. Sum it safely with Number(order.orderTotal || 0).
+Fix deposit/remainder checks:
+
+The deposit time-based collection checks should also only run when:
+
+paymentLimit > 0
+If paymentLimit is 0, skip all collection limit/deposit blocking logic.
+Keep existing behavior:
+Do not remove rider assignment logic.
+Do not remove notification logic.
+Do not remove email logic.
+Do not remove admin/super admin/maxOrderLimit logic.
+
+Keep response structure as:
+
+{
+  status: '404',
+  msg: '...'
+}
+
+or:
+
+{
+  status: '200',
+  msg: 'This order is now assigned to you.'
+}
+Prevent duplicate assignment race condition if possible:
+Before final update, make sure order still has no riderId.
+
+Prefer atomic update:
+
+Orders.findOneAndUpdate(
+  { _id: orderId, riderId: { $exists: false } },
+  { $set: req.body },
+  { new: true }
+)
+Also handle cases where riderId may be null or empty.
+Improve error safety:
+Use optional chaining where needed.
+Avoid crashes when rider.maxOrderLimit is missing.
+If maxOrderLimit is missing, do not block rider by default.

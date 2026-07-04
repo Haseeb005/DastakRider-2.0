@@ -437,28 +437,53 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
   try {
     const riderId = requireRiderId(req, res);
     if (!riderId) return;
-    const rider = await findRiderById(riderId);
-    if (!rider) return res.status(404).json({ message: "Rider not found" });
-    const activeCount = await ordersCol().countDocuments({
-      riderId,
-      status: { $in: ACTIVE_STATUSES },
-    });
-    if (activeCount > 0)
-      return res.status(400).json({ message: "Complete your current delivery first." });
-    // Cash-collection gate (admin-owned fields, read-only here — never written by this route).
-    const pendingCollection = Number(rider.pendingCollection) || 0;
-    const paymentLimit = Number(rider.paymentLimit) || 0;
-    if (paymentLimit > 0 && pendingCollection >= paymentLimit)
-      return res.status(400).json({
-        message: "You've reached your cash collection limit. Please clear your pending payment with the company before accepting new orders.",
-      });
+
     let orderObjectId: ObjectId;
     try {
       orderObjectId = new ObjectId(req.params.orderId);
     } catch {
       return res.status(400).json({ message: "Invalid order id" });
     }
+
+    const rider = await findRiderById(riderId);
+    if (!rider) return res.status(404).json({ message: "Rider not found" });
+
+    const targetOrder = await ordersCol().findOne({ _id: orderObjectId });
+    if (!targetOrder) return res.status(404).json({ message: "Order not found" });
+
+    const activeCount = await ordersCol().countDocuments({
+      riderId,
+      status: { $in: ACTIVE_STATUSES },
+    });
+    if (activeCount > 0)
+      return res.status(400).json({ message: "Complete your current delivery first." });
+
+    // Cash-collection gate (admin-owned fields, read-only here — never written by this route).
+    const pendingCollection = Number(rider?.pendingCollection || 0);
+    const paymentLimit = Number(rider?.paymentLimit || 0);
+    if (paymentLimit > 0) {
+      if (pendingCollection >= paymentLimit)
+        return res.status(400).json({
+          message:
+            "You've reached your cash collection limit. Please clear your pending payment with the company before accepting new orders.",
+        });
+      // Only COD orders add to the rider's cash-in-hand exposure; online/wallet/split
+      // payments are settled electronically and should never be blocked by this limit.
+      const isCod = String(targetOrder?.paymentType || "").toUpperCase() === "COD";
+      if (isCod) {
+        const remainingLimit = paymentLimit - pendingCollection;
+        const orderTotal = Number(targetOrder?.orderTotal || 0);
+        if (orderTotal > remainingLimit)
+          return res.status(400).json({
+            message:
+              "Accepting this order would put you over your cash collection limit. Please clear your pending payment with the company first.",
+          });
+      }
+    }
+
     const now = new Date();
+    // Atomic update guards against a race where two riders accept the same order at once —
+    // it only succeeds if the order is still available and has no riderId assigned.
     const updated = await ordersCol().findOneAndUpdate(
       {
         _id: orderObjectId,
