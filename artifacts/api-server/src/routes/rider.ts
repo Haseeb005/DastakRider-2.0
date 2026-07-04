@@ -455,8 +455,13 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       riderId,
       status: { $in: ACTIVE_STATUSES },
     });
-    if (activeCount > 0)
-      return res.status(400).json({ message: "Complete your current delivery first." });
+    // maxOrderLimit caps how many orders a rider can carry at once (admin-owned field).
+    // If missing/0, do not block by default — no concurrent-order cap is enforced.
+    const maxOrderLimit = Number(rider?.maxOrderLimit || 0);
+    if (maxOrderLimit > 0 && activeCount >= maxOrderLimit)
+      return res.status(400).json({
+        message: `You can only have ${maxOrderLimit} active order${maxOrderLimit === 1 ? "" : "s"} at a time. Complete a current delivery before accepting more.`,
+      });
 
     // Cash-collection gate (admin-owned fields, read-only here — never written by this route).
     const pendingCollection = Number(rider?.pendingCollection || 0);
