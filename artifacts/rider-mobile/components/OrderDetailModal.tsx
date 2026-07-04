@@ -587,12 +587,6 @@ export function OrderDetailModal({
               }}
             />
             <Row label="Order total" value={money(order.total)} strong />
-            <Row
-              label="Your fare"
-              value={money(order.riderFare)}
-              strong
-              color={c.success}
-            />
             <View
               style={{
                 marginTop: 10,

@@ -627,17 +627,6 @@ function RiderOrderDetailModal({
             </div>
           )}
 
-          {/* Your Fare */}
-          <div className="rounded-lg p-3 bg-green-50 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-green-700/70">Your Fare</p>
-              <p className="text-lg font-bold text-green-700">{formatMoney(order.riderFare)}</p>
-            </div>
-            <Badge className={`border-0 text-xs ${order.paidToRider ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-              {order.paidToRider ? "Paid" : "Pending"}
-            </Badge>
-          </div>
-
           {order.comment && (
             <div className="text-sm">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Note</h4>
