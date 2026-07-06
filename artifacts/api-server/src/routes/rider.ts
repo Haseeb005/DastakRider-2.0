@@ -149,9 +149,13 @@ function pktPeriodStart(kind: "day" | "week" | "month"): Date {
   const y = shifted.getUTCFullYear();
   const m = shifted.getUTCMonth();
   const d = shifted.getUTCDate();
-  const dow = shifted.getUTCDay();
+  const dow = shifted.getUTCDay(); // 0=Sun..6=Sat
   let day = d;
-  if (kind === "week") day = d - dow;
+  if (kind === "week") {
+    // Rider week runs Saturday -> Friday, not the JS default Sunday -> Saturday.
+    const daysSinceSaturday = (dow - 6 + 7) % 7;
+    day = d - daysSinceSaturday;
+  }
   if (kind === "month") day = 1;
   // PKT midnight of that calendar date == that UTC midnight minus 5h.
   return new Date(Date.UTC(y, m, day) - PKT_MS);
