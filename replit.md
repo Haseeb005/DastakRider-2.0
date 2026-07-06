@@ -26,7 +26,7 @@ Food-delivery rider apps for Pakistan: a web rider app and an Expo mobile app, b
 - `artifacts/rider-app` — web rider app (Vite + React), served at `/`
 - `artifacts/rider-mobile` — Expo mobile rider app, served at `/rider-mobile/`
 - `lib/api-spec/openapi.yaml` — API contract; `lib/api-client-react` & `lib/api-zod` are generated from it
-- Real data lives in the shared production MongoDB (`MONGODB_URI`); riders are `users` with `type:"rider"`.
+- Real data lives in the shared production MongoDB (`MONGODB_URI_RIDER`); riders are `users` with `type:"rider"`.
 
 ## Architecture decisions
 

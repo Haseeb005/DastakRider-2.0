@@ -4,8 +4,8 @@ import { logger } from "./logger";
 let db: Db;
 
 export async function connectMongo(): Promise<void> {
-  const uri = process.env["MONGODB_URI"];
-  if (!uri) throw new Error("MONGODB_URI environment variable is required.");
+  const uri = process.env["MONGODB_URI_RIDER"];
+  if (!uri) throw new Error("MONGODB_URI_RIDER environment variable is required.");
   const client = new MongoClient(uri);
   await client.connect();
   db = client.db();
