@@ -76,15 +76,25 @@ export default function ActiveScreen() {
     invalidateAll();
   };
 
+  const onMutateError = (e: any) => {
+    Alert.alert(
+      "Update failed",
+      e?.message || "Could not update order status. Please try again.",
+    );
+  };
+
   const setStatus = (order: RiderOrder, status: string) => {
     statusM.mutate(
       { orderId: order.id, data: { status } },
-      { onSuccess: onMutated },
+      { onSuccess: onMutated, onError: onMutateError },
     );
   };
 
   const markArrived = (order: RiderOrder) => {
-    arrivedM.mutate({ orderId: order.id }, { onSuccess: onMutated });
+    arrivedM.mutate(
+      { orderId: order.id },
+      { onSuccess: onMutated, onError: onMutateError },
+    );
   };
 
   const pickUp = async (order: RiderOrder) => {
