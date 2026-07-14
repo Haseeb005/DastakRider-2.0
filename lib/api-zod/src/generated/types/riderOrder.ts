@@ -44,6 +44,13 @@ export interface RiderOrder {
   martPhone?: string | null;
   /** @nullable */
   paymentType?: string | null;
+  /**
+     * Billing mode from the admin system ("prepaid" or "postpaid"). Prepaid COD orders show collectAmount instead of total as the amount to collect.
+     * @nullable
+     */
+  billingMode?: string | null;
+  /** The amount the rider physically collects from the customer. For prepaid+COD orders this is orderTotal minus the sum of (actualPrice × quantity) per product. For non-prepaid COD it equals total. For non-COD it is 0. */
+  collectAmount?: number;
   /** @nullable */
   orderNum?: string | null;
   /** @nullable */

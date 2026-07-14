@@ -183,11 +183,69 @@ async function computeEarnings(riderId: string, tillNoonFare = 0) {
   };
   const fareExpr =
     tillNoonFare > 0 ? { $literal: tillNoonFare } : snapshotExpr;
-  // Cash the rider physically collects — COD only (online payments excluded).
+  // Cash the rider physically collects.
+  // For prepaid+COD orders the customer already paid the restaurant directly, so
+  // the rider only collects the platform-margin portion: orderTotal − prepaidActualTotal.
+  // For postpaid COD the rider collects the full orderTotal as before.
+  // For non-COD orders the rider collects nothing (0).
+  const orderTotalDbl = {
+    $convert: { input: "$orderTotal", to: "double", onError: 0, onNull: 0 },
+  };
+  const isCodExpr = {
+    $in: [{ $ifNull: ["$paymentType", "$paymentMethod"] }, COD_TYPES],
+  };
+  const isPrepaidExpr = { $eq: ["$billingMode", "prepaid"] };
+  // Sum of actualPrice × count across all products in the order (falls back to price).
+  const prepaidActualTotalExpr = {
+    $sum: {
+      $map: {
+        input: { $ifNull: ["$products", []] },
+        as: "p",
+        in: {
+          $multiply: [
+            {
+              $convert: {
+                input: {
+                  $ifNull: ["$$p.actualPrice", { $ifNull: ["$$p.price", 0] }],
+                },
+                to: "double",
+                onError: 0,
+                onNull: 0,
+              },
+            },
+            {
+              $convert: {
+                input: { $ifNull: ["$$p.count", 1] },
+                to: "double",
+                onError: 1,
+                onNull: 1,
+              },
+            },
+          ],
+        },
+      },
+    },
+  };
   const codAmountExpr = {
     $cond: [
-      { $in: [{ $ifNull: ["$paymentType", "$paymentMethod"] }, COD_TYPES] },
-      { $convert: { input: "$orderTotal", to: "double", onError: 0, onNull: 0 } },
+      isCodExpr,
+      {
+        $cond: [
+          isPrepaidExpr,
+          { $max: [{ $subtract: [orderTotalDbl, prepaidActualTotalExpr] }, 0] },
+          orderTotalDbl,
+        ],
+      },
+      0,
+    ],
+  };
+  // For prepaid non-COD orders the platform margin (orderTotal − prepaidActualTotal)
+  // was not collected in cash by the rider, so it must be subtracted from the
+  // rider's displayed cash-in-hand balance (pendingCollection).
+  const prepaidNonCodDeductExpr = {
+    $cond: [
+      { $and: [isPrepaidExpr, { $not: [isCodExpr] }] },
+      { $max: [{ $subtract: [orderTotalDbl, prepaidActualTotalExpr] }, 0] },
       0,
     ],
   };
@@ -196,6 +254,7 @@ async function computeEarnings(riderId: string, tillNoonFare = 0) {
     count: { $sum: 1 },
     earnings: { $sum: fareExpr },
     orderAmount: { $sum: codAmountExpr },
+    prepaidNonCodDeduction: { $sum: prepaidNonCodDeductExpr },
   };
 
   const [agg] = await ordersCol()
@@ -235,6 +294,11 @@ async function computeEarnings(riderId: string, tillNoonFare = 0) {
     monthEarnings: month.earnings,
     monthDeliveries: month.count,
     monthOrderAmount: month.orderAmount,
+    // Total deduction to subtract from the rider's displayed pendingCollection for
+    // prepaid non-COD orders (customer paid online; rider never held that cash).
+    prepaidNonCodDeduction: Math.round(
+      agg?.total?.[0]?.prepaidNonCodDeduction || 0
+    ),
   };
 }
 
@@ -325,8 +389,15 @@ router.get("/rider/me", async (req: any, res: any) => {
       return res.status(401).json({ message: "Rider not found" });
     }
     const earn = await computeEarnings(riderId, Number(rider.tillNoonFare) || 0);
+    const base = safeRider(rider);
     res.json({
-      ...safeRider(rider),
+      ...base,
+      // Subtract prepaid non-COD margin from displayed cash-in-hand: the rider
+      // never physically collected that cash (customer paid online).
+      pendingCollection: Math.max(
+        base.pendingCollection - (earn.prepaidNonCodDeduction || 0),
+        0
+      ),
       totalEarnings: earn.totalEarnings,
       totalDeliveries: earn.totalDeliveries || Number(rider.orderCount) || 0,
     });
@@ -478,11 +549,32 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
         });
       // Only COD orders add to the rider's cash-in-hand exposure; online/wallet/split
       // payments are settled electronically and should never be blocked by this limit.
-      const isCod = String(targetOrder?.paymentType || "").toUpperCase() === "COD";
+      const payTypeCash = String(
+        targetOrder?.paymentType || targetOrder?.paymentMethod || ""
+      );
+      const isCod = COD_TYPES.some(
+        (t) => t.toLowerCase() === payTypeCash.toLowerCase()
+      );
       if (isCod) {
         const remainingLimit = paymentLimit - pendingCollection;
-        const orderTotal = Number(targetOrder?.orderTotal || 0);
-        if (orderTotal > remainingLimit)
+        const rawTotal = Number(targetOrder?.orderTotal || 0);
+        // For prepaid COD, rider only collects the platform-margin portion.
+        const isPrepaid =
+          String(targetOrder?.billingMode || "").toLowerCase() === "prepaid";
+        const prepaidAmt =
+          isPrepaid && Array.isArray(targetOrder?.products)
+            ? (targetOrder.products as any[]).reduce(
+                (s: number, p: any) =>
+                  s +
+                  Number(p.actualPrice ?? p.price ?? 0) *
+                    (Number(p.count) || 1),
+                0
+              )
+            : 0;
+        const effectiveCollect = isPrepaid
+          ? Math.max(rawTotal - prepaidAmt, 0)
+          : rawTotal;
+        if (effectiveCollect > remainingLimit)
           return res.status(400).json({
             message:
               "Accepting this order would put you over your cash collection limit. Please clear your pending payment with the company first.",
@@ -612,7 +704,11 @@ router.get("/rider/earnings", async (req: any, res: any) => {
       ...earn,
       rating,
       ratingCount,
-      pendingCollection: Number(rider.pendingCollection) || 0,
+      pendingCollection: Math.max(
+        (Number(rider.pendingCollection) || 0) -
+          (earn.prepaidNonCodDeduction || 0),
+        0
+      ),
       unpaidCollection: Number(rider.unpaidCollection) || 0,
     });
   } catch (e: any) {
@@ -764,6 +860,21 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
     martAddress: doc.martAddress || null,
     martPhone: doc.martPhone || null,
     paymentType: doc.paymentType || doc.paymentMethod || null,
+    billingMode: doc.billingMode || null,
+    collectAmount: (() => {
+      const payType = String(
+        doc.paymentType || doc.paymentMethod || ""
+      ).toLowerCase();
+      const isCodOrder = COD_TYPES.some((t) => t.toLowerCase() === payType);
+      const prepaidActualTotal = items.reduce(
+        (s: number, item: { actualPrice: number; quantity: number }) =>
+          s + item.actualPrice * item.quantity,
+        0
+      );
+      if (doc.billingMode === "prepaid" && isCodOrder)
+        return Math.max(total - prepaidActualTotal, 0);
+      return isCodOrder ? total : 0;
+    })(),
     orderNum: doc.orderNum != null ? String(doc.orderNum) : null,
     comment: doc.comment || null,
     tip: toNum(doc.tip),

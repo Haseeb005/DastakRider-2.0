@@ -620,7 +620,7 @@ function RiderOrderDetailModal({
                 </Badge>
                 <span className={`text-sm font-medium ${isCod ? "text-amber-700" : "text-emerald-700"}`}>
                   {isCod
-                    ? `${formatMoney(order.total)} ${isDelivered ? "collected" : "to collect"}`
+                    ? `${formatMoney(order.collectAmount ?? order.total)} ${isDelivered ? "collected" : "to collect"}`
                     : "Paid online"}
                 </span>
               </div>
@@ -894,7 +894,11 @@ function OrderCard({
           <div className="flex items-center justify-between pt-1">
             <div>
               <p className="text-xs text-gray-400">Order Total</p>
-              <p className="font-bold text-gray-900 text-lg">{formatMoney(order.total)}</p>
+              <p className="font-bold text-gray-900 text-lg">{formatMoney(
+                (order.collectAmount != null && order.collectAmount !== order.total)
+                  ? order.collectAmount
+                  : order.total
+              )}</p>
             </div>
             <div className="text-right">
               <p className="text-xs text-gray-400">Your Earning</p>
