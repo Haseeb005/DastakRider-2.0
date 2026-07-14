@@ -112,18 +112,7 @@ export default function ActiveScreen() {
   };
 
   const deliver = (order: RiderOrder) => {
-    Alert.alert(
-      "Deliver order?",
-      "Confirm you have handed the order to the customer.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Deliver",
-          style: "default",
-          onPress: () => setStatus(order, "Delivered"),
-        },
-      ],
-    );
+    setStatus(order, "Delivered");
   };
 
   const renderAction = (order: RiderOrder) => {
