@@ -660,11 +660,24 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
     // Enforce the 3-step progression server-side: a rider must mark "Arrived at
     // Restaurant" (riderArrived) before picking up. This guards against stale
     // clients or direct API calls skipping the checkpoint.
+    //
+    // For "Delivered" we intentionally do NOT filter on status === "Rider Picked Up".
+    // The external admin system may revert the status between the moment our
+    // "Rider Picked Up" write lands and the moment the rider presses "Delivered"
+    // (observed: < 5 s). Instead we gate on two additive timestamps that we own
+    // and admin never clears:
+    //   • pickUpTime present  → rider physically picked up the order
+    //   • timeWhenDelivered absent → not yet delivered (prevents double-delivery)
     const now = new Date();
     const filter: Record<string, any> =
       status === "Rider Picked Up"
         ? { _id: orderObjectId, riderId, status: "Rider Accepted", riderArrived: true }
-        : { _id: orderObjectId, riderId, status: "Rider Picked Up" };
+        : {
+            _id: orderObjectId,
+            riderId,
+            pickUpTime: { $exists: true },
+            timeWhenDelivered: { $exists: false },
+          };
     // Additive timestamps that mirror the original app (no shared counter writes).
     const extra: Record<string, any> =
       status === "Rider Picked Up"
