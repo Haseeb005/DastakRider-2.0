@@ -7,7 +7,8 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import React from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback } from "react";
 import {
   Alert,
   Platform,
@@ -130,9 +131,18 @@ function CollectionCard({
 export default function ProfileScreen() {
   const c = useColors();
   const qc = useQueryClient();
-  const { signOut } = useAuth();
+  const { signOut, token } = useAuth();
 
-  const meQ = useGetRiderMe();
+  const meQ = useGetRiderMe({
+    query: { queryKey: getGetRiderMeQueryKey(), enabled: !!token },
+  });
+
+  // Refetch every time the user navigates to this tab so cash/earnings are fresh.
+  useFocusEffect(
+    useCallback(() => {
+      if (token) qc.invalidateQueries({ queryKey: getGetRiderMeQueryKey() });
+    }, [token, qc]),
+  );
   const rider = meQ.data;
   const isOnline = !!rider?.isOnline;
 
