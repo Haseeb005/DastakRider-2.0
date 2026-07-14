@@ -392,9 +392,7 @@ router.get("/rider/me", async (req: any, res: any) => {
     const base = safeRider(rider);
     res.json({
       ...base,
-      // Cash in hand = total COD order amount from all delivered orders,
-      // matching what the Earnings screen shows as "Order amount".
-      pendingCollection: earn.totalOrderAmount || 0,
+      pendingCollection: base.pendingCollection,
       totalEarnings: earn.totalEarnings,
       totalDeliveries: earn.totalDeliveries || Number(rider.orderCount) || 0,
     });
@@ -692,6 +690,35 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
           : "Invalid status transition, or order not assigned to you.";
       return res.status(409).json({ message });
     }
+    // On delivery of a prepaid+COD order, accumulate the cash the rider collected
+    // (orderTotal − sum(p.actualPrice × count)) into the rider's pendingCollection.
+    if (status === DELIVERED_STATUS) {
+      const payType = String(
+        updated.paymentType || updated.paymentMethod || ""
+      ).toLowerCase();
+      const isCod = COD_TYPES.some((t) => t.toLowerCase() === payType);
+      if (updated.billingMode === "prepaid" && isCod) {
+        const products: any[] = Array.isArray(updated.products)
+          ? updated.products
+          : [];
+        const actualPriceTotal = products.reduce(
+          (s: number, p: any) =>
+            s +
+            toNum(p.actualPrice ?? p.price ?? p.net) * (Number(p.count) || 1),
+          0
+        );
+        const collectAmt = Math.max(
+          toNum(updated.orderTotal) - actualPriceTotal,
+          0
+        );
+        if (collectAmt > 0) {
+          await usersCol().updateOne(
+            { _id: new ObjectId(riderId) },
+            { $inc: { pendingCollection: collectAmt } }
+          );
+        }
+      }
+    }
     res.json(normalizeOrder(updated, tnf));
   } catch (e: any) {
     req.log.error(e);
@@ -853,6 +880,13 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
     (s: number, p: any) => s + toNum(p.net),
     0
   );
+  // Cash collect amount = orderTotal − sum(p.actualPrice × count).
+  // Used for collectAmount display and pendingCollection increments on delivery.
+  const actualPriceTotal = rawProducts.reduce(
+    (s: number, p: any) =>
+      s + toNum(p.actualPrice ?? p.price ?? p.net) * (Number(p.count) || 1),
+    0
+  );
   return {
     id: String(doc._id),
     restaurantName: doc.martName || null,
@@ -884,7 +918,7 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
       ).toLowerCase();
       const isCodOrder = COD_TYPES.some((t) => t.toLowerCase() === payType);
       if (doc.billingMode === "prepaid" && isCodOrder)
-        return Math.max(total - itemsTotal, 0);
+        return Math.max(total - actualPriceTotal, 0);
       return isCodOrder ? total : 0;
     })(),
     orderNum: doc.orderNum != null ? String(doc.orderNum) : null,
