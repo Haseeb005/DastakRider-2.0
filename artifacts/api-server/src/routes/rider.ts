@@ -392,12 +392,9 @@ router.get("/rider/me", async (req: any, res: any) => {
     const base = safeRider(rider);
     res.json({
       ...base,
-      // Subtract prepaid non-COD margin from displayed cash-in-hand: the rider
-      // never physically collected that cash (customer paid online).
-      pendingCollection: Math.max(
-        base.pendingCollection - (earn.prepaidNonCodDeduction || 0),
-        0
-      ),
+      // Cash in hand = total COD order amount from all delivered orders,
+      // matching what the Earnings screen shows as "Order amount".
+      pendingCollection: earn.totalOrderAmount || 0,
       totalEarnings: earn.totalEarnings,
       totalDeliveries: earn.totalDeliveries || Number(rider.orderCount) || 0,
     });
