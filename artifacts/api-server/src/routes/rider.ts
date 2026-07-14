@@ -850,11 +850,11 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
       ? riderFareOverride
       : 0;
   const riderFare = override > 0 ? override : snapshot;
-  // Sum of actualPrice × quantity across all items — used for both subtotal display
-  // and prepaid COD collect-amount calculation.
-  const itemsTotal = items.reduce(
-    (s: number, item: { actualPrice: number; quantity: number }) =>
-      s + item.actualPrice * item.quantity,
+  // Sum of net × count from raw products — the per-item net price as stored in the
+  // DB, used for the "Subtotal" line in order detail. Falls back to price then 0.
+  const rawProducts: any[] = Array.isArray(doc.products) ? doc.products : [];
+  const itemsTotal = rawProducts.reduce(
+    (s: number, p: any) => s + toNum(p.net ?? p.price) * (Number(p.count) || 1),
     0
   );
   return {
