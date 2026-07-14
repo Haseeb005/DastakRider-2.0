@@ -697,20 +697,23 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
         updated.paymentType || updated.paymentMethod || ""
       ).toLowerCase();
       const isCod = COD_TYPES.some((t) => t.toLowerCase() === payType);
-      if (updated.billingMode === "prepaid" && isCod) {
-        const products: any[] = Array.isArray(updated.products)
-          ? updated.products
-          : [];
-        const actualPriceTotal = products.reduce(
-          (s: number, p: any) =>
-            s +
-            toNum(p.actualPrice ?? p.price ?? p.net) * (Number(p.count) || 1),
-          0
-        );
-        const collectAmt = Math.max(
-          toNum(updated.orderTotal) - actualPriceTotal,
-          0
-        );
+      if (isCod) {
+        const orderTotal = toNum(updated.orderTotal);
+        let collectAmt = orderTotal;
+        if (updated.billingMode === "prepaid") {
+          // Prepaid COD: rider collects only the margin (orderTotal − items actualPrice).
+          const products: any[] = Array.isArray(updated.products)
+            ? updated.products
+            : [];
+          const actualPriceTotal = products.reduce(
+            (s: number, p: any) =>
+              s +
+              toNum(p.actualPrice ?? p.price ?? p.net) * (Number(p.count) || 1),
+            0
+          );
+          collectAmt = Math.max(orderTotal - actualPriceTotal, 0);
+        }
+        // Postpaid COD: rider collects full orderTotal (collectAmt already = orderTotal).
         if (collectAmt > 0) {
           await usersCol().updateOne(
             { _id: new ObjectId(riderId) },
