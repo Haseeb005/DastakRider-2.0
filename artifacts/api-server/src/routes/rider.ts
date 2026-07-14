@@ -850,10 +850,10 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
       ? riderFareOverride
       : 0;
   const riderFare = override > 0 ? override : snapshot;
-  // Subtotal = sum of p.count across all products as stored in the DB.
+  // Subtotal = sum of p.net across all products as stored in the DB.
   const rawProducts: any[] = Array.isArray(doc.products) ? doc.products : [];
   const itemsTotal = rawProducts.reduce(
-    (s: number, p: any) => s + toNum(p.count),
+    (s: number, p: any) => s + toNum(p.net),
     0
   );
   return {
