@@ -850,6 +850,13 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
       ? riderFareOverride
       : 0;
   const riderFare = override > 0 ? override : snapshot;
+  // Sum of actualPrice × quantity across all items — used for both subtotal display
+  // and prepaid COD collect-amount calculation.
+  const itemsTotal = items.reduce(
+    (s: number, item: { actualPrice: number; quantity: number }) =>
+      s + item.actualPrice * item.quantity,
+    0
+  );
   return {
     id: String(doc._id),
     restaurantName: doc.martName || null,
@@ -864,7 +871,8 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
     // Customer-facing delivery charge on the bill — NOT the rider's pay (riderFare).
     deliveryFee: toNum(doc.deliveryCharges),
     riderFare,
-    subtotal: Math.max(total - toNum(doc.deliveryCharges), 0) || total,
+    // Items sum (actualPrice × qty) shown as "Subtotal" in order detail.
+    subtotal: itemsTotal,
     items,
     userName: doc.name || null,
     city: doc.city || null,
@@ -879,13 +887,8 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
         doc.paymentType || doc.paymentMethod || ""
       ).toLowerCase();
       const isCodOrder = COD_TYPES.some((t) => t.toLowerCase() === payType);
-      const prepaidActualTotal = items.reduce(
-        (s: number, item: { actualPrice: number; quantity: number }) =>
-          s + item.actualPrice * item.quantity,
-        0
-      );
       if (doc.billingMode === "prepaid" && isCodOrder)
-        return Math.max(total - prepaidActualTotal, 0);
+        return Math.max(total - itemsTotal, 0);
       return isCodOrder ? total : 0;
     })(),
     orderNum: doc.orderNum != null ? String(doc.orderNum) : null,

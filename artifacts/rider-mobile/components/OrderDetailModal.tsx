@@ -588,7 +588,7 @@ export function OrderDetailModal({
             />
             <Row
               label="Order total"
-              value={money(cod ? (order.collectAmount ?? order.total) : order.total)}
+              value={money(order.total)}
               strong
             />
             <View
