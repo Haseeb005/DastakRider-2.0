@@ -3,6 +3,9 @@
     "name": "Dastak Rider",
     "slug": "rider-mobile",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "rider-mobile",
@@ -18,7 +21,11 @@
       "bundleIdentifier": "com.ios.DastakRiders"
     },
     "android": {
-      "package": "com.dastakriders"
+      "package": "com.dastakriders",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#ffffff"
+      }
     },
     "web": {
       "favicon": "./assets/images/icon.png"
