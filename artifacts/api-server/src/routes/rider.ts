@@ -777,11 +777,7 @@ router.get("/rider/earnings", async (req: any, res: any) => {
       ...earn,
       rating,
       ratingCount,
-      pendingCollection: Math.max(
-        (Number(rider.pendingCollection) || 0) -
-          (earn.prepaidNonCodDeduction || 0),
-        0
-      ),
+      pendingCollection: Number(rider.pendingCollection) || 0,
       unpaidCollection: Number(rider.unpaidCollection) || 0,
     });
   } catch (e: any) {
