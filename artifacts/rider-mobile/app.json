@@ -31,7 +31,18 @@
         }
       ],
       "expo-web-browser",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Dastak Rider needs your location so customers can track their delivery in real time.",
+          "locationAlwaysPermission": "Dastak Rider needs background location access so tracking continues while you deliver.",
+          "locationWhenInUsePermission": "Dastak Rider needs your location so customers can track their delivery in real time.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      "expo-task-manager"
     ],
     "experiments": {
       "typedRoutes": true,

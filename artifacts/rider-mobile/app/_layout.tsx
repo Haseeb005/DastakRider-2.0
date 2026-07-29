@@ -22,6 +22,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Loading } from "@/components/ui";
 import { AuthProvider, TOKEN_KEY, useAuth } from "@/lib/auth";
+// Side-effect import — registers the background location task with TaskManager
+// before any screen mounts. Must stay at module level.
+import "@/lib/locationTask";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();

@@ -797,7 +797,7 @@ const riderLocations = new Map<
   string,
   { lat: number; lng: number; riderId: string; ts: number }
 >();
-const LOCATION_TTL_MS = 60_000;
+const LOCATION_TTL_MS = 90_000;
 
 // Rider pushes GPS coordinates for an active order they own and are delivering.
 router.post("/rider/location", async (req: any, res: any) => {

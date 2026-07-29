@@ -45,9 +45,11 @@ export default function ActiveScreen() {
   });
   const orders = ordersQ.data ?? [];
 
-  const trackId =
-    orders.find((o) => o.status === "Rider Picked Up")?.id ?? null;
-  const locationStatus = useLocationTracking(trackId);
+  // Track ALL "Rider Picked Up" orders concurrently (fix: was only tracking first one).
+  const trackIds = orders
+    .filter((o) => o.status === "Rider Picked Up")
+    .map((o) => o.id);
+  const locationStatus = useLocationTracking(trackIds);
 
   // Alert the rider the moment live sharing drops mid-delivery.
   useEffect(() => {
@@ -168,7 +170,7 @@ export default function ActiveScreen() {
         }
       />
 
-      {trackId ? (
+      {trackIds.length > 0 ? (
         <View
           style={{
             marginHorizontal: 20,
