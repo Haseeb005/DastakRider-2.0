@@ -626,7 +626,7 @@ router.post("/rider/orders/:orderId/arrived", async (req: any, res: any) => {
     }
     const updated = await ordersCol().findOneAndUpdate(
       { _id: orderObjectId, riderId, status: "Rider Accepted" },
-      { $set: { riderArrived: true, riderArrivedTime: new Date(), updatedAt: new Date() } },
+      { $set: { riderArrived: true, riderArrivedTime: pktTimeString(new Date()), updatedAt: new Date() } },
       { returnDocument: "after" }
     );
     if (!updated)
@@ -680,8 +680,8 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
     // Additive timestamps that mirror the original app (no shared counter writes).
     const extra: Record<string, any> =
       status === "Rider Picked Up"
-        ? { pickUpTime: now }
-        : { timeWhenDelivered: now, paidToRider: false };
+        ? { pickUpTime: pktTimeString(now) }
+        : { timeWhenDelivered: pktTimeString(now), paidToRider: false };
     const updated = await ordersCol().findOneAndUpdate(
       filter,
       { $set: { status, updatedAt: now, ...extra } },
@@ -853,8 +853,21 @@ function toNumOrNull(v: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Formats a Date as "04:15 pm" in PKT (UTC+5, no DST). */
+function pktTimeString(d: Date): string {
+  const pkt = new Date(d.getTime() + 5 * 60 * 60 * 1000);
+  let h = pkt.getUTCHours();
+  const m = pkt.getUTCMinutes();
+  const ampm = h >= 12 ? "pm" : "am";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
 function fmtTime(v: any): string | null {
   if (!v) return null;
+  // Already a formatted time string (e.g. "04:15 pm") — pass through as-is.
+  if (typeof v === "string" && /^\d{2}:\d{2} (am|pm)$/i.test(v)) return v;
   const d = v instanceof Date ? v : new Date(v);
   return isNaN(d.getTime()) ? String(v) : d.toISOString();
 }

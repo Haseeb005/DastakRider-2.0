@@ -98,6 +98,8 @@ export function formatDateTime(
   iso: string | null | undefined,
 ): { date: string; time: string } | null {
   if (!iso) return null;
+  // Already a formatted time string (e.g. "04:15 pm") — return as-is with no date.
+  if (/^\d{2}:\d{2} (am|pm)$/i.test(iso)) return { date: "", time: iso };
   const ms = Date.parse(iso);
   if (Number.isNaN(ms)) return null;
   const d = new Date(ms + 5 * 60 * 60 * 1000);

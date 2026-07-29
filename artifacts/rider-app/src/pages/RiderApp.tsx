@@ -125,6 +125,8 @@ function formatDateTime(dateStr?: string | null) {
 /** Formats a timestamp as "04:15 pm" (PKT = UTC+5, zero-padded, lowercase am/pm). */
 function formatTime(dateStr?: string | null): string {
   if (!dateStr) return "—";
+  // Already stored as "04:15 pm" — pass through directly.
+  if (/^\d{2}:\d{2} (am|pm)$/i.test(dateStr)) return dateStr;
   const ms = Date.parse(dateStr);
   if (Number.isNaN(ms)) return "—";
   const d = new Date(ms + 5 * 60 * 60 * 1000);
