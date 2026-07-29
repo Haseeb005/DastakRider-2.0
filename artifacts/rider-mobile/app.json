@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Dastak Rider",
-    "slug": "rider-mobile",
+    "slug": "Dastak Rider",
     "version": "1.0.0",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -22,12 +22,10 @@
     },
     "android": {
       "package": "com.dastakriders",
-<<<<<<< Updated upstream
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
-      }
-=======
+      },
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
@@ -37,7 +35,6 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
->>>>>>> Stashed changes
     },
     "web": {
       "favicon": "./assets/images/icon.png"
