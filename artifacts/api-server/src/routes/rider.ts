@@ -724,6 +724,23 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
             { $inc: { pendingCollection: collectAmt } }
           );
         }
+      } else if (updated.billingMode === "prepaid") {
+        // Prepaid non-COD: customer paid online — rider never held this cash.
+        // Deduct the actualPrice total from pendingCollection to correct the balance.
+        const products: any[] = Array.isArray(updated.products)
+          ? updated.products
+          : [];
+        const actualPriceTotal = products.reduce(
+          (s: number, p: any) =>
+            s + toNum(p.actualPrice ?? p.price ?? p.net) * (Number(p.count) || 1),
+          0
+        );
+        if (actualPriceTotal > 0) {
+          await usersCol().updateOne(
+            { _id: new ObjectId(riderId) },
+            { $inc: { pendingCollection: -actualPriceTotal } }
+          );
+        }
       }
       // Decrement active order count. If it hits 0 (or below), rider is idle again.
       const updatedRider = await usersCol().findOneAndUpdate(
