@@ -600,6 +600,11 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       { returnDocument: "after" }
     );
     if (!updated) return res.status(409).json({ message: "Order already taken or unavailable." });
+    // Rider is now carrying at least one order — mark "on delivery" and bump active count.
+    await usersCol().updateOne(
+      { _id: new ObjectId(riderId) },
+      { $set: { status: "on delivery" }, $inc: { orderCount: 1 } }
+    );
     res.json(normalizeOrder(updated, Number(rider.tillNoonFare) || 0));
   } catch (e: any) {
     req.log.error(e);
@@ -720,6 +725,18 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
             { $inc: { pendingCollection: collectAmt } }
           );
         }
+      }
+      // Decrement active order count. If it hits 0 (or below), rider is idle again.
+      const updatedRider = await usersCol().findOneAndUpdate(
+        { _id: new ObjectId(riderId) },
+        { $inc: { orderCount: -1 } },
+        { returnDocument: "after" }
+      );
+      if ((updatedRider?.orderCount ?? 0) <= 0) {
+        await usersCol().updateOne(
+          { _id: new ObjectId(riderId) },
+          { $set: { status: "idle", orderCount: 0 } }
+        );
       }
     }
     res.json(normalizeOrder(updated, tnf));
