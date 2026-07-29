@@ -521,10 +521,9 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
     const targetOrder = await ordersCol().findOne({ _id: orderObjectId });
     if (!targetOrder) return res.status(404).json({ message: "Order not found" });
 
-    const activeCount = await ordersCol().countDocuments({
-      riderId,
-      status: { $in: ACTIVE_STATUSES },
-    });
+    // Use the live orderCount on the rider doc (maintained by accept/deliver routes)
+    // instead of a separate countDocuments query — one less DB round-trip.
+    const activeCount = Number(rider?.orderCount || 0);
     // maxOrderLimit caps how many orders a rider can carry at once (admin-owned field).
     // If missing/0, do not block by default — no concurrent-order cap is enforced.
     const maxOrderLimit = Number(rider?.maxOrderLimit || 0);
