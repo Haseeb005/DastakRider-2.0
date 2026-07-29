@@ -14,9 +14,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.ios.DastakRiders"
     },
-    "android": {},
+    "android": {
+      "package": "com.dastakriders"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
