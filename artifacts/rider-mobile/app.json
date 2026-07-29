@@ -22,10 +22,22 @@
     },
     "android": {
       "package": "com.dastakriders",
+<<<<<<< Updated upstream
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
       }
+=======
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
+      ]
+>>>>>>> Stashed changes
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -54,6 +66,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "fc7bfa99-d113-4c75-878d-7b1ddb1c630c"
+      }
+    },
+    "owner": "haseeb0042-2"
   }
 }
