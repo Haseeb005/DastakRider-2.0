@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Dastak Rider",
-    "slug": "dastak-rider",
+    "slug": "rider-mobile",
     "version": "1.0.0",
     "runtimeVersion": {
       "policy": "appVersion"
