@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Dastak Rider",
-    "slug": "Dastak Rider",
+    "slug": "dastak-rider",
     "version": "1.0.0",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -40,12 +40,7 @@
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://replit.com/"
-        }
-      ],
+      "expo-router",
       "expo-web-browser",
       "expo-audio",
       [
