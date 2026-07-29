@@ -106,12 +106,12 @@ export function formatDateTime(
   const year = d.getUTCFullYear();
   let h = d.getUTCHours();
   const m = d.getUTCMinutes();
-  const ampm = h >= 12 ? "PM" : "AM";
+  const ampm = h >= 12 ? "pm" : "am";
   h = h % 12;
   if (h === 0) h = 12;
   return {
     date: `${day} ${month} ${year}`,
-    time: `${h}:${String(m).padStart(2, "0")} ${ampm}`,
+    time: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`,
   };
 }
 

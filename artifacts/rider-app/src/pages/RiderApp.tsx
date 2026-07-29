@@ -122,6 +122,20 @@ function formatDateTime(dateStr?: string | null) {
   });
 }
 
+/** Formats a timestamp as "04:15 pm" (PKT = UTC+5, zero-padded, lowercase am/pm). */
+function formatTime(dateStr?: string | null): string {
+  if (!dateStr) return "—";
+  const ms = Date.parse(dateStr);
+  if (Number.isNaN(ms)) return "—";
+  const d = new Date(ms + 5 * 60 * 60 * 1000);
+  let h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  const ampm = h >= 12 ? "pm" : "am";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
 // ── New-order alert: Web Audio arpeggio + browser notification ──────────────────
 // Plays an ascending E-major arpeggio (E5 → G5 → B5 → E6) for ~15 seconds.
 function playOrderAlert(): () => void {
@@ -453,9 +467,9 @@ function RiderOrderDetailModal({
                 ))
               : (
                 <>
-                  <DetailRow label="Accepted" value={formatDateTime(order.acceptedTime)} />
-                  <DetailRow label="Picked up" value={formatDateTime(order.pickUpTime)} />
-                  <DetailRow label="Delivered" value={formatDateTime(order.timeWhenDelivered)} />
+                  <DetailRow label="Accepted" value={formatTime(order.acceptedTime)} />
+                  <DetailRow label="Picked up" value={formatTime(order.pickUpTime)} />
+                  <DetailRow label="Delivered" value={formatTime(order.timeWhenDelivered)} />
                 </>
               )}
           </div>
