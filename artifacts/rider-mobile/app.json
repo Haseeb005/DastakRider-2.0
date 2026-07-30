@@ -50,8 +50,7 @@
           "isAndroidForegroundServiceEnabled": true
         }
       ],
-      "expo-task-manager",
-      "@sentry/react-native/expo"
+      "expo-task-manager"
     ],
     "experiments": {
       "typedRoutes": true,
