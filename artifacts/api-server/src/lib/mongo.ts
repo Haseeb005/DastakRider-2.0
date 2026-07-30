@@ -20,3 +20,8 @@ export function usersCol() {
 export function ordersCol() {
   return db.collection("orders");
 }
+
+// Reviews are stored with _id = rider's user ID (string, not ObjectId).
+export function reviewsCol() {
+  return db.collection("reviews");
+}

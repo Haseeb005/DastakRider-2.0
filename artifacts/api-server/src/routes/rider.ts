@@ -2,7 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { ObjectId } from "mongodb";
-import { usersCol, ordersCol } from "../lib/mongo";
+import { usersCol, ordersCol, reviewsCol } from "../lib/mongo";
 
 const router = Router();
 
@@ -107,16 +107,24 @@ async function findRiderById(id: string) {
   return usersCol().findOne({ _id, type: "rider" });
 }
 
-function riderRating(user: any): { rating: number; ratingCount: number } {
-  const rating = Number(user?.rating) || 0;
-  const ratingCount = Array.isArray(user?.reviews)
-    ? user.reviews.length
-    : Number(user?.ratingCount) || 0;
-  return { rating, ratingCount };
+async function riderRating(user: any): Promise<{ rating: number; ratingCount: number }> {
+  try {
+    const doc = await reviewsCol().findOne({ _id: String(user?._id) } as any);
+    const list: any[] = Array.isArray(doc?.reviews) ? doc.reviews : [];
+    const ratingCount = list.length;
+    const rating =
+      ratingCount > 0
+        ? list.reduce((sum: number, r: any) => sum + (Number(r.rating) || 0), 0) /
+          ratingCount
+        : 0;
+    return { rating: Math.round(rating * 10) / 10, ratingCount };
+  } catch {
+    return { rating: 0, ratingCount: 0 };
+  }
 }
 
-function safeRider(user: any) {
-  const { rating, ratingCount } = riderRating(user);
+async function safeRider(user: any) {
+  const { rating, ratingCount } = await riderRating(user);
   return {
     id: String(user._id),
     name: user.name || null,
@@ -344,7 +352,7 @@ router.post("/rider/register", async (req: any, res: any) => {
     (req.session as any).riderId = String(result.insertedId);
     await saveSession(req);
     res.status(201).json({
-      ...safeRider({ ...rider, _id: result.insertedId }),
+      ...(await safeRider({ ...rider, _id: result.insertedId })),
       token: signToken(String(result.insertedId)),
     });
   } catch (e: any) {
@@ -365,7 +373,7 @@ router.post("/rider/login", async (req: any, res: any) => {
       return res.status(401).json({ message: "Invalid phone number or password" });
     (req.session as any).riderId = String(rider._id);
     await saveSession(req);
-    res.json({ ...safeRider(rider), token: signToken(String(rider._id)) });
+    res.json({ ...(await safeRider(rider)), token: signToken(String(rider._id)) });
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
@@ -389,7 +397,7 @@ router.get("/rider/me", async (req: any, res: any) => {
       return res.status(401).json({ message: "Rider not found" });
     }
     const earn = await computeEarnings(riderId, Number(rider.tillNoonFare) || 0);
-    const base = safeRider(rider);
+    const base = await safeRider(rider);
     res.json({
       ...base,
       pendingCollection: base.pendingCollection,
@@ -771,7 +779,7 @@ router.get("/rider/earnings", async (req: any, res: any) => {
     if (!rider) return res.status(404).json({ message: "Rider not found" });
 
     const earn = await computeEarnings(riderId, Number(rider.tillNoonFare) || 0);
-    const { rating, ratingCount } = riderRating(rider);
+    const { rating, ratingCount } = await riderRating(rider);
 
     res.json({
       ...earn,
