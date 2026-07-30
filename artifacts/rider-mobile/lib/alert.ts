@@ -15,14 +15,51 @@ function ensureAudioMode() {
     .then(() => {
       audioModeReady = true;
     })
-    .catch(() => {
-      // Leave unready so a later alert retries the setup.
-    });
+    .catch(() => {});
 }
+
+// ─── Singleton native player ───────────────────────────────────────────────
+// We keep ONE player instance for the lifetime of the app. Reusing it instead
+// of calling createAudioPlayer() on every new order prevents two overlapping
+// audio tracks (the old instance wouldn't always stop in time on Android).
+let _player: ReturnType<typeof createAudioPlayer> | null = null;
+
+function getNativePlayer() {
+  if (!_player) {
+    try {
+      ensureAudioMode();
+      _player = createAudioPlayer(ORDER_TONE);
+      _player.loop = true;
+      _player.volume = 1;
+    } catch {
+      _player = null;
+    }
+  }
+  return _player;
+}
+
+function startNativePlayer() {
+  const p = getNativePlayer();
+  if (!p) return;
+  try {
+    // Seek back to start so overlapping calls always replay from the beginning.
+    p.seekTo(0);
+    p.play();
+  } catch {}
+}
+
+function stopNativePlayer() {
+  if (!_player) return;
+  try {
+    // pause() is guaranteed to silence playback on Android; remove() alone is not.
+    _player.pause();
+  } catch {}
+}
+// ──────────────────────────────────────────────────────────────────────────
 
 /**
  * Plays a new-order alert. On web, an ascending arpeggio via Web Audio.
- * On native, a looping ringtone (expo-audio) plus repeated haptic pulses.
+ * On native, a looping ringtone (singleton expo-audio player) + haptics.
  * Returns a stop function.
  */
 export function playOrderAlert(): () => void {
@@ -61,17 +98,8 @@ export function playOrderAlert(): () => void {
     }
   }
 
-  // Looping ringtone via expo-audio (works on a real device + Expo Go).
-  let player: ReturnType<typeof createAudioPlayer> | null = null;
-  try {
-    ensureAudioMode();
-    player = createAudioPlayer(ORDER_TONE);
-    player.loop = true;
-    player.volume = 1;
-    player.play();
-  } catch {
-    player = null;
-  }
+  // Native: single shared player — no duplicate tracks possible.
+  startNativePlayer();
 
   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
     () => {},
@@ -84,16 +112,10 @@ export function playOrderAlert(): () => void {
     );
     if (count >= 25) clearInterval(id);
   }, 600);
+
   return () => {
     clearInterval(id);
-    if (player) {
-      try {
-        player.remove();
-      } catch {
-        // ignore
-      }
-      player = null;
-    }
+    stopNativePlayer();
   };
 }
 
