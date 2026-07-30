@@ -119,26 +119,17 @@ export function playOrderAlert(): () => void {
   };
 }
 
-const AUTO_HIDE_MS = 12000;
-
 /**
  * Tracks seen order IDs; seeds on first load (no alert), then alerts when new
- * orders appear while online. The banner auto-hides after a timeout, when the
- * rider accepts (clearNew), or when the new orders leave the available list.
+ * orders appear while online. The tune stops when the rider accepts (clearNew)
+ * or when all alerted orders leave the available list (taken by another rider).
+ * There is no auto-hide timer — the banner stays until one of those two events.
  */
 export function useOrderAlert(orders: { id: string }[], isOnline: boolean) {
   const seen = useRef<Set<string>>(new Set());
   const seeded = useRef(false);
   const stopRef = useRef<null | (() => void)>(null);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [newIds, setNewIds] = useState<string[]>([]);
-
-  const clearTimer = () => {
-    if (hideTimer.current) {
-      clearTimeout(hideTimer.current);
-      hideTimer.current = null;
-    }
-  };
 
   const stopAlert = () => {
     if (stopRef.current) {
@@ -152,7 +143,6 @@ export function useOrderAlert(orders: { id: string }[], isOnline: boolean) {
       seeded.current = false;
       seen.current = new Set();
       stopAlert();
-      clearTimer();
       // Return the same array when already empty so React bails out and we
       // don't loop on the new `[]` identity from `ordersQ.data ?? []`.
       setNewIds((prev) => (prev.length === 0 ? prev : []));
@@ -180,22 +170,16 @@ export function useOrderAlert(orders: { id: string }[], isOnline: boolean) {
       return same ? prev : merged;
     });
     if (fresh.length > 0) {
+      // New order(s) arrived — start the tune.
       fresh.forEach((id) => seen.current.add(id));
       stopAlert();
       stopRef.current = playOrderAlert();
-      clearTimer();
-      hideTimer.current = setTimeout(() => {
-        stopAlert();
-        setNewIds([]);
-      }, AUTO_HIDE_MS);
     } else {
-      // No new orders arrived, but check if ALL previously-alerted orders have
-      // now disappeared (e.g. another rider accepted the order). If so, silence
-      // the tune immediately instead of waiting for the auto-hide timer.
+      // No new orders, but check if ALL previously-alerted orders have now
+      // disappeared (another rider accepted). If so, silence the tune.
       setNewIds((prev) => {
         if (prev.length > 0 && prev.every((id) => !presentIds.has(id))) {
           stopAlert();
-          clearTimer();
           return [];
         }
         return prev;
@@ -206,12 +190,10 @@ export function useOrderAlert(orders: { id: string }[], isOnline: boolean) {
   useEffect(() => {
     return () => {
       stopAlert();
-      clearTimer();
     };
   }, []);
 
   const clearNew = () => {
-    clearTimer();
     stopAlert();
     setNewIds([]);
   };
