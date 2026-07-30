@@ -109,12 +109,14 @@ async function findRiderById(id: string) {
 
 async function riderRating(user: any): Promise<{ rating: number; ratingCount: number }> {
   try {
-    const doc = await reviewsCol().findOne({ _id: String(user?._id) } as any);
-    const list: any[] = Array.isArray(doc?.reviews) ? doc.reviews : [];
-    const ratingCount = list.length;
+    const riderId = String(user?._id);
+    const reviews = await reviewsCol()
+      .find({ riderId, type: "delivery" } as any)
+      .toArray();
+    const ratingCount = reviews.length;
     const rating =
       ratingCount > 0
-        ? list.reduce((sum: number, r: any) => sum + (Number(r.rating) || 0), 0) /
+        ? reviews.reduce((sum: number, r: any) => sum + (Number(r.riderRating) || 0), 0) /
           ratingCount
         : 0;
     return { rating: Math.round(rating * 10) / 10, ratingCount };
