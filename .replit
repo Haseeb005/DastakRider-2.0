@@ -37,3 +37,8 @@ externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+EXPO_PUBLIC_SENTRY_DSN = "https://cced82b3556ae52e8b9f0f0088c3be21@o4511823864332288.ingest.us.sentry.io/4511823868002304"

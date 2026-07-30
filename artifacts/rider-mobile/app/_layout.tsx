@@ -12,9 +12,20 @@ import {
   setAuthTokenGetter,
   setBaseUrl,
 } from "@workspace/api-client-react";
+import * as Sentry from "@sentry/react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
+
+// Initialise Sentry as early as possible — before any component renders.
+// In production the DSN comes from the EAS env var; in dev it falls back
+// to the Replit shared env var set via EXPO_PUBLIC_SENTRY_DSN.
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN,
+  tracesSampleRate: 0.2,       // 20 % of sessions for performance tracing
+  debug: false,
+});
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -77,7 +88,7 @@ function RootLayoutNav() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -110,3 +121,6 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+// Wrap with Sentry so unhandled errors and native crashes are captured.
+export default Sentry.wrap(RootLayout);

@@ -55,6 +55,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@sentry/react-native": "^8.20.0",
     "expo-audio": "~1.1.1",
     "expo-task-manager": "~14.0.9",
     "lucide-react-native": "^1.20.0"
