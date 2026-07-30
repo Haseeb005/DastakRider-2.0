@@ -188,6 +188,18 @@ export function useOrderAlert(orders: { id: string }[], isOnline: boolean) {
         stopAlert();
         setNewIds([]);
       }, AUTO_HIDE_MS);
+    } else {
+      // No new orders arrived, but check if ALL previously-alerted orders have
+      // now disappeared (e.g. another rider accepted the order). If so, silence
+      // the tune immediately instead of waiting for the auto-hide timer.
+      setNewIds((prev) => {
+        if (prev.length > 0 && prev.every((id) => !presentIds.has(id))) {
+          stopAlert();
+          clearTimer();
+          return [];
+        }
+        return prev;
+      });
     }
   }, [orders, isOnline]);
 
