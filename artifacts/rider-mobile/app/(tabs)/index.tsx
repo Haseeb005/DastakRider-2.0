@@ -118,7 +118,7 @@ export default function AvailableScreen() {
     query: {
       queryKey: getGetAvailableOrdersQueryKey(),
       enabled: isOnline,
-      refetchInterval: isOnline ? 10000 : false,
+      refetchInterval: isOnline ? 1000 : false,
     },
   });
   const orders = ordersQ.data ?? EMPTY_ORDERS;
