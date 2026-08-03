@@ -42,7 +42,15 @@ SplashScreen.preventAutoHideAsync();
 
 // Point the generated API client at the shared backend (served at /api via the
 // reverse proxy) and supply the rider's bearer token on every request.
-setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+// On Replit, EXPO_PUBLIC_DOMAIN is injected by the dev script.
+// Locally, fall back to EXPO_PUBLIC_API_URL (set in .env.local) or the
+// default local API server port.  Android emulator needs 10.0.2.2 instead
+// of localhost — set EXPO_PUBLIC_API_URL=http://10.0.2.2:3000 in that case.
+setBaseUrl(
+  process.env.EXPO_PUBLIC_DOMAIN
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+    : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000"),
+);
 setAuthTokenGetter(async () => {
   try {
     return await AsyncStorage.getItem(TOKEN_KEY);
