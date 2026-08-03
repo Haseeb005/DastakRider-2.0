@@ -255,29 +255,54 @@ export function OrderCard({
         }}
       >
         <View>
-          <Text
-            style={{
-              fontFamily: "Inter_700Bold",
-              fontSize: 10,
-              letterSpacing: 0.8,
-              color: c.mutedForeground,
-              textTransform: "uppercase",
-              marginBottom: 1,
-            }}
-          >
-            Customer Bill
-          </Text>
           {cod ? (
-            <Text
+            <>
+              <Text
+                style={{
+                  fontFamily: "Inter_700Bold",
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                  color: c.mutedForeground,
+                  textTransform: "uppercase",
+                  marginBottom: 1,
+                }}
+              >
+                Customer Bill
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "Inter_700Bold",
+                  fontSize: 15,
+                  color: c.foreground,
+                }}
+              >
+                {money(order.total)}
+              </Text>
+            </>
+          ) : (
+            <View
               style={{
-                fontFamily: "Inter_700Bold",
-                fontSize: 15,
-                color: c.foreground,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                backgroundColor: c.infoBg,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 6,
               }}
             >
-              {money(order.total)}
-            </Text>
-          ) : null}
+              <Icon name="credit-card" size={11} color={c.info} />
+              <Text
+                style={{
+                  fontFamily: "Inter_600SemiBold",
+                  fontSize: 11,
+                  color: c.info,
+                }}
+              >
+                Paid Online
+              </Text>
+            </View>
+          )}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
           <Icon name="shopping-bag" size={13} color={c.mutedForeground} />
