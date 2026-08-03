@@ -259,10 +259,20 @@ async function computeEarnings(riderId: string, tillNoonFare = 0) {
       0,
     ],
   };
+  // Tip left by the customer on this order (0 if absent).
+  const tipExpr = {
+    $convert: {
+      input: { $ifNull: ["$tip", 0] },
+      to: "double",
+      onError: 0,
+      onNull: 0,
+    },
+  };
   const group = {
     _id: null,
     count: { $sum: 1 },
-    earnings: { $sum: fareExpr },
+    // Base pay (tillNoonFare or snapshot) + any customer tip.
+    earnings: { $sum: { $add: [fareExpr, tipExpr] } },
     orderAmount: { $sum: codAmountExpr },
     prepaidNonCodDeduction: { $sum: prepaidNonCodDeductExpr },
   };
