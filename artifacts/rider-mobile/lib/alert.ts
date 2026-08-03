@@ -130,6 +130,14 @@ export function useOrderAlert(orders: { id: string }[], isOnline: boolean) {
   const seeded = useRef(false);
   const stopRef = useRef<null | (() => void)>(null);
   const [newIds, setNewIds] = useState<string[]>([]);
+  // Mirror of newIds as a ref so the effect can read current state synchronously
+  // without adding newIds to the dependency array (which would cause loops).
+  const newIdsRef = useRef<string[]>([]);
+
+  const updateNewIds = (next: string[]) => {
+    newIdsRef.current = next;
+    setNewIds(next);
+  };
 
   const stopAlert = () => {
     if (stopRef.current) {
@@ -143,9 +151,7 @@ export function useOrderAlert(orders: { id: string }[], isOnline: boolean) {
       seeded.current = false;
       seen.current = new Set();
       stopAlert();
-      // Return the same array when already empty so React bails out and we
-      // don't loop on the new `[]` identity from `ordersQ.data ?? []`.
-      setNewIds((prev) => (prev.length === 0 ? prev : []));
+      if (newIdsRef.current.length > 0) updateNewIds([]);
       return;
     }
     const presentIds = new Set(orders.map((o) => o.id));
@@ -157,33 +163,26 @@ export function useOrderAlert(orders: { id: string }[], isOnline: boolean) {
     const fresh = orders
       .filter((o) => !seen.current.has(o.id))
       .map((o) => o.id);
-    // Prune any previously-new orders that left the list (accepted by
-    // someone, expired, …) and merge in the freshly arrived ones. Return the
-    // previous array unchanged when the result is identical so React bails out
-    // of the render instead of looping on a new array instance every poll.
-    setNewIds((prev) => {
-      const kept = prev.filter((id) => presentIds.has(id));
-      const merged = Array.from(new Set([...kept, ...fresh]));
-      const same =
-        merged.length === prev.length &&
-        merged.every((id, i) => id === prev[i]);
-      return same ? prev : merged;
-    });
+
     if (fresh.length > 0) {
-      // New order(s) arrived — start the tune.
+      // New order(s) arrived — update list and start the tune.
       fresh.forEach((id) => seen.current.add(id));
+      const kept = newIdsRef.current.filter((id) => presentIds.has(id));
+      const merged = Array.from(new Set([...kept, ...fresh]));
+      updateNewIds(merged);
       stopAlert();
       stopRef.current = playOrderAlert();
     } else {
-      // No new orders, but check if ALL previously-alerted orders have now
-      // disappeared (another rider accepted). If so, silence the tune.
-      setNewIds((prev) => {
-        if (prev.length > 0 && prev.every((id) => !presentIds.has(id))) {
+      // No new orders — prune ids that left the list.
+      const kept = newIdsRef.current.filter((id) => presentIds.has(id));
+      if (kept.length !== newIdsRef.current.length) {
+        // Some alerted orders disappeared (accepted by another rider).
+        if (kept.length === 0) {
+          // All gone — silence the tune immediately.
           stopAlert();
-          return [];
         }
-        return prev;
-      });
+        updateNewIds(kept);
+      }
     }
   }, [orders, isOnline]);
 
@@ -195,7 +194,7 @@ export function useOrderAlert(orders: { id: string }[], isOnline: boolean) {
 
   const clearNew = () => {
     stopAlert();
-    setNewIds([]);
+    updateNewIds([]);
   };
 
   return { newCount: newIds.length, clearNew, stopAlert };
