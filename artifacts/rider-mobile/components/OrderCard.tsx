@@ -267,15 +267,17 @@ export function OrderCard({
           >
             Customer Bill
           </Text>
-          <Text
-            style={{
-              fontFamily: "Inter_700Bold",
-              fontSize: 15,
-              color: c.foreground,
-            }}
-          >
-            {money(order.total)}
-          </Text>
+          {cod ? (
+            <Text
+              style={{
+                fontFamily: "Inter_700Bold",
+                fontSize: 15,
+                color: c.foreground,
+              }}
+            >
+              {money(order.total)}
+            </Text>
+          ) : null}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
           <Icon name="shopping-bag" size={13} color={c.mutedForeground} />

@@ -586,11 +586,13 @@ export function OrderDetailModal({
                 marginVertical: 6,
               }}
             />
-            <Row
-              label="Order total"
-              value={money(order.total)}
-              strong
-            />
+            {cod ? (
+              <Row
+                label="Order total"
+                value={money(order.total)}
+                strong
+              />
+            ) : null}
             <View
               style={{
                 marginTop: 10,
