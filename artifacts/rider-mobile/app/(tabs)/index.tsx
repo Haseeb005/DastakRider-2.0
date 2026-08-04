@@ -159,7 +159,7 @@ export default function AvailableScreen() {
           ).catch(() => {});
           Alert.alert(
             "Could not accept order",
-            e?.message || "Order may already be taken.",
+            e?.data?.message || "Order may already be taken.",
           );
         },
       },
