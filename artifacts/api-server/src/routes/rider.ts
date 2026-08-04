@@ -583,6 +583,37 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
         message: `You can only have ${maxOrderLimit} active order${maxOrderLimit === 1 ? "" : "s"} at a time. Complete a current delivery before accepting more.`,
       });
 
+    // Previous-day cash clearance gate.
+    // Two conditions must both be true to block:
+    //   1. The rider's pendingCollection > 0 (admin resets this to 0 when cash is received).
+    //   2. At least one COD order delivered in a prior collection window exists — meaning
+    //      the pending cash is from a previous day, not just today's fresh deliveries.
+    // Non-COD orders are excluded: the rider never holds physical cash for them.
+    const pendingCollectionRaw = Number(rider?.pendingCollection || 0);
+    const targetPayType = String(
+      targetOrder?.paymentType || targetOrder?.paymentMethod || ""
+    ).toLowerCase();
+    const isTargetCod = COD_TYPES.some((t) => t.toLowerCase() === targetPayType);
+    if (pendingCollectionRaw > 0 && isTargetCod) {
+      const windowStart = pkt8AMCutoff();
+      const staleOrder = await ordersCol().findOne({
+        riderId,
+        timeWhenDelivered: { $exists: true, $gt: "" },
+        createdAt: { $lt: windowStart },
+        $expr: {
+          $in: [
+            { $ifNull: ["$paymentType", "$paymentMethod"] },
+            COD_TYPES,
+          ],
+        },
+      });
+      if (staleOrder) {
+        return res.status(400).json({
+          message:
+            "You have uncollected cash from a previous day. Please submit your cash to the company before accepting new orders.",
+        });
+      }
+    }
 
     // Cash-collection gate (admin-owned fields, read-only here — never written by this route).
     const pendingCollection = Number(rider?.pendingCollection || 0);
