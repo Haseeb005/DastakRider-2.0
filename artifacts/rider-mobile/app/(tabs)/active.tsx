@@ -81,7 +81,7 @@ export default function ActiveScreen() {
   const onMutateError = (e: any) => {
     Alert.alert(
       "Update failed",
-      e?.message || "Could not update order status. Please try again.",
+      e?.data?.message || "Could not update order status. Please try again.",
     );
   };
 
