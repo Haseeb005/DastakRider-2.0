@@ -1,0 +1,61 @@
+const { ObjectId } = require('mongodb'); // or import if using ES modules
+
+// GET /api/orders/:id/chat — fetch messages + mark customer's as read
+app.get('/api/orders/:id/chat', requireRiderAuth, async (req, res) => {
+  const orderId = req.params.id;
+  const riderId = req.rider.id; // however your rider auth exposes the rider's userId
+
+  // Verify this rider owns the order
+  const order = await db.collection('orders').findOne({ id: orderId });
+  if (!order) return res.status(404).json({ message: 'Order not found' });
+  if (String(order.riderId || order.riderUserId) !== String(riderId)) {
+    return res.status(403).json({ message: 'Not your order' });
+  }
+
+  const messages = await db.collection('chatMessages')
+    .find({ orderId })
+    .sort({ createdAt: 1 })
+    .toArray();
+
+  // Mark customer messages as read
+  db.collection('chatMessages')
+    .updateMany({ orderId, fromRole: 'customer', read: false }, { $set: { read: true } });
+
+  return res.json(messages.map(m => ({
+    id: m._id.toString(),
+    fromRole: m.fromRole,
+    text: m.text,
+    createdAt: m.createdAt,
+    read: m.read,
+  })));
+});
+
+// POST /api/orders/:id/chat — send a message as rider
+app.post('/api/orders/:id/chat', requireRiderAuth, async (req, res) => {
+  const orderId = req.params.id;
+  const riderId = req.rider.id;
+  const { text } = req.body;
+
+  if (!text?.trim()) return res.status(400).json({ message: 'Text required' });
+
+  const order = await db.collection('orders').findOne({ id: orderId });
+  if (!order) return res.status(404).json({ message: 'Order not found' });
+  if (String(order.riderId || order.riderUserId) !== String(riderId)) {
+    return res.status(403).json({ message: 'Not your order' });
+  }
+
+  await db.collection('chatMessages').insertOne({
+    orderId,
+    fromRole: 'rider',
+    fromId: String(riderId),
+    text: text.trim(),
+    createdAt: new Date(),
+    read: false,
+  });
+
+  // NOTE: Push notification to customer is handled by the Dastak server's
+  // POST /api/orders/:id/chat endpoint. Since you're writing to DB directly,
+  // trigger it here if you want the push — see below.
+
+  return res.json({ ok: true });
+});
