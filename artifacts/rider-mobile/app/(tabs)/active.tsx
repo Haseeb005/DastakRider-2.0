@@ -31,6 +31,7 @@ import {
   ensureLocationPermission,
   useLocationTracking,
 } from "@/lib/useLocationTracking";
+import { useChatWatcher } from "@/lib/useChatWatcher";
 
 export default function ActiveScreen() {
   const c = useColors();
@@ -38,6 +39,13 @@ export default function ActiveScreen() {
   const router = useRouter();
   const { token } = useAuth();
   const [selected, setSelected] = useState<RiderOrder | null>(null);
+  // Snapshot of unread message IDs seen when the rider last opened each order's
+  // chat.  The card badge shows only messages NOT in this snapshot, so:
+  //   • it clears immediately when the chat screen is opened (optimistic UX)
+  //   • it reappears if a NEW unread message arrives after the rider closes chat
+  const [seenUnreadIds, setSeenUnreadIds] = useState<
+    Record<string, Set<string>>
+  >({});
 
   const ordersQ = useGetActiveOrders({
     query: {
@@ -47,6 +55,19 @@ export default function ActiveScreen() {
     },
   });
   const orders = ordersQ.data ?? [];
+  const orderIds = orders.map((o) => o.id);
+
+  // Background chat watcher — keeps message counts fresh for the card-level badge.
+  const { messagesByOrderId } = useChatWatcher(orderIds);
+
+  // Returns the number of customer messages that arrived AFTER the rider last
+  // opened the chat for this order — used for the OrderCard corner badge.
+  const unreadCount = (orderId: string): number => {
+    const seen = seenUnreadIds[orderId] ?? new Set<string>();
+    return (messagesByOrderId[orderId] ?? []).filter(
+      (m) => m.fromRole === "customer" && !m.read && !seen.has(m.id),
+    ).length;
+  };
 
   // Track ALL "Rider Picked Up" orders concurrently (fix: was only tracking first one).
   const trackIds = orders
@@ -229,11 +250,29 @@ export default function ActiveScreen() {
           />
         }
         renderItem={({ item }) => (
-          <OrderCard order={item} onPress={() => setSelected(item)}>
+          <OrderCard
+            order={item}
+            onPress={() => setSelected(item)}
+            unreadCount={unreadCount(item.id)}
+          >
             {renderAction(item)}
             <ChatBadgeButton
               orderId={item.id}
-              onPress={() => router.push(`/chat/${item.id}`)}
+              onPress={() => {
+                // Snapshot current unread IDs so the card corner badge clears
+                // immediately.  Any message arriving after this moment will
+                // re-trigger the badge (not in the snapshot set).
+                const currentUnread = new Set(
+                  (messagesByOrderId[item.id] ?? [])
+                    .filter((m) => m.fromRole === "customer" && !m.read)
+                    .map((m) => m.id),
+                );
+                setSeenUnreadIds((prev) => ({
+                  ...prev,
+                  [item.id]: currentUnread,
+                }));
+                router.push(`/chat/${item.id}`);
+              }}
             />
           </OrderCard>
         )}

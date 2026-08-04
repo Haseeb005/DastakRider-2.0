@@ -29,10 +29,12 @@ export function OrderCard({
   order,
   onPress,
   children,
+  unreadCount = 0,
 }: {
   order: RiderOrder;
   onPress?: () => void;
   children?: React.ReactNode;
+  unreadCount?: number;
 }) {
   const c = useColors();
   const atRestaurant =
@@ -54,13 +56,42 @@ export function OrderCard({
           backgroundColor: c.card,
           borderRadius: 24,
           borderWidth: 1,
-          borderColor: c.border,
+          borderColor: unreadCount > 0 ? c.primary : c.border,
           padding: 18,
           marginBottom: 16,
           opacity: pressed ? 0.95 : 1,
         },
       ]}
     >
+      {/* Unread message badge — top-right corner overlay */}
+      {unreadCount > 0 && (
+        <View
+          style={{
+            position: "absolute",
+            top: -6,
+            right: -6,
+            minWidth: 20,
+            height: 20,
+            borderRadius: 10,
+            backgroundColor: c.primary,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 4,
+            zIndex: 10,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: "Inter_700Bold",
+              fontSize: 11,
+              color: "#FFFFFF",
+              lineHeight: 14,
+            }}
+          >
+            {unreadCount > 9 ? "9+" : String(unreadCount)}
+          </Text>
+        </View>
+      )}
       {/* Timestamp: when the order came in (PKT) */}
       {dt ? (
         <View
