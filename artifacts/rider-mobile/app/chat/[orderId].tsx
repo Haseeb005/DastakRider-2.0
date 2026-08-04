@@ -17,7 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ChatScreen() {
-  const { orderId, orderNum } = useLocalSearchParams<{ orderId: string; orderNum?: string }>();
+  const { orderId, orderNum, customerName } = useLocalSearchParams<{ orderId: string; orderNum?: string; customerName?: string }>();
   const router = useRouter();
   const c = useColors();
   const insets = useSafeAreaInsets();
@@ -79,7 +79,7 @@ export default function ChatScreen() {
               color: c.foreground,
             }}
           >
-            Chat with Customer
+            {customerName ? customerName : "Chat with Customer"}
           </Text>
           <Text
             style={{

@@ -5,10 +5,11 @@ import { useOrderChat } from "@/hooks/useOrderChat";
 interface ChatPanelProps {
   orderId: string;
   orderNum?: string | number;
+  customerName?: string;
   onClose: () => void;
 }
 
-export function ChatPanel({ orderId, orderNum, onClose }: ChatPanelProps) {
+export function ChatPanel({ orderId, orderNum, customerName, onClose }: ChatPanelProps) {
   const { messages, loading, sending, sendMessage } = useOrderChat(orderId);
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -50,7 +51,7 @@ export function ChatPanel({ orderId, orderNum, onClose }: ChatPanelProps) {
           <X className="w-5 h-5 text-gray-600" />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 truncate">Chat with Customer</p>
+          <p className="font-semibold text-gray-900 truncate">{customerName || "Chat with Customer"}</p>
           {orderNum && (
             <p className="text-xs text-gray-500">Order #{orderNum}</p>
           )}

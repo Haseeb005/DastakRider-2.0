@@ -1282,6 +1282,7 @@ function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatu
         <ChatPanel
           orderId={chatOrder.id}
           orderNum={chatOrder.orderNum ?? undefined}
+          customerName={chatOrder.userName ?? undefined}
           onClose={() => setChatOrder(null)}
         />
       )}
