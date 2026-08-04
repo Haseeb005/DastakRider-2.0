@@ -10,6 +10,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
@@ -33,6 +34,7 @@ import {
 export default function ActiveScreen() {
   const c = useColors();
   const qc = useQueryClient();
+  const router = useRouter();
   const { token } = useAuth();
   const [selected, setSelected] = useState<RiderOrder | null>(null);
 
@@ -228,6 +230,13 @@ export default function ActiveScreen() {
         renderItem={({ item }) => (
           <OrderCard order={item} onPress={() => setSelected(item)}>
             {renderAction(item)}
+            <Button
+              label="Chat with Customer"
+              icon="message-circle"
+              variant="outline"
+              onPress={() => router.push(`/chat/${item.id}`)}
+              style={{ alignSelf: "stretch", marginTop: 6 }}
+            />
           </OrderCard>
         )}
         ListEmptyComponent={

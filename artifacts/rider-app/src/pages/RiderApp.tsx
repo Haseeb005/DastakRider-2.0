@@ -28,6 +28,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import {
   Bike,
+  MessageCircle,
   Package,
   CheckCircle,
   MapPin,
@@ -53,6 +54,8 @@ import {
   AlertTriangle,
   ChevronRight,
 } from "lucide-react";
+import { ChatPanel } from "@/components/ChatPanel";
+import { saveRiderChatToken } from "@/hooks/useOrderChat";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -308,7 +311,10 @@ function LoginForm() {
   const set = (k: string) => (e: any) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const pending = loginMutation.isPending;
 
-  const onSuccess = () => qc.invalidateQueries({ queryKey: getGetRiderMeQueryKey() });
+  const onSuccess = (data: any) => {
+    if (data?.token) saveRiderChatToken(data.token);
+    qc.invalidateQueries({ queryKey: getGetRiderMeQueryKey() });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1096,6 +1102,7 @@ function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatu
   const { toast } = useToast();
   const qc = useQueryClient();
   const [selected, setSelected] = useState<RiderOrder | null>(null);
+  const [chatOrder, setChatOrder] = useState<RiderOrder | null>(null);
 
   const {
     data: orders = [],
@@ -1197,20 +1204,36 @@ function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatu
         </div>
       ) : (
         orders.map((order) => (
-          <OrderCard
-            key={order.id}
-            order={order}
-            showStatus
-            busy={statusMutation.isPending || arrivedMutation.isPending}
-            onStatusUpdate={(status) => handleStatus(order.id, status)}
-            onArrived={() => handleArrived(order.id)}
-            onClick={() => setSelected(order)}
-          />
+          <div key={order.id} className="space-y-2">
+            <OrderCard
+              order={order}
+              showStatus
+              busy={statusMutation.isPending || arrivedMutation.isPending}
+              onStatusUpdate={(status) => handleStatus(order.id, status)}
+              onArrived={() => handleArrived(order.id)}
+              onClick={() => setSelected(order)}
+            />
+            <button
+              onClick={() => setChatOrder(order)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 active:scale-[0.99] transition-all"
+            >
+              <MessageCircle className="w-4 h-4 text-brand-500" />
+              Chat with Customer
+            </button>
+          </div>
         ))
       )}
 
       {selected && (
         <RiderOrderDetailModal order={selected} onClose={() => setSelected(null)} />
+      )}
+
+      {chatOrder && (
+        <ChatPanel
+          orderId={chatOrder.id}
+          orderNum={chatOrder.orderNum ?? undefined}
+          onClose={() => setChatOrder(null)}
+        />
       )}
     </div>
   );
