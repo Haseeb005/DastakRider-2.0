@@ -562,16 +562,6 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
     const targetOrder = await ordersCol().findOne({ _id: orderObjectId });
     if (!targetOrder) return res.status(404).json({ message: "Order not found" });
 
-    // Only non-COD orders may be accepted through this app.
-    const targetPayTypeCod = String(
-      targetOrder?.paymentType || targetOrder?.paymentMethod || ""
-    ).toLowerCase();
-    if (COD_TYPES.some((t) => t.toLowerCase() === targetPayTypeCod)) {
-      return res.status(400).json({
-        message: "COD orders cannot be accepted through this app.",
-      });
-    }
-
     // Use the live orderCount on the rider doc (maintained by accept/deliver routes)
     // instead of a separate countDocuments query — one less DB round-trip.
     const activeCount = Number(rider?.orderCount || 0);
