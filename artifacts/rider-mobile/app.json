@@ -6,6 +6,12 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
+    "updates": {
+      "url": "https://u.expo.dev/fc7bfa99-d113-4c75-878d-7b1ddb1c630c",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "rider-mobile",
@@ -50,7 +56,8 @@
           "isAndroidForegroundServiceEnabled": true
         }
       ],
-      "expo-task-manager"
+      "expo-task-manager",
+      "expo-updates"
     ],
     "experiments": {
       "typedRoutes": true,
