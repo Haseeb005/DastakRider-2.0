@@ -21,7 +21,9 @@ import {
   subscribe,
 } from "./chatBadgeStore";
 
-const CHAT_BASE = "https://dastakbites.com";
+const CHAT_BASE = process.env.EXPO_PUBLIC_DOMAIN
+  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+  : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000");
 const WS_URL = "wss://dastakbites.com/ws/live";
 const POLL_MS = 15_000;
 
@@ -189,12 +191,13 @@ export function useChatUnread(orderId: string): number {
         ws.onmessage = (event) => {
           try {
             const msg = JSON.parse(event.data as string);
-            if (
-              msg.type === "change" &&
-              msg.collection === "orders" &&
-              msg.id === orderId
-            ) {
-              fetchAndUpdate();
+            if (msg.type === "change") {
+              if (
+                (msg.collection === "orders" && msg.id === orderId) ||
+                msg.collection === "chats"
+              ) {
+                fetchAndUpdate();
+              }
             }
           } catch {}
         };

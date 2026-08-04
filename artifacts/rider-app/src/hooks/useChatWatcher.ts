@@ -35,11 +35,16 @@ export type ChatMessage = {
 };
 
 /**
- * @param orderIds - List of active order IDs to watch.
- * @returns messagesByOrderId - Latest messages keyed by order ID, updated
- *   whenever the server reports a change for any watched order.
+ * @param orderIds       - List of active order IDs to watch.
+ * @param onNewMessage   - Called with (orderId) when a new customer message
+ *                         arrives for that order. Store in a ref on the
+ *                         caller side to avoid dependency-array churn.
+ * @returns messagesByOrderId - Latest messages keyed by order ID.
  */
-export function useChatWatcher(orderIds: string[]) {
+export function useChatWatcher(
+  orderIds: string[],
+  onNewMessage?: (orderId: string) => void,
+) {
   const [messagesByOrderId, setMessagesByOrderId] = useState<
     Record<string, ChatMessage[]>
   >({});
@@ -48,6 +53,16 @@ export function useChatWatcher(orderIds: string[]) {
   // needing to re-subscribe every time the list changes.
   const orderIdsRef = useRef<string[]>(orderIds);
   orderIdsRef.current = orderIds;
+
+  // Store callback in a ref so it never needs to be in a dependency array.
+  const onNewMessageRef = useRef(onNewMessage);
+  onNewMessageRef.current = onNewMessage;
+
+  // Track seen customer-message IDs per order so we can detect new arrivals.
+  // seededOrders: orders whose initial snapshot has been captured (no alert on
+  // first load — only on genuinely new messages that arrive later).
+  const seenMsgIds = useRef<Record<string, Set<string>>>({});
+  const seededOrders = useRef<Set<string>>(new Set());
 
   const fetchForOrder = useCallback(async (orderId: string) => {
     try {
@@ -60,7 +75,25 @@ export function useChatWatcher(orderIds: string[]) {
       const msgs: ChatMessage[] = Array.isArray(data)
         ? data
         : (data.messages ?? []);
+
       setMessagesByOrderId((prev) => ({ ...prev, [orderId]: msgs }));
+
+      // Detect new customer messages after the first snapshot.
+      const customerMsgs = msgs.filter((m) => m.fromRole === "customer");
+      const seen = seenMsgIds.current[orderId] ?? new Set<string>();
+
+      if (!seededOrders.current.has(orderId)) {
+        // First fetch: just record what already exists, no alert.
+        seededOrders.current.add(orderId);
+        seenMsgIds.current[orderId] = new Set(customerMsgs.map((m) => m.id));
+      } else {
+        const newOnes = customerMsgs.filter((m) => !seen.has(m.id));
+        if (newOnes.length > 0) {
+          newOnes.forEach((m) => seen.add(m.id));
+          seenMsgIds.current[orderId] = seen;
+          onNewMessageRef.current?.(orderId);
+        }
+      }
     } catch {
       // network error — leave previous messages intact
     }

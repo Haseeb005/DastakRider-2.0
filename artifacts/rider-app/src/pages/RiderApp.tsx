@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from "react";
+import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetRiderMe,
@@ -1163,6 +1163,22 @@ function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatu
   } = useGetActiveOrders({
     query: { queryKey: getGetActiveOrdersQueryKey(), refetchInterval: 8_000 },
   });
+
+  // Notify the rider when a new customer message arrives and chat isn't open.
+  const chatOrderRef = useRef(chatOrder);
+  chatOrderRef.current = chatOrder;
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
+  const onNewChatMessage = useCallback((orderId: string) => {
+    if (chatOrderRef.current?.id === orderId) return; // panel already open
+    const order = ordersRef.current.find((o) => o.id === orderId);
+    const name = order?.userName;
+    toast({
+      title: "💬 New message" + (name ? ` from ${name}` : " from customer"),
+      description: "Tap Chat to reply.",
+    });
+  }, [toast]);
+  useChatWatcher(orders.map((o) => o.id), onNewChatMessage);
 
   const statusMutation = useUpdateOrderStatus();
   const arrivedMutation = useMarkOrderArrived();
