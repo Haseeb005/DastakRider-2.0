@@ -29,11 +29,17 @@ export type ChatMessage = {
 };
 
 /**
- * @param orderIds - List of active order IDs to watch.
+ * @param orderIds     - List of active order IDs to watch.
+ * @param onNewMessage - Optional callback fired with (orderId) whenever a new
+ *   customer message arrives. Store in a stable ref on the caller side to
+ *   avoid re-subscribing on every render.
  * @returns messagesByOrderId - Latest messages keyed by order ID, updated
  *   whenever the server reports a change for any watched order.
  */
-export function useChatWatcher(orderIds: string[]) {
+export function useChatWatcher(
+  orderIds: string[],
+  onNewMessage?: (orderId: string) => void,
+) {
   const [messagesByOrderId, setMessagesByOrderId] = useState<
     Record<string, ChatMessage[]>
   >({});
@@ -42,6 +48,14 @@ export function useChatWatcher(orderIds: string[]) {
   // needing to re-subscribe every time the list changes.
   const orderIdsRef = useRef<string[]>(orderIds);
   orderIdsRef.current = orderIds;
+
+  // Stable ref so the callback never triggers a re-subscribe.
+  const onNewMessageRef = useRef(onNewMessage);
+  onNewMessageRef.current = onNewMessage;
+
+  // Track which customer-message IDs we've already seen per order.
+  const seenMsgIds = useRef<Record<string, Set<string>>>({});
+  const seededOrders = useRef<Set<string>>(new Set());
 
   const fetchForOrder = useCallback(async (orderId: string) => {
     try {
@@ -55,6 +69,21 @@ export function useChatWatcher(orderIds: string[]) {
         ? data
         : (data.messages ?? []);
       setMessagesByOrderId((prev) => ({ ...prev, [orderId]: msgs }));
+
+      // Detect new customer messages; fire callback after the initial snapshot.
+      const customerMsgs = msgs.filter((m) => m.fromRole === "customer");
+      const seen = seenMsgIds.current[orderId] ?? new Set<string>();
+      if (!seededOrders.current.has(orderId)) {
+        seededOrders.current.add(orderId);
+        seenMsgIds.current[orderId] = new Set(customerMsgs.map((m) => m.id));
+      } else {
+        const newOnes = customerMsgs.filter((m) => !seen.has(m.id));
+        if (newOnes.length > 0) {
+          newOnes.forEach((m) => seen.add(m.id));
+          seenMsgIds.current[orderId] = seen;
+          onNewMessageRef.current?.(orderId);
+        }
+      }
     } catch {
       // network error — leave previous messages intact
     }

@@ -88,8 +88,11 @@ function countUnread(msgs: RawMessage[], clearedAt: number): number {
   return msgs.filter((m) => {
     if (m.fromRole !== "customer") return false;
     if (!m.read) {
-      if (clearedAt > 0 && m.createdAt) {
-        return new Date(m.createdAt).getTime() > clearedAt;
+      if (clearedAt > 0) {
+        // If the message has a timestamp, only count it if it arrived after the
+        // rider last closed the chat. Without a timestamp, assume it was seen.
+        if (m.createdAt) return new Date(m.createdAt).getTime() > clearedAt;
+        return false;
       }
       return true;
     }

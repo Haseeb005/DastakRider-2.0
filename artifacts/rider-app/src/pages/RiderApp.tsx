@@ -55,6 +55,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { ChatPanel } from "@/components/ChatPanel";
+import { ChatNotificationBanner, type BannerInfo } from "@/components/ChatNotificationBanner";
 import { saveRiderChatToken, useOrderChat } from "@/hooks/useOrderChat";
 import { useChatWatcher } from "@/hooks/useChatWatcher";
 
@@ -1115,12 +1116,16 @@ function ChatButtonWithBadge({
 }) {
   const { messages } = useOrderChat(order.id);
   const clearedAtRef = useRef<number>(0);
+  const wasOpenRef = useRef(false);
 
-  // When the chat panel opens, stamp the current time so earlier messages are
-  // considered "seen".
+  // Stamp the watermark at the moment the chat panel *closes*, not when it
+  // opens, so messages arriving during the session are also treated as seen.
   useEffect(() => {
     if (isChatOpen) {
+      wasOpenRef.current = true;
+    } else if (wasOpenRef.current) {
       clearedAtRef.current = Date.now();
+      wasOpenRef.current = false;
     }
   }, [isChatOpen]);
 
@@ -1129,8 +1134,11 @@ function ChatButtonWithBadge({
     : messages.filter((m) => {
         if (m.fromRole !== "customer" || m.read) return false;
         const clearedAt = clearedAtRef.current;
-        if (clearedAt > 0 && m.createdAt) {
-          return new Date(m.createdAt).getTime() > clearedAt;
+        if (clearedAt > 0) {
+          // If the message has a timestamp, only unread if it arrived after the
+          // panel was last closed. Without a timestamp, assume it was seen.
+          if (m.createdAt) return new Date(m.createdAt).getTime() > clearedAt;
+          return false;
         }
         return true;
       }).length;
@@ -1155,6 +1163,7 @@ function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatu
   const qc = useQueryClient();
   const [selected, setSelected] = useState<RiderOrder | null>(null);
   const [chatOrder, setChatOrder] = useState<RiderOrder | null>(null);
+  const [banner, setBanner] = useState<BannerInfo | null>(null);
 
   const {
     data: orders = [],
@@ -1172,12 +1181,12 @@ function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatu
   const onNewChatMessage = useCallback((orderId: string) => {
     if (chatOrderRef.current?.id === orderId) return; // panel already open
     const order = ordersRef.current.find((o) => o.id === orderId);
-    const name = order?.userName;
-    toast({
-      title: "💬 New message" + (name ? ` from ${name}` : " from customer"),
-      description: "Tap Chat to reply.",
+    setBanner({
+      orderId,
+      customerName: order?.userName ?? undefined,
+      orderNum: order?.orderNum ?? undefined,
     });
-  }, [toast]);
+  }, []);
   useChatWatcher(orders.map((o) => o.id), onNewChatMessage);
 
   const statusMutation = useUpdateOrderStatus();
@@ -1302,6 +1311,16 @@ function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatu
           onClose={() => setChatOrder(null)}
         />
       )}
+
+      {/* Slide-in banner when a customer message arrives */}
+      <ChatNotificationBanner
+        banner={banner}
+        onOpenChat={(orderId) => {
+          const order = ordersRef.current.find((o) => o.id === orderId);
+          if (order) setChatOrder(order);
+        }}
+        onDismiss={() => setBanner(null)}
+      />
     </div>
   );
 }

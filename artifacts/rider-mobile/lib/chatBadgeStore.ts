@@ -39,6 +39,11 @@ export function openChat(orderId: string) {
 
 /** Called by the chat screen on unmount. */
 export function closeChat() {
+  // Stamp the watermark at close-time, not open-time, so any messages that
+  // arrived while the rider was actively reading are also treated as seen.
+  if (_openChatOrderId) {
+    _clearedAt[_openChatOrderId] = Date.now();
+  }
   _openChatOrderId = null;
   notify();
 }
