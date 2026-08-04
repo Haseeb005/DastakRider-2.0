@@ -1158,12 +1158,18 @@ function ChatButtonWithBadge({
     </button>
   );
 }
-function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatus }) {
+function ActiveDelivery({
+  locationStatus,
+  chatOrder,
+  setChatOrder,
+}: {
+  locationStatus: LocationShareStatus;
+  chatOrder: RiderOrder | null;
+  setChatOrder: (order: RiderOrder | null) => void;
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [selected, setSelected] = useState<RiderOrder | null>(null);
-  const [chatOrder, setChatOrder] = useState<RiderOrder | null>(null);
-  const [banner, setBanner] = useState<BannerInfo | null>(null);
 
   const {
     data: orders = [],
@@ -1172,22 +1178,6 @@ function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatu
   } = useGetActiveOrders({
     query: { queryKey: getGetActiveOrdersQueryKey(), refetchInterval: 8_000 },
   });
-
-  // Notify the rider when a new customer message arrives and chat isn't open.
-  const chatOrderRef = useRef(chatOrder);
-  chatOrderRef.current = chatOrder;
-  const ordersRef = useRef(orders);
-  ordersRef.current = orders;
-  const onNewChatMessage = useCallback((orderId: string) => {
-    if (chatOrderRef.current?.id === orderId) return; // panel already open
-    const order = ordersRef.current.find((o) => o.id === orderId);
-    setBanner({
-      orderId,
-      customerName: order?.userName ?? undefined,
-      orderNum: order?.orderNum ?? undefined,
-    });
-  }, []);
-  useChatWatcher(orders.map((o) => o.id), onNewChatMessage);
 
   const statusMutation = useUpdateOrderStatus();
   const arrivedMutation = useMarkOrderArrived();
@@ -1303,24 +1293,6 @@ function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatu
         <RiderOrderDetailModal order={selected} onClose={() => setSelected(null)} />
       )}
 
-      {chatOrder && (
-        <ChatPanel
-          orderId={chatOrder.id}
-          orderNum={chatOrder.orderNum ?? undefined}
-          customerName={chatOrder.userName ?? undefined}
-          onClose={() => setChatOrder(null)}
-        />
-      )}
-
-      {/* Slide-in banner when a customer message arrives */}
-      <ChatNotificationBanner
-        banner={banner}
-        onOpenChat={(orderId) => {
-          const order = ordersRef.current.find((o) => o.id === orderId);
-          if (order) setChatOrder(order);
-        }}
-        onDismiss={() => setBanner(null)}
-      />
     </div>
   );
 }
@@ -1666,23 +1638,25 @@ export default function RiderApp() {
   // tab, not just when the rider is looking at the Active tab.
   const activeOrderIds = activeOrders.map((o) => o.id);
 
-  // Stable ref so the callback never causes the watcher to re-subscribe.
-  // chatOrder lives inside ActiveDelivery; at this level it is always null,
-  // which means toast suppression is conservative (always shows).
-  const chatOrderRef = useRef<{ id: string } | null>(null);
+  // chatOrder and banner lifted here so ChatPanel + banner are visible on every
+  // tab — not just when ActiveDelivery is mounted.
+  const [chatOrder, setChatOrder] = useState<RiderOrder | null>(null);
+  const [banner, setBanner] = useState<BannerInfo | null>(null);
+
+  const chatOrderRef = useRef(chatOrder);
+  chatOrderRef.current = chatOrder;
   const activeOrdersRef = useRef(activeOrders);
   activeOrdersRef.current = activeOrders;
 
   const onNewChatMessage = useCallback((orderId: string) => {
-    // Skip if the chat panel is already open for this order.
     if (chatOrderRef.current?.id === orderId) return;
     const order = activeOrdersRef.current.find((o) => o.id === orderId);
-    const name = order?.userName;
-    toast({
-      title: "💬 New message" + (name ? ` from ${name}` : " from customer"),
-      description: "Tap Chat to reply.",
+    setBanner({
+      orderId,
+      customerName: order?.userName ?? undefined,
+      orderNum: order?.orderNum ?? undefined,
     });
-  }, [toast]);
+  }, []);
 
   useChatWatcher(activeOrderIds, onNewChatMessage);
 
@@ -1754,10 +1728,30 @@ export default function RiderApp() {
       {/* Content */}
       <main className="flex-1 overflow-auto pb-20">
         {view === "available" && <AvailableOrders rider={rider} />}
-        {view === "active" && <ActiveDelivery locationStatus={locationStatus} />}
+        {view === "active" && <ActiveDelivery locationStatus={locationStatus} chatOrder={chatOrder} setChatOrder={setChatOrder} />}
         {view === "history" && <DeliveryHistory />}
         {view === "profile" && <RiderProfile rider={rider} />}
       </main>
+
+      {/* Chat panel — fixed overlay, visible on any tab */}
+      {chatOrder && (
+        <ChatPanel
+          orderId={chatOrder.id}
+          orderNum={chatOrder.orderNum ?? undefined}
+          customerName={chatOrder.userName ?? undefined}
+          onClose={() => setChatOrder(null)}
+        />
+      )}
+
+      {/* Slide-in banner — triggers from any tab */}
+      <ChatNotificationBanner
+        banner={banner}
+        onOpenChat={(orderId) => {
+          const order = activeOrdersRef.current.find((o) => o.id === orderId);
+          if (order) setChatOrder(order);
+        }}
+        onDismiss={() => setBanner(null)}
+      />
 
       {/* Bottom Nav */}
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-gray-100 z-50">
