@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "lGPTgAZqpDfR7UPgyuCpD"
+uri = "file://artifacts/rider-mobile/assets/images/icon.png"
+type = "image"
+title = "icon.png — App Store / iOS icon"
+description = "White background, crimson rider icon, 1024×1024"
+
+[[outputs]]
+id = "Qujmc9DdT9-dWlKQe1GRa"
+uri = "file://artifacts/rider-mobile/assets/images/adaptive-icon.png"
+type = "image"
+title = "adaptive-icon.png — Android adaptive foreground"
+description = "Transparent background, crimson rider icon within safe zone, 1024×1024"
