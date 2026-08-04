@@ -2,8 +2,9 @@ import { Icon } from "@/components/Icon";
 import { Loading } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useOrderChat } from "@/lib/useOrderChat";
+import { closeChat, openChat } from "@/lib/chatBadgeStore";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -23,6 +24,15 @@ export default function ChatScreen() {
   const { messages, loading, sending, sendMessage } = useOrderChat(orderId);
   const [text, setText] = useState("");
   const inputRef = useRef<TextInput>(null);
+
+  // Register this order as "chat open" so useChatUnread clears its badge
+  // and suppresses notifications while the rider is in this screen.
+  useEffect(() => {
+    if (orderId) {
+      openChat(orderId);
+      return () => closeChat();
+    }
+  }, [orderId]);
 
   // Newest first for FlatList inverted — newest message appears at bottom
   const reversed = [...messages].reverse();

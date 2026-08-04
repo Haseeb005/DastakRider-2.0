@@ -36,6 +36,14 @@ import { AuthProvider, TOKEN_KEY, useAuth } from "@/lib/auth";
 // Side-effect import — registers the background location task with TaskManager
 // before any screen mounts. Must stay at module level.
 import "@/lib/locationTask";
+import {
+  ensureNotificationHandler,
+  requestNotificationPermission,
+} from "@/lib/useChatUnread";
+
+// Configure the notification handler so alerts fire while the app is
+// foregrounded. Must be called before any component tries to schedule one.
+ensureNotificationHandler();
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -75,6 +83,13 @@ function RootLayoutNav() {
   const { token, isReady } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  // Request notification permission once the rider is authenticated.
+  useEffect(() => {
+    if (token) {
+      requestNotificationPermission().catch(() => {});
+    }
+  }, [!!token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isReady) return;

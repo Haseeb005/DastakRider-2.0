@@ -21,6 +21,7 @@ import {
   View,
 } from "react-native";
 
+import { ChatBadgeButton } from "@/components/ChatBadgeButton";
 import { OrderCard } from "@/components/OrderCard";
 import { OrderDetailModal } from "@/components/OrderDetailModal";
 import { Button, EmptyState, ScreenHeader } from "@/components/ui";
@@ -230,12 +231,9 @@ export default function ActiveScreen() {
         renderItem={({ item }) => (
           <OrderCard order={item} onPress={() => setSelected(item)}>
             {renderAction(item)}
-            <Button
-              label="Chat with Customer"
-              icon="message-circle"
-              variant="outline"
+            <ChatBadgeButton
+              orderId={item.id}
               onPress={() => router.push(`/chat/${item.id}`)}
-              style={{ alignSelf: "stretch", marginTop: 6 }}
             />
           </OrderCard>
         )}

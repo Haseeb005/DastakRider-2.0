@@ -55,7 +55,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { ChatPanel } from "@/components/ChatPanel";
-import { saveRiderChatToken } from "@/hooks/useOrderChat";
+import { saveRiderChatToken, useOrderChat } from "@/hooks/useOrderChat";
 import { useChatWatcher } from "@/hooks/useChatWatcher";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1097,8 +1097,59 @@ function AvailableOrders({ rider }: { rider: Rider }) {
   );
 }
 
-// ── Active Delivery Tab ───────────────────────────────────────────────────────
+/**
+ * Renders the "Chat with Customer" button with a red badge showing the count
+ * of unread customer messages.  The badge clears when isChatOpen is true.
+ *
+ * Internally runs its own useOrderChat instance (separate from ChatPanel) so
+ * the badge stays live even when the chat panel is closed.
+ */
+function ChatButtonWithBadge({
+  order,
+  isChatOpen,
+  onClick,
+}: {
+  order: RiderOrder;
+  isChatOpen: boolean;
+  onClick: () => void;
+}) {
+  const { messages } = useOrderChat(order.id);
+  const clearedAtRef = useRef<number>(0);
 
+  // When the chat panel opens, stamp the current time so earlier messages are
+  // considered "seen".
+  useEffect(() => {
+    if (isChatOpen) {
+      clearedAtRef.current = Date.now();
+    }
+  }, [isChatOpen]);
+
+  const unread = isChatOpen
+    ? 0
+    : messages.filter((m) => {
+        if (m.fromRole !== "customer" || m.read) return false;
+        const clearedAt = clearedAtRef.current;
+        if (clearedAt > 0 && m.createdAt) {
+          return new Date(m.createdAt).getTime() > clearedAt;
+        }
+        return true;
+      }).length;
+
+  return (
+    <button
+      onClick={onClick}
+      className="relative w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 active:scale-[0.99] transition-all"
+    >
+      <MessageCircle className="w-4 h-4 text-brand-500" />
+      Chat with Customer
+      {unread > 0 && (
+        <span className="absolute top-1.5 right-3 inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
+          {unread > 99 ? "99+" : unread}
+        </span>
+      )}
+    </button>
+  );
+}
 function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatus }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -1214,13 +1265,11 @@ function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatu
               onArrived={() => handleArrived(order.id)}
               onClick={() => setSelected(order)}
             />
-            <button
+            <ChatButtonWithBadge
+              order={order}
+              isChatOpen={chatOrder?.id === order.id}
               onClick={() => setChatOrder(order)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 active:scale-[0.99] transition-all"
-            >
-              <MessageCircle className="w-4 h-4 text-brand-500" />
-              Chat with Customer
-            </button>
+            />
           </div>
         ))
       )}
