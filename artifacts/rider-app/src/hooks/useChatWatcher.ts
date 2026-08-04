@@ -12,7 +12,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { subscribeWS } from "./sharedWS";
 
-const CHAT_BASE = "https://dastakbites.com";
+// Empty base — calls are relative to the current origin, which the Replit
+// shared proxy routes to the api-server.
+const CHAT_BASE = "";
 const TOKEN_STORAGE_KEY = "rider_chat_token";
 
 function getToken(): string | null {
@@ -72,21 +74,35 @@ export function useChatWatcher(orderIds: string[]) {
 
   // Subscribe to the shared WS once; re-use the existing connection if
   // useOrderChat (chat panel) is also subscribed.
+  // Handle both "orders" and "chats" collection change events.
   useEffect(() => {
     const unsubscribe = subscribeWS((event) => {
       try {
         const msg = JSON.parse(event.data as string);
-        if (
-          msg.type === "change" &&
-          msg.collection === "orders" &&
-          orderIdsRef.current.includes(msg.id)
-        ) {
-          fetchForOrder(msg.id);
+        if (msg.type === "change") {
+          if (
+            msg.collection === "orders" &&
+            orderIdsRef.current.includes(msg.id)
+          ) {
+            fetchForOrder(msg.id);
+          } else if (msg.collection === "chats") {
+            // We don't know which order changed; refetch all watched orders.
+            orderIdsRef.current.forEach((id) => fetchForOrder(id));
+          }
         }
       } catch {}
     });
     return unsubscribe;
   }, [fetchForOrder]);
+
+  // Polling fallback so messages surface even without a WS broadcast.
+  useEffect(() => {
+    if (orderIds.length === 0) return;
+    const interval = setInterval(() => {
+      orderIdsRef.current.forEach((id) => fetchForOrder(id));
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [orderIds.length, fetchForOrder]);
 
   return { messagesByOrderId };
 }

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { subscribeWS } from "./sharedWS";
 
-const CHAT_BASE = "https://dastakbites.com";
+// Empty base — calls are relative to the current origin, which the Replit
+// shared proxy routes to the api-server.
+const CHAT_BASE = "";
 const TOKEN_STORAGE_KEY = "rider_chat_token";
 
 export type ChatMessage = {
@@ -92,22 +94,29 @@ export function useOrderChat(orderId: string | null) {
 
     // Subscribe to the shared singleton WebSocket — no new connection is
     // opened if useChatWatcher is already running on the Active tab.
+    // Fire on "orders" changes for this order OR any "chats" collection change
+    // (DastakMart may broadcast either collection when a message is sent).
     const unsubscribe = subscribeWS((event) => {
       try {
         const msg = JSON.parse(event.data as string);
-        if (
-          msg.type === "change" &&
-          msg.collection === "orders" &&
-          msg.id === orderId
-        ) {
-          fetchMessages();
+        if (msg.type === "change") {
+          if (msg.collection === "orders" && msg.id === orderId) {
+            fetchMessages();
+          } else if (msg.collection === "chats") {
+            fetchMessages();
+          }
         }
       } catch {}
     });
 
+    // Polling fallback — ensures messages appear even if the WebSocket misses
+    // the event (e.g. the customer app writes to a different WS channel).
+    const poll = setInterval(fetchMessages, 8_000);
+
     return () => {
       mountedRef.current = false;
       unsubscribe();
+      clearInterval(poll);
     };
   }, [orderId, fetchMessages]);
 

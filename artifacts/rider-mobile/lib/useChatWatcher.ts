@@ -14,7 +14,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { TOKEN_KEY } from "./auth";
 import { subscribeWS } from "./sharedWS";
 
-const CHAT_BASE = "https://dastakbites.com";
+// Resolve the api-server base URL the same way the rest of the mobile app does.
+const CHAT_BASE = process.env.EXPO_PUBLIC_DOMAIN
+  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+  : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000");
 
 export type ChatMessage = {
   id: string;
@@ -65,21 +68,35 @@ export function useChatWatcher(orderIds: string[]) {
 
   // Subscribe to the shared WS once; re-use the existing connection if
   // useOrderChat (chat screen) is also subscribed.
+  // Handle both "orders" and "chats" collection change events.
   useEffect(() => {
     const unsubscribe = subscribeWS((event) => {
       try {
         const msg = JSON.parse(event.data as string);
-        if (
-          msg.type === "change" &&
-          msg.collection === "orders" &&
-          orderIdsRef.current.includes(msg.id)
-        ) {
-          fetchForOrder(msg.id);
+        if (msg.type === "change") {
+          if (
+            msg.collection === "orders" &&
+            orderIdsRef.current.includes(msg.id)
+          ) {
+            fetchForOrder(msg.id);
+          } else if (msg.collection === "chats") {
+            // Refetch all watched orders — we don't have the orderId from the chat doc ID.
+            orderIdsRef.current.forEach((id) => fetchForOrder(id));
+          }
         }
       } catch {}
     });
     return unsubscribe;
   }, [fetchForOrder]);
+
+  // Polling fallback so messages surface even without a WS broadcast.
+  useEffect(() => {
+    if (orderIds.length === 0) return;
+    const interval = setInterval(() => {
+      orderIdsRef.current.forEach((id) => fetchForOrder(id));
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [orderIds.length, fetchForOrder]);
 
   return { messagesByOrderId };
 }

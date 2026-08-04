@@ -25,3 +25,9 @@ export function ordersCol() {
 export function reviewsCol() {
   return db.collection("reviews");
 }
+
+// Chat messages are stored in the `chats` collection.
+// Each document: { _id, orderId, riderId, userId, chat: [{ _id, name, type, txt, time, createdAt, read }] }
+export function chatsCol() {
+  return db.collection("chats");
+}

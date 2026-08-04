@@ -3,7 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { TOKEN_KEY } from "./auth";
 import { subscribeWS } from "./sharedWS";
 
-const CHAT_BASE = "https://dastakbites.com";
+// Resolve the api-server base URL the same way the rest of the mobile app does.
+const CHAT_BASE = process.env.EXPO_PUBLIC_DOMAIN
+  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+  : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000");
 
 export type ChatMessage = {
   id: string;
@@ -72,22 +75,28 @@ export function useOrderChat(orderId: string) {
 
     // Subscribe to the shared singleton WebSocket — no new connection is
     // opened if useChatWatcher is already running on the Active tab.
+    // Fire on "orders" changes for this order OR any "chats" collection change.
     const unsubscribe = subscribeWS((event) => {
       try {
         const msg = JSON.parse(event.data as string);
-        if (
-          msg.type === "change" &&
-          msg.collection === "orders" &&
-          msg.id === orderId
-        ) {
-          fetchMessages();
+        if (msg.type === "change") {
+          if (msg.collection === "orders" && msg.id === orderId) {
+            fetchMessages();
+          } else if (msg.collection === "chats") {
+            fetchMessages();
+          }
         }
       } catch {}
     });
 
+    // Polling fallback — ensures messages appear even if the WebSocket misses
+    // the event.
+    const poll = setInterval(fetchMessages, 8_000);
+
     return () => {
       mountedRef.current = false;
       unsubscribe();
+      clearInterval(poll);
     };
   }, [orderId, fetchMessages]);
 

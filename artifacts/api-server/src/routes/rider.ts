@@ -2,7 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { ObjectId } from "mongodb";
-import { usersCol, ordersCol, reviewsCol } from "../lib/mongo";
+import { usersCol, ordersCol, reviewsCol, chatsCol } from "../lib/mongo";
 
 const router = Router();
 
@@ -1063,5 +1063,92 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
     riderArrived: !!doc.riderArrived,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Chat routes
+// The `chats` collection stores one document per order:
+//   { _id, orderId, riderId, userId, chat: [{ _id, name, type, txt, time, createdAt, read }] }
+// We map:
+//   type "user"  → fromRole "customer"
+//   type "rider" → fromRole "rider"
+//   txt          → text
+//   _id          → id (string)
+// ---------------------------------------------------------------------------
+
+function mapChatMsg(m: any) {
+  return {
+    id: m._id ? String(m._id) : String(Math.random()),
+    fromRole: m.type === "rider" ? "rider" : "customer",
+    text: m.txt ?? m.text ?? "",
+    time: m.time ?? "",
+    createdAt: m.createdAt ?? null,
+    read: !!m.read,
+  };
+}
+
+// GET /api/orders/:orderId/chat
+router.get("/orders/:orderId/chat", async (req, res) => {
+  const riderId = requireRiderId(req, res);
+  if (!riderId) return;
+
+  const { orderId } = req.params;
+  try {
+    const doc = await chatsCol().findOne({ orderId } as any);
+    const msgs = Array.isArray(doc?.chat) ? doc.chat.map(mapChatMsg) : [];
+    res.json(msgs);
+  } catch (err) {
+    console.error("GET /api/orders/:orderId/chat error", err);
+    res.status(500).json({ message: "Failed to fetch chat" });
+  }
+});
+
+// POST /api/orders/:orderId/chat
+router.post("/orders/:orderId/chat", async (req, res) => {
+  const riderId = requireRiderId(req, res);
+  if (!riderId) return;
+
+  const { orderId } = req.params;
+  const text = String(req.body?.text ?? "").trim();
+  if (!text) {
+    res.status(400).json({ message: "text is required" });
+    return;
+  }
+
+  try {
+    // Find the rider's name for the message
+    const rider = await findRiderById(riderId);
+    const name = rider?.name ?? "Rider";
+
+    const { ObjectId: ObjId } = await import("mongodb");
+    const newMsg = {
+      _id: new ObjId(),
+      name,
+      type: "rider",
+      txt: text,
+      time: new Date().toLocaleTimeString("en-PK", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Karachi",
+      }),
+      createdAt: new Date().toISOString(),
+      read: false,
+    };
+
+    // Upsert: create the chat doc if it doesn't exist yet
+    await chatsCol().updateOne(
+      { orderId } as any,
+      {
+        $push: { chat: newMsg } as any,
+        $setOnInsert: { orderId, riderId, createdAt: new Date().toISOString() },
+      },
+      { upsert: true },
+    );
+
+    res.json(mapChatMsg(newMsg));
+  } catch (err) {
+    console.error("POST /api/orders/:orderId/chat error", err);
+    res.status(500).json({ message: "Failed to send message" });
+  }
+});
 
 export default router;
