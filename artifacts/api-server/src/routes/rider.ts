@@ -583,22 +583,6 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
         message: `You can only have ${maxOrderLimit} active order${maxOrderLimit === 1 ? "" : "s"} at a time. Complete a current delivery before accepting more.`,
       });
 
-    // 8 AM cash-clearance gate: if the order was placed on or after today's 8 AM PKT
-    // and the rider still has uncollected cash (pendingCollection > 0), block.
-    const pendingCollectionRaw = Number(rider?.pendingCollection || 0);
-    if (pendingCollectionRaw > 0) {
-      const today8AM = pkt8AMCutoff();
-      const rawCreatedAt = (targetOrder as any)?.createdAt;
-      const orderCreatedAt = rawCreatedAt instanceof Date
-        ? rawCreatedAt
-        : new Date(rawCreatedAt || 0);
-      if (orderCreatedAt >= today8AM) {
-        return res.status(400).json({
-          message:
-            "You have uncollected cash. Please submit your cash to the company before accepting new orders.",
-        });
-      }
-    }
 
     // Cash-collection gate (admin-owned fields, read-only here — never written by this route).
     const pendingCollection = Number(rider?.pendingCollection || 0);
