@@ -999,7 +999,7 @@ function AvailableOrders({ rider }: { rider: Rider }) {
         onError: (e: any) =>
           toast({
             title: "Could not accept",
-            description: e?.message || "Order may already be taken",
+            description: e?.data?.message || "Order may already be taken",
             variant: "destructive",
           }),
       }
@@ -1117,7 +1117,7 @@ function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatu
           qc.invalidateQueries({ queryKey: getGetActiveOrdersQueryKey() });
         },
         onError: (e: any) =>
-          toast({ title: "Error", description: e?.message || "Could not update", variant: "destructive" }),
+          toast({ title: "Error", description: e?.data?.message || "Could not update", variant: "destructive" }),
       }
     );
   };
@@ -1154,7 +1154,7 @@ function ActiveDelivery({ locationStatus }: { locationStatus: LocationShareStatu
           qc.invalidateQueries({ queryKey: getGetRiderEarningsQueryKey() });
         },
         onError: (e: any) =>
-          toast({ title: "Error", description: e?.message || "Could not update", variant: "destructive" }),
+          toast({ title: "Error", description: e?.data?.message || "Could not update", variant: "destructive" }),
       }
     );
   };
