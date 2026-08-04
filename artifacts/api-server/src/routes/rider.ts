@@ -154,6 +154,27 @@ async function safeRider(user: any) {
 // puts everything in "today" and makes Today/Week/Month all equal the overall total.
 const PKT_MS = 5 * 60 * 60 * 1000;
 
+/**
+ * Returns the start of the current cash-collection window as a UTC Date.
+ * The window boundary is 8:00 AM PKT (UTC+5) each day.
+ *   • If it is currently ≥ 8:00 AM PKT → today's 8:00 AM PKT.
+ *   • If it is currently < 8:00 AM PKT → yesterday's 8:00 AM PKT.
+ * Any COD order with paidToRider:false and createdAt before this cutoff
+ * is "stale" and must be cleared before the rider can accept new orders.
+ */
+function pkt8AMCutoff(): Date {
+  const nowMs = Date.now();
+  const shifted = new Date(nowMs + PKT_MS); // PKT wall clock via UTC getters
+  const y = shifted.getUTCFullYear();
+  const m = shifted.getUTCMonth();
+  const d = shifted.getUTCDate();
+  // PKT midnight of today as UTC instant, then +8 h = today's 8 AM PKT.
+  const today8AM = new Date(Date.UTC(y, m, d) - PKT_MS + 8 * 60 * 60 * 1000);
+  return nowMs >= today8AM.getTime()
+    ? today8AM
+    : new Date(today8AM.getTime() - 24 * 60 * 60 * 1000); // step back one day
+}
+
 function pktPeriodStart(kind: "day" | "week" | "month"): Date {
   const shifted = new Date(Date.now() + PKT_MS); // read PKT wall clock via UTC getters
   const y = shifted.getUTCFullYear();
@@ -551,6 +572,31 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       return res.status(400).json({
         message: `You can only have ${maxOrderLimit} active order${maxOrderLimit === 1 ? "" : "s"} at a time. Complete a current delivery before accepting more.`,
       });
+
+    // Previous-day cash clearance gate.
+    // Block the rider if they have any uncleared COD cash from a prior collection
+    // window (orders created before today's 8:00 AM PKT cutoff that are delivered
+    // but not yet marked paidToRider).  Non-COD orders are excluded — the rider
+    // never holds physical cash for them.
+    const windowStart = pkt8AMCutoff();
+    const staleCashOrder = await ordersCol().findOne({
+      riderId,
+      paidToRider: false,
+      timeWhenDelivered: { $exists: true, $gt: "" },
+      createdAt: { $lt: windowStart },
+      $expr: {
+        $in: [
+          { $ifNull: ["$paymentType", "$paymentMethod"] },
+          COD_TYPES,
+        ],
+      },
+    });
+    if (staleCashOrder) {
+      return res.status(400).json({
+        message:
+          "You have uncollected cash from a previous day. Please submit your cash to the company before accepting new orders.",
+      });
+    }
 
     // Cash-collection gate (admin-owned fields, read-only here — never written by this route).
     const pendingCollection = Number(rider?.pendingCollection || 0);
