@@ -25,6 +25,17 @@ export function ChatPanel({ orderId, orderNum, customerName, onClose }: ChatPane
     setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
 
+  // Mark all customer messages as read when the panel opens
+  useEffect(() => {
+    const token = (() => {
+      try { return localStorage.getItem("rider_chat_token"); } catch { return null; }
+    })();
+    fetch(`/api/orders/${orderId}/chat/read`, {
+      method: "PATCH",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).catch(() => {/* best-effort */});
+  }, [orderId]);
+
   const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed || sending) return;

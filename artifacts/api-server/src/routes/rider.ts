@@ -1151,4 +1151,39 @@ router.post("/orders/:orderId/chat", async (req, res) => {
   }
 });
 
+// PATCH /api/orders/:orderId/chat/read
+// Marks all customer messages (type "user") in the chat as read.
+// Only the rider assigned to the order may call this.
+router.patch("/orders/:orderId/chat/read", async (req, res) => {
+  const riderId = requireRiderId(req, res);
+  if (!riderId) return;
+
+  const { orderId } = req.params;
+  try {
+    // Verify the order is assigned to this rider before touching anything.
+    let orderObjectId: ObjectId;
+    try {
+      orderObjectId = new ObjectId(orderId);
+    } catch {
+      res.status(400).json({ message: "Invalid orderId" });
+      return;
+    }
+    const order = await ordersCol().findOne({ _id: orderObjectId, riderId } as any);
+    if (!order) {
+      res.status(403).json({ message: "Not authorized" });
+      return;
+    }
+
+    await chatsCol().updateOne(
+      { orderId } as any,
+      { $set: { "chat.$[elem].read": true } } as any,
+      { arrayFilters: [{ "elem.type": "user" }] },
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("PATCH /api/orders/:orderId/chat/read error", err);
+    res.status(500).json({ message: "Failed to mark messages as read" });
+  }
+});
+
 export default router;

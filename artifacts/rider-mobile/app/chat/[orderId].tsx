@@ -3,8 +3,14 @@ import { Loading } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useOrderChat } from "@/lib/useOrderChat";
 import { closeChat, openChat } from "@/lib/chatBadgeStore";
+import { TOKEN_KEY } from "@/lib/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
+
+const CHAT_BASE = process.env.EXPO_PUBLIC_DOMAIN
+  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+  : "";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -27,9 +33,17 @@ export default function ChatScreen() {
 
   // Register this order as "chat open" so useChatUnread clears its badge
   // and suppresses notifications while the rider is in this screen.
+  // Also mark all customer messages as read on the server.
   useEffect(() => {
     if (orderId) {
       openChat(orderId);
+      // Best-effort: mark customer messages as read
+      AsyncStorage.getItem(TOKEN_KEY).then((token) => {
+        fetch(`${CHAT_BASE}/api/orders/${orderId}/chat/read`, {
+          method: "PATCH",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }).catch(() => {/* ignore */});
+      });
       return () => closeChat();
     }
   }, [orderId]);

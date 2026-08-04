@@ -1646,7 +1646,26 @@ export default function RiderApp() {
   // Chat watcher runs app-wide so incoming customer messages are fetched on any
   // tab, not just when the rider is looking at the Active tab.
   const activeOrderIds = activeOrders.map((o) => o.id);
-  useChatWatcher(activeOrderIds);
+
+  // Stable ref so the callback never causes the watcher to re-subscribe.
+  // chatOrder lives inside ActiveDelivery; at this level it is always null,
+  // which means toast suppression is conservative (always shows).
+  const chatOrderRef = useRef<{ id: string } | null>(null);
+  const activeOrdersRef = useRef(activeOrders);
+  activeOrdersRef.current = activeOrders;
+
+  const onNewChatMessage = useCallback((orderId: string) => {
+    // Skip if the chat panel is already open for this order.
+    if (chatOrderRef.current?.id === orderId) return;
+    const order = activeOrdersRef.current.find((o) => o.id === orderId);
+    const name = order?.userName;
+    toast({
+      title: "💬 New message" + (name ? ` from ${name}` : " from customer"),
+      description: "Tap Chat to reply.",
+    });
+  }, [toast]);
+
+  useChatWatcher(activeOrderIds, onNewChatMessage);
 
   // Alert the rider (on any tab) the moment live sharing drops mid-delivery.
   useEffect(() => {
