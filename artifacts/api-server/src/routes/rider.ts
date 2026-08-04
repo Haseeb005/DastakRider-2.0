@@ -574,28 +574,31 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       });
 
     // Previous-day cash clearance gate.
-    // Block the rider if they have any uncleared COD cash from a prior collection
-    // window (orders created before today's 8:00 AM PKT cutoff that are delivered
-    // but not yet marked paidToRider).  Non-COD orders are excluded — the rider
-    // never holds physical cash for them.
-    const windowStart = pkt8AMCutoff();
-    const staleCashOrder = await ordersCol().findOne({
-      riderId,
-      paidToRider: false,
-      timeWhenDelivered: { $exists: true, $gt: "" },
-      createdAt: { $lt: windowStart },
-      $expr: {
-        $in: [
-          { $ifNull: ["$paymentType", "$paymentMethod"] },
-          COD_TYPES,
-        ],
-      },
-    });
-    if (staleCashOrder) {
-      return res.status(400).json({
-        message:
-          "You have uncollected cash from a previous day. Please submit your cash to the company before accepting new orders.",
+    // Two conditions must both be true to block:
+    //   1. The rider's pendingCollection > 0 (admin resets this to 0 when cash is received).
+    //   2. At least one COD order delivered in a prior collection window exists — meaning
+    //      the pending cash is from a previous day, not just today's fresh deliveries.
+    // Non-COD orders are excluded: the rider never holds physical cash for them.
+    const pendingCollectionRaw = Number(rider?.pendingCollection || 0);
+    if (pendingCollectionRaw > 0) {
+      const windowStart = pkt8AMCutoff();
+      const staleOrder = await ordersCol().findOne({
+        riderId,
+        timeWhenDelivered: { $exists: true, $gt: "" },
+        createdAt: { $lt: windowStart },
+        $expr: {
+          $in: [
+            { $ifNull: ["$paymentType", "$paymentMethod"] },
+            COD_TYPES,
+          ],
+        },
       });
+      if (staleOrder) {
+        return res.status(400).json({
+          message:
+            "You have uncollected cash from a previous day. Please submit your cash to the company before accepting new orders.",
+        });
+      }
     }
 
     // Cash-collection gate (admin-owned fields, read-only here — never written by this route).
