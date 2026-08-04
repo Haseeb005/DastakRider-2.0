@@ -149,11 +149,11 @@ function truncate(text: string, maxLength = 300): string {
 }
 
 function buildErrorMessage(response: Response, data: unknown): string {
-  const prefix = `HTTP ${response.status} ${response.statusText}`;
+  const fallback = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
 
   if (typeof data === "string") {
     const text = data.trim();
-    return text ? `${prefix}: ${truncate(text)}` : prefix;
+    return text ? truncate(text) : fallback;
   }
 
   const title = getStringField(data, "title");
@@ -163,12 +163,12 @@ function buildErrorMessage(response: Response, data: unknown): string {
     getStringField(data, "error_description") ??
     getStringField(data, "error");
 
-  if (title && detail) return `${prefix}: ${title} — ${detail}`;
-  if (detail) return `${prefix}: ${detail}`;
-  if (message) return `${prefix}: ${message}`;
-  if (title) return `${prefix}: ${title}`;
+  if (title && detail) return `${title} — ${detail}`;
+  if (detail) return detail;
+  if (message) return message;
+  if (title) return title;
 
-  return prefix;
+  return fallback;
 }
 
 export class ApiError<T = unknown> extends Error {
