@@ -1,7 +1,6 @@
-import { Icon } from "@/components/Icon";
 import { useLoginRider } from "@workspace/api-client-react";
 import React, { useState } from "react";
-import { Platform, Text, TextInput, View } from "react-native";
+import { Image, Platform, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -105,19 +104,11 @@ export default function LoginScreen() {
       bottomOffset={24}
     >
       <View style={{ alignItems: "center", marginBottom: 28 }}>
-        <View
-          style={{
-            width: 72,
-            height: 72,
-            borderRadius: 20,
-            backgroundColor: c.primary,
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 14,
-          }}
-        >
-          <Icon name="zap" size={34} color="#FFFFFF" />
-        </View>
+        <Image
+          source={require("@/assets/images/icon.png")}
+          style={{ width: 120, height: 120, borderRadius: 24, marginBottom: 14 }}
+          resizeMode="contain"
+        />
         <Text
           style={{
             fontFamily: "Inter_700Bold",

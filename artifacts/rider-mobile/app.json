@@ -24,7 +24,7 @@
       "package": "com.dastakriders",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#DB143C"
+        "backgroundColor": "#E6ECEA"
       },
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
