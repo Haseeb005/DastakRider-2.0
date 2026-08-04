@@ -258,6 +258,7 @@ export default function ActiveScreen() {
             {renderAction(item)}
             <ChatBadgeButton
               orderId={item.id}
+              customerName={item.userName ?? undefined}
               onPress={() => {
                 // Snapshot current unread IDs so the card corner badge clears
                 // immediately.  Any message arriving after this moment will

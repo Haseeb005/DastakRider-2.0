@@ -15,12 +15,13 @@ import { useChatUnread } from "@/lib/useChatUnread";
 
 interface Props {
   orderId: string;
+  customerName?: string;
   onPress: () => void;
 }
 
-export function ChatBadgeButton({ orderId, onPress }: Props) {
+export function ChatBadgeButton({ orderId, customerName, onPress }: Props) {
   const c = useColors();
-  const unread = useChatUnread(orderId);
+  const unread = useChatUnread(orderId, customerName);
 
   return (
     <View style={{ position: "relative", alignSelf: "stretch" }}>

@@ -102,7 +102,7 @@ function countUnread(msgs: RawMessage[], clearedAt: number): number {
 const notifThrottleByOrder = new Map<string, number>();
 const NOTIF_THROTTLE_MS = 5_000;
 
-export function useChatUnread(orderId: string): number {
+export function useChatUnread(orderId: string, customerName?: string): number {
   // Force a re-render when chatBadgeStore notifies us (chat open/close).
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   useEffect(() => subscribe(rerender), []);
@@ -151,13 +151,20 @@ export function useChatUnread(orderId: string): number {
         if (Date.now() - lastNotif > NOTIF_THROTTLE_MS) {
           notifThrottleByOrder.set(orderId, Date.now());
           const delta = count - prevCountRef.current;
+          const senderLabel = customerName?.trim() || null;
           Notifications.scheduleNotificationAsync({
             content: {
-              title: "New message from customer",
+              title: senderLabel
+                ? `Message from ${senderLabel}`
+                : "New message from customer",
               body:
                 delta === 1
-                  ? "The customer sent you a message"
-                  : `${delta} new messages from the customer`,
+                  ? senderLabel
+                    ? `${senderLabel} sent you a message`
+                    : "The customer sent you a message"
+                  : senderLabel
+                    ? `${senderLabel} sent you ${delta} new messages`
+                    : `${delta} new messages from the customer`,
               sound: true,
             },
             trigger: null, // fire immediately
