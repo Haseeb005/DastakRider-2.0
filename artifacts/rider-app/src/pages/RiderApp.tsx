@@ -56,6 +56,7 @@ import {
 } from "lucide-react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { saveRiderChatToken } from "@/hooks/useOrderChat";
+import { useChatWatcher } from "@/hooks/useChatWatcher";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1575,6 +1576,11 @@ export default function RiderApp() {
   // GPS tracking runs app-wide (not tab-scoped) so it keeps publishing while a
   // picked-up order is in transit, regardless of which tab the rider is on.
   const locationStatus = useLocationTracking(activeOrders);
+
+  // Chat watcher runs app-wide so incoming customer messages are fetched on any
+  // tab, not just when the rider is looking at the Active tab.
+  const activeOrderIds = activeOrders.map((o) => o.id);
+  useChatWatcher(activeOrderIds);
 
   // Alert the rider (on any tab) the moment live sharing drops mid-delivery.
   useEffect(() => {

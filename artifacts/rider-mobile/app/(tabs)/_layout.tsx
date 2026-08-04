@@ -12,6 +12,7 @@ import { Pressable, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
+import { useChatWatcher } from "@/lib/useChatWatcher";
 
 type TabBarProps = Parameters<
   NonNullable<React.ComponentProps<typeof Tabs>["tabBar"]>
@@ -200,6 +201,19 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
+  const { token } = useAuth();
+  const activeQ = useGetActiveOrders({
+    query: {
+      queryKey: getGetActiveOrdersQueryKey(),
+      enabled: !!token,
+      refetchInterval: 10000,
+    },
+  });
+  // Chat watcher runs at the tabs-root level so it stays alive on every tab,
+  // not just when the rider is looking at the Active screen.
+  const activeOrderIds = (activeQ.data ?? []).map((o) => o.id);
+  useChatWatcher(activeOrderIds);
+
   if (isLiquidGlassAvailable()) {
     return <NativeTabLayout />;
   }

@@ -1,9 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TOKEN_KEY } from "./auth";
+import { subscribeWS } from "./sharedWS";
 
 const CHAT_BASE = "https://dastakbites.com";
-const WS_URL = "wss://dastakbites.com/ws/live";
 
 export type ChatMessage = {
   id: string;
@@ -18,7 +18,6 @@ export function useOrderChat(orderId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
   const mountedRef = useRef(true);
 
   const fetchMessages = useCallback(async () => {
@@ -71,42 +70,24 @@ export function useOrderChat(orderId: string) {
     setMessages([]);
     fetchMessages();
 
-    let ws: WebSocket;
-    let retryTimeout: ReturnType<typeof setTimeout>;
-
-    function connect() {
+    // Subscribe to the shared singleton WebSocket — no new connection is
+    // opened if useChatWatcher is already running on the Active tab.
+    const unsubscribe = subscribeWS((event) => {
       try {
-        ws = new WebSocket(WS_URL);
-        wsRef.current = ws;
-
-        ws.onmessage = (event) => {
-          try {
-            const msg = JSON.parse(event.data as string);
-            if (
-              msg.type === "change" &&
-              msg.collection === "orders" &&
-              msg.id === orderId
-            ) {
-              fetchMessages();
-            }
-          } catch {}
-        };
-
-        ws.onerror = () => {};
-        ws.onclose = () => {
-          if (mountedRef.current) {
-            retryTimeout = setTimeout(connect, 5_000);
-          }
-        };
+        const msg = JSON.parse(event.data as string);
+        if (
+          msg.type === "change" &&
+          msg.collection === "orders" &&
+          msg.id === orderId
+        ) {
+          fetchMessages();
+        }
       } catch {}
-    }
-
-    connect();
+    });
 
     return () => {
       mountedRef.current = false;
-      clearTimeout(retryTimeout);
-      wsRef.current?.close();
+      unsubscribe();
     };
   }, [orderId, fetchMessages]);
 
