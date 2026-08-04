@@ -68,7 +68,12 @@ function NativeTabLayout() {
   );
 }
 
-function CustomTabBar({ state, navigation, insets }: TabBarProps) {
+function CustomTabBar({
+  state,
+  navigation,
+  insets,
+  unreadMessages = 0,
+}: TabBarProps & { unreadMessages?: number }) {
   const c = useColors();
   const { token } = useAuth();
   const activeQ = useGetActiveOrders({
@@ -108,6 +113,8 @@ function CustomTabBar({ state, navigation, insets }: TabBarProps) {
         const isFocused = state.index === index;
         const color = isFocused ? c.primary : c.mutedForeground;
         const showBadge = route.name === "active" && activeCount > 0;
+        const showUnreadDot =
+          route.name === "active" && unreadMessages > 0;
 
         const onPress = () => {
           const event = navigation.emit({
@@ -169,6 +176,21 @@ function CustomTabBar({ state, navigation, insets }: TabBarProps) {
                   </Text>
                 </View>
               ) : null}
+              {showUnreadDot ? (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    left: -4,
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: "#DB143C",
+                    borderWidth: 1.5,
+                    borderColor: c.card,
+                  }}
+                />
+              ) : null}
             </View>
             <Text
               style={{
@@ -187,10 +209,12 @@ function CustomTabBar({ state, navigation, insets }: TabBarProps) {
   );
 }
 
-function ClassicTabLayout() {
+function ClassicTabLayout({ unreadMessages }: { unreadMessages: number }) {
   return (
     <Tabs
-      tabBar={(props) => <CustomTabBar {...props} />}
+      tabBar={(props) => (
+        <CustomTabBar {...props} unreadMessages={unreadMessages} />
+      )}
       screenOptions={{ headerShown: false }}
     >
       {TABS.map((t) => (
@@ -212,10 +236,18 @@ export default function TabLayout() {
   // Chat watcher runs at the tabs-root level so it stays alive on every tab,
   // not just when the rider is looking at the Active screen.
   const activeOrderIds = (activeQ.data ?? []).map((o) => o.id);
-  useChatWatcher(activeOrderIds);
+  const { messagesByOrderId } = useChatWatcher(activeOrderIds);
+
+  // Total unread customer messages across all active orders — drives the
+  // red dot on the Active tab so riders notice new messages from any tab.
+  const totalUnreadMessages = Object.values(messagesByOrderId).reduce(
+    (sum, msgs) =>
+      sum + msgs.filter((m) => m.fromRole === "customer" && !m.read).length,
+    0,
+  );
 
   if (isLiquidGlassAvailable()) {
     return <NativeTabLayout />;
   }
-  return <ClassicTabLayout />;
+  return <ClassicTabLayout unreadMessages={totalUnreadMessages} />;
 }
