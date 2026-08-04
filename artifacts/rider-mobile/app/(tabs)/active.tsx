@@ -271,7 +271,7 @@ export default function ActiveScreen() {
                   ...prev,
                   [item.id]: currentUnread,
                 }));
-                router.push(`/chat/${item.id}`);
+                router.push(`/chat/${item.id}?orderNum=${encodeURIComponent(item.orderNum ?? "")}`);
               }}
             />
           </OrderCard>

@@ -17,7 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ChatScreen() {
-  const { orderId } = useLocalSearchParams<{ orderId: string }>();
+  const { orderId, orderNum } = useLocalSearchParams<{ orderId: string; orderNum?: string }>();
   const router = useRouter();
   const c = useColors();
   const insets = useSafeAreaInsets();
@@ -88,7 +88,7 @@ export default function ChatScreen() {
               color: c.mutedForeground,
             }}
           >
-            Order #{String(orderId).slice(-6).toUpperCase()}
+            {orderNum ? `Order #${orderNum}` : `Order #${String(orderId).slice(-6).toUpperCase()}`}
           </Text>
         </View>
       </View>
