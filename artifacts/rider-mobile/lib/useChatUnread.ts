@@ -11,7 +11,10 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Notifications from "expo-notifications";
+import {
+  setNotificationHandler,
+  requestPermissionsAsync,
+} from "@/lib/localPush";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { Platform } from "react-native";
 
@@ -41,7 +44,7 @@ let notifHandlerSet = false;
 export function ensureNotificationHandler() {
   if (notifHandlerSet) return;
   notifHandlerSet = true;
-  Notifications.setNotificationHandler({
+  setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
       shouldPlaySound: true,
@@ -58,7 +61,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
   try {
     // requestPermissionsAsync is safe to call repeatedly — it returns the
     // current grant status without re-prompting if already decided.
-    const result = (await Notifications.requestPermissionsAsync()) as {
+    const result = (await requestPermissionsAsync()) as {
       ios?: { status?: number };
       canAskAgain?: boolean;
     } & Record<string, unknown>;

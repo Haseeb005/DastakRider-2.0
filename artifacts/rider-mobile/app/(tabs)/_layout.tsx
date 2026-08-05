@@ -5,7 +5,7 @@ import {
   useGetActiveOrders,
 } from "@workspace/api-client-react";
 import type { SFSymbol } from "expo-symbols";
-import * as Notifications from "expo-notifications";
+import { scheduleNotificationAsync } from "@/lib/localPush";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
@@ -258,7 +258,7 @@ export default function TabLayout() {
 
     // Local push — shows a system notification when the app is foregrounded
     // on a different screen. (Background push requires server-side FCM/APNs.)
-    Notifications.scheduleNotificationAsync({
+    scheduleNotificationAsync({
       content: {
         title: order?.userName
           ? `Message from ${order.userName}`

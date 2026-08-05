@@ -36,7 +36,10 @@ import { AuthProvider, TOKEN_KEY, useAuth } from "@/lib/auth";
 // Side-effect import — registers the background location task with TaskManager
 // before any screen mounts. Must stay at module level.
 import "@/lib/locationTask";
-import * as Notifications from "expo-notifications";
+import {
+  addNotificationResponseReceivedListener,
+  type EventSubscription,
+} from "@/lib/localPush";
 import {
   initOneSignal,
   oneSignalLogin,
@@ -132,10 +135,10 @@ function RootLayoutNav() {
   // Navigate to chat when the rider taps a LOCAL push notification
   // (scheduled via expo-notifications in the tab layout's onNewMessage).
   // OneSignal remote-push taps are handled by initOneSignal's click listener.
-  const responseListener = useRef<Notifications.EventSubscription | null>(null);
+  const responseListener = useRef<EventSubscription | null>(null);
   useEffect(() => {
     responseListener.current =
-      Notifications.addNotificationResponseReceivedListener((response) => {
+      addNotificationResponseReceivedListener((response: any) => {
         const data = response.notification.request.content.data as
           | Record<string, unknown>
           | undefined;
