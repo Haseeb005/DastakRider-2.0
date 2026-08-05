@@ -74,7 +74,7 @@ export async function sendChatPush(payload: ChatPushPayload): Promise<void> {
       ...(customerName ? { customerName } : {}),
       ...(orderNum ? { orderNum } : {}),
     },
-    android_channel_id: "default",
+    android_channel_id: "978916b0-393b-4003-a090-405ccab2d321",
     ios_badge_type: "Increase",
     ios_badge_count: 1,
   });
@@ -110,7 +110,7 @@ export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<vo
       orderId,
       ...(orderNum ? { orderNum } : {}),
     },
-    android_channel_id: "default",
+    android_channel_id: "978916b0-393b-4003-a090-405ccab2d321",
     ios_badge_type: "Increase",
     ios_badge_count: 1,
   });
