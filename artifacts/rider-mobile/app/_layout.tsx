@@ -38,6 +38,11 @@ import { AuthProvider, TOKEN_KEY, useAuth } from "@/lib/auth";
 import "@/lib/locationTask";
 import * as Notifications from "expo-notifications";
 import {
+  initOneSignal,
+  oneSignalLogin,
+  oneSignalLogout,
+} from "@/lib/onesignal";
+import {
   ensureNotificationHandler,
   requestNotificationPermission,
 } from "@/lib/useChatUnread";
@@ -80,19 +85,53 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * Decode the rider's MongoDB _id from the bearer token.
+ * Token format: <header_b64url>.<riderId_b64url>.<sig_b64url>
+ */
+function riderIdFromToken(token: string): string | null {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    return atob(padded) || null;
+  } catch {
+    return null;
+  }
+}
+
 function RootLayoutNav() {
   const { token, isReady } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
-  // Request notification permission once the rider is authenticated.
+  // Initialise OneSignal once — pass a stable navigation callback.
+  // initOneSignal is idempotent so calling it in a useEffect is safe.
+  useEffect(() => {
+    initOneSignal((orderId, customerName, orderNum) => {
+      const params = new URLSearchParams();
+      if (customerName) params.set("customerName", customerName);
+      if (orderNum) params.set("orderNum", orderNum);
+      const qs = params.toString();
+      router.push(`/chat/${orderId}${qs ? `?${qs}` : ""}` as any);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Associate / disassociate the device with the rider's OneSignal profile.
   useEffect(() => {
     if (token) {
       requestNotificationPermission().catch(() => {});
+      const riderId = riderIdFromToken(token);
+      if (riderId) oneSignalLogin(riderId);
+    } else {
+      oneSignalLogout();
     }
   }, [!!token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Navigate to the chat screen when the rider taps a push notification.
+  // Navigate to chat when the rider taps a LOCAL push notification
+  // (scheduled via expo-notifications in the tab layout's onNewMessage).
+  // OneSignal remote-push taps are handled by initOneSignal's click listener.
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
   useEffect(() => {
     responseListener.current =

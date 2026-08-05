@@ -1,4 +1,5 @@
 import app from "./app";
+import { startChatPushWatcher } from "./lib/chatPushWatcher";
 import { logger } from "./lib/logger";
 import { connectMongo } from "./lib/mongo";
 
@@ -18,6 +19,11 @@ if (Number.isNaN(port) || port <= 0) {
 
 async function start() {
   await connectMongo();
+
+  // Start the background watcher that sends OneSignal push notifications to
+  // riders when a customer message arrives while their app is backgrounded.
+  startChatPushWatcher();
+
   app.listen(port, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");
