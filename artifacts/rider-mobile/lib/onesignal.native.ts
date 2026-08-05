@@ -24,15 +24,21 @@ const APP_ID: string =
 
 let initialized = false;
 
+export type PushScreen = "chat" | "newOrder";
+
+export interface PushTapEvent {
+  screen: PushScreen;
+  orderId?: string;
+  customerName?: string;
+  orderNum?: string;
+}
+
 /**
  * Must be called once on app start (before any screen renders).
  *
  * @param onTap  Callback invoked when the rider taps a push notification.
- *               Receives the orderId embedded in the notification data.
  */
-export function initOneSignal(
-  onTap: (orderId: string, customerName?: string, orderNum?: string) => void,
-) {
+export function initOneSignal(onTap: (e: PushTapEvent) => void) {
   if (!APP_ID || initialized) return;
   initialized = true;
 
@@ -44,26 +50,27 @@ export function initOneSignal(
     const data = event.notification.additionalData as
       | Record<string, unknown>
       | undefined;
+    const screen = data?.screen as string | undefined;
     const orderId = data?.orderId as string | undefined;
 
-    if (orderId && getOpenChatOrderId() === orderId) {
-      event.preventDefault(); // rider is in the chat — no system banner needed
+    // Only suppress chat notifications when the rider is already in that chat.
+    if (screen === "chat" && orderId && getOpenChatOrderId() === orderId) {
+      event.preventDefault();
     } else {
-      event.getNotification().display(); // show normally
+      event.getNotification().display();
     }
   });
 
-  // Navigate to the chat screen when the rider taps a notification.
+  // Navigate when the rider taps a notification.
   OneSignal.Notifications.addEventListener("click", (event: any) => {
     const data = event.notification.additionalData as
       | Record<string, unknown>
       | undefined;
+    const screen = (data?.screen as PushScreen | undefined) ?? "chat";
     const orderId = data?.orderId as string | undefined;
     const customerName = data?.customerName as string | undefined;
     const orderNum = data?.orderNum as string | undefined;
-    if (orderId) {
-      onTap(orderId, customerName, orderNum);
-    }
+    onTap({ screen, orderId, customerName, orderNum });
   });
 }
 

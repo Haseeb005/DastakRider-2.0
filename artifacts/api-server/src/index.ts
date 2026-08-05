@@ -1,5 +1,6 @@
 import app from "./app";
 import { startChatPushWatcher } from "./lib/chatPushWatcher";
+import { startOrderPushWatcher } from "./lib/orderPushWatcher";
 import { logger } from "./lib/logger";
 import { connectMongo } from "./lib/mongo";
 
@@ -23,6 +24,7 @@ async function start() {
   // Start the background watcher that sends OneSignal push notifications to
   // riders when a customer message arrives while their app is backgrounded.
   startChatPushWatcher();
+  startOrderPushWatcher();
 
   app.listen(port, (err) => {
     if (err) {

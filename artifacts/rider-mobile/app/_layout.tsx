@@ -112,12 +112,18 @@ function RootLayoutNav() {
   // Initialise OneSignal once — pass a stable navigation callback.
   // initOneSignal is idempotent so calling it in a useEffect is safe.
   useEffect(() => {
-    initOneSignal((orderId, customerName, orderNum) => {
-      const params = new URLSearchParams();
-      if (customerName) params.set("customerName", customerName);
-      if (orderNum) params.set("orderNum", orderNum);
-      const qs = params.toString();
-      router.push(`/chat/${orderId}${qs ? `?${qs}` : ""}` as any);
+    initOneSignal(({ screen, orderId, customerName, orderNum }) => {
+      if (screen === "newOrder") {
+        // Navigate to the Available Orders tab (index tab).
+        router.push("/(tabs)/" as any);
+      } else if (orderId) {
+        // Chat notification — open the specific chat screen.
+        const params = new URLSearchParams();
+        if (customerName) params.set("customerName", customerName);
+        if (orderNum) params.set("orderNum", orderNum);
+        const qs = params.toString();
+        router.push(`/chat/${orderId}${qs ? `?${qs}` : ""}` as any);
+      }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

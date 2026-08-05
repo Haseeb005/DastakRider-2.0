@@ -24,23 +24,17 @@ export interface ChatPushPayload {
   messageText?: string;
 }
 
-/**
- * Send a push notification to the given rider about a new customer chat message.
- * Silently no-ops when the env vars are not configured.
- */
-export async function sendChatPush(payload: ChatPushPayload): Promise<void> {
-  if (!APP_ID || !REST_KEY) {
-    logger.warn("sendChatPush: ONESIGNAL_APP_ID_RIDER or ONESIGNAL_REST_API_KEY_RIDER not set — skipping push");
-    return;
-  }
+export interface NewOrderPushPayload {
+  /** Array of rider MongoDB _ids to notify (OneSignal accepts up to 2 000). */
+  riderIds: string[];
+  orderId: string;
+  orderNum?: string;
+  area?: string;
+}
 
-  const { riderId, orderId, customerName, orderNum, messageText } = payload;
-
-  const heading = customerName
-    ? `Message from ${customerName}`
-    : "New message from customer";
-  const body = messageText || "Tap to reply";
-
+/** Fire-and-forget POST to the OneSignal REST API. */
+async function postNotification(body: Record<string, unknown>): Promise<void> {
+  if (!APP_ID || !REST_KEY) return;
   try {
     const res = await fetch("https://onesignal.com/api/v1/notifications", {
       method: "POST",
@@ -48,31 +42,76 @@ export async function sendChatPush(payload: ChatPushPayload): Promise<void> {
         "Content-Type": "application/json",
         Authorization: `Basic ${REST_KEY}`,
       },
-      body: JSON.stringify({
-        app_id: APP_ID,
-        // Target this specific rider by their external user ID (= riderId).
-        include_aliases: { external_id: [riderId] },
-        target_channel: "push",
-        headings: { en: heading },
-        contents: { en: body },
-        // Data payload — read by OneSignal click handler to navigate to chat.
-        data: {
-          screen: "chat",
-          orderId,
-          ...(customerName ? { customerName } : {}),
-          ...(orderNum ? { orderNum } : {}),
-        },
-        android_channel_id: "default",
-        ios_badge_type: "Increase",
-        ios_badge_count: 1,
-      }),
+      body: JSON.stringify({ app_id: APP_ID, ...body }),
     });
-
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      logger.error({ status: res.status, body: text }, "sendChatPush: OneSignal API error");
+      logger.error({ status: res.status, body: text }, "OneSignal API error");
     }
   } catch (err) {
-    logger.error({ err }, "sendChatPush: network error");
+    logger.error({ err }, "OneSignal: network error");
   }
+}
+
+/**
+ * Send a push notification to the given rider about a new customer chat message.
+ * Silently no-ops when the env vars are not configured.
+ */
+export async function sendChatPush(payload: ChatPushPayload): Promise<void> {
+  if (!APP_ID || !REST_KEY) {
+    logger.warn("sendChatPush: ONESIGNAL env vars not set — skipping");
+    return;
+  }
+  const { riderId, orderId, customerName, orderNum, messageText } = payload;
+  await postNotification({
+    include_aliases: { external_id: [riderId] },
+    target_channel: "push",
+    headings: { en: customerName ? `Message from ${customerName}` : "New message from customer" },
+    contents: { en: messageText || "Tap to reply" },
+    data: {
+      screen: "chat",
+      orderId,
+      ...(customerName ? { customerName } : {}),
+      ...(orderNum ? { orderNum } : {}),
+    },
+    android_channel_id: "default",
+    ios_badge_type: "Increase",
+    ios_badge_count: 1,
+  });
+}
+
+/**
+ * Send a new-order push to multiple riders simultaneously.
+ * OneSignal accepts up to 2 000 external_ids per request.
+ */
+export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<void> {
+  if (!APP_ID || !REST_KEY) {
+    logger.warn("sendNewOrderPush: ONESIGNAL env vars not set — skipping");
+    return;
+  }
+  const { riderIds, orderId, orderNum, area } = payload;
+  if (riderIds.length === 0) return;
+
+  const heading = "New Order Available";
+  const body = [
+    orderNum ? `Order #${orderNum}` : "A new order is waiting",
+    area ? `· ${area}` : "",
+  ]
+    .join(" ")
+    .trim();
+
+  await postNotification({
+    include_aliases: { external_id: riderIds },
+    target_channel: "push",
+    headings: { en: heading },
+    contents: { en: body },
+    data: {
+      screen: "newOrder",
+      orderId,
+      ...(orderNum ? { orderNum } : {}),
+    },
+    android_channel_id: "default",
+    ios_badge_type: "Increase",
+    ios_badge_count: 1,
+  });
 }
