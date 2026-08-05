@@ -2,7 +2,11 @@ import { Icon as AppIcon, type IconName } from "@/components/Icon";
 import { ChatBanner, type BannerInfo } from "@/components/ChatBanner";
 import {
   getGetActiveOrdersQueryKey,
+  getGetAvailableOrdersQueryKey,
+  getGetRiderMeQueryKey,
   useGetActiveOrders,
+  useGetAvailableOrders,
+  useGetRiderMe,
 } from "@workspace/api-client-react";
 import type { SFSymbol } from "expo-symbols";
 import { scheduleNotificationAsync } from "@/lib/localPush";
@@ -15,7 +19,12 @@ import { Pressable, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
 import { getClearedAt, getOpenChatOrderId, subscribe as subscribeBadgeStore } from "@/lib/chatBadgeStore";
-import { getOrderBadgeCount, subscribe as subscribeOrderBadge } from "@/lib/orderBadgeStore";
+import {
+  clearOrderBadge,
+  getOrderBadgeCount,
+  setOrderBadgeCount,
+  subscribe as subscribeOrderBadge,
+} from "@/lib/orderBadgeStore";
 import { useChatWatcher } from "@/lib/useChatWatcher";
 
 type TabBarProps = Parameters<
@@ -132,6 +141,8 @@ function CustomTabBar({
           route.name === "active" && unreadMessages > 0;
 
         const onPress = () => {
+          // Clear new-order badge the instant the rider taps the Orders tab.
+          if (route.name === "index") clearOrderBadge();
           const event = navigation.emit({
             type: "tabPress",
             target: route.key,
@@ -274,6 +285,55 @@ export default function TabLayout() {
       refetchInterval: 10000,
     },
   });
+
+  // ── Available-orders badge ────────────────────────────────────────────────
+  // We detect new "Admin Accepted" orders here (always mounted) rather than
+  // inside index.tsx (only mounted after first visit to Orders tab).
+  const meQ = useGetRiderMe({ query: { queryKey: getGetRiderMeQueryKey(), enabled: !!token } });
+  const isOnline = !!meQ.data?.isOnline;
+  const availableQ = useGetAvailableOrders({
+    query: {
+      queryKey: getGetAvailableOrdersQueryKey(),
+      enabled: !!token && isOnline,
+      refetchInterval: isOnline ? 3000 : false,
+    },
+  });
+
+  const seenOrderIds = useRef<Set<string>>(new Set());
+  const seededOrders = useRef(false);
+
+  useEffect(() => {
+    const orders = availableQ.data;
+    if (!orders) return;
+    if (!isOnline) {
+      // Rider went offline — reset so we re-seed when they come back online.
+      seenOrderIds.current = new Set();
+      seededOrders.current = false;
+      setOrderBadgeCount(0);
+      return;
+    }
+    const presentIds = new Set(orders.map((o) => o.id));
+    if (!seededOrders.current) {
+      // First load: seed seen set silently so existing orders don't trigger badge.
+      orders.forEach((o) => seenOrderIds.current.add(o.id));
+      seededOrders.current = true;
+      return;
+    }
+    const fresh = orders.filter((o) => !seenOrderIds.current.has(o.id));
+    fresh.forEach((o) => seenOrderIds.current.add(o.id));
+
+    if (fresh.length > 0) {
+      // New orders arrived — add to badge count.
+      setOrderBadgeCount(getOrderBadgeCount() + fresh.length);
+    } else {
+      // Prune orders that left (accepted by another rider); cap badge at remaining.
+      const remaining = Array.from(seenOrderIds.current).filter((id) => presentIds.has(id)).length;
+      // Only reduce if badge would exceed remaining (don't clear manually-cleared badge).
+      const current = getOrderBadgeCount();
+      if (current > remaining) setOrderBadgeCount(remaining);
+    }
+  }, [availableQ.data, isOnline]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Chat watcher runs at the tabs-root level so it stays alive on every tab.
   const activeOrderIds = (activeQ.data ?? []).map((o) => o.id);

@@ -31,7 +31,7 @@ import { OrderDetailModal } from "@/components/OrderDetailModal";
 import { Button, EmptyState, Loading } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useOrderAlert } from "@/lib/alert";
-import { clearOrderBadge, setOrderBadgeCount } from "@/lib/orderBadgeStore";
+import { clearOrderBadge } from "@/lib/orderBadgeStore";
 
 const EMPTY_ORDERS: RiderOrder[] = [];
 
@@ -127,12 +127,8 @@ export default function AvailableScreen() {
 
   const { newCount, clearNew } = useOrderAlert(orders, isOnline);
 
-  // Keep the tab-bar badge in sync with the new-order count.
-  useEffect(() => {
-    setOrderBadgeCount(newCount);
-  }, [newCount]);
-
-  // Clear the badge as soon as the rider focuses this tab.
+  // Clear the badge as soon as the rider focuses this tab (belt-and-suspenders
+  // alongside the tab-bar onPress clear in _layout.tsx).
   useFocusEffect(
     useCallback(() => {
       clearOrderBadge();
