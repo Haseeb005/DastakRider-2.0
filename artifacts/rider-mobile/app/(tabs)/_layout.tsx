@@ -15,6 +15,7 @@ import { Pressable, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
 import { getClearedAt, getOpenChatOrderId, subscribe as subscribeBadgeStore } from "@/lib/chatBadgeStore";
+import { getOrderBadgeCount, subscribe as subscribeOrderBadge } from "@/lib/orderBadgeStore";
 import { useChatWatcher } from "@/lib/useChatWatcher";
 
 type TabBarProps = Parameters<
@@ -79,6 +80,10 @@ function CustomTabBar({
 }: TabBarProps & { unreadMessages?: number }) {
   const c = useColors();
   const { token } = useAuth();
+
+  // Subscribe to new-order badge count so the Orders tab re-renders.
+  const [, tickOrder] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => subscribeOrderBadge(tickOrder), []);
   const activeQ = useGetActiveOrders({
     query: {
       queryKey: getGetActiveOrdersQueryKey(),
@@ -114,7 +119,14 @@ function CustomTabBar({
         if (!meta) return null;
 
         const isFocused = state.index === index;
-        const color = isFocused ? c.primary : c.mutedForeground;
+        const newOrderCount = getOrderBadgeCount();
+        const hasNewOrders = route.name === "index" && newOrderCount > 0;
+        // Orders tab turns crimson when there are new available orders.
+        const color = hasNewOrders
+          ? "#DB143C"
+          : isFocused
+            ? c.primary
+            : c.mutedForeground;
         const showBadge = route.name === "active" && activeCount > 0;
         const showUnreadDot =
           route.name === "active" && unreadMessages > 0;
@@ -153,6 +165,32 @@ function CustomTabBar({
             ) : null}
             <View>
               <AppIcon name={meta.feather} size={24} color={color} />
+              {hasNewOrders ? (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -6,
+                    right: -10,
+                    minWidth: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: "#DB143C",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 10,
+                      fontFamily: "Inter_700Bold",
+                    }}
+                  >
+                    {newOrderCount}
+                  </Text>
+                </View>
+              ) : null}
               {showBadge ? (
                 <View
                   style={{

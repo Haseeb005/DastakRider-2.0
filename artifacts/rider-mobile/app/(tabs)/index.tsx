@@ -11,7 +11,8 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
@@ -30,6 +31,7 @@ import { OrderDetailModal } from "@/components/OrderDetailModal";
 import { Button, EmptyState, Loading } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useOrderAlert } from "@/lib/alert";
+import { clearOrderBadge, setOrderBadgeCount } from "@/lib/orderBadgeStore";
 
 const EMPTY_ORDERS: RiderOrder[] = [];
 
@@ -124,6 +126,18 @@ export default function AvailableScreen() {
   const orders = ordersQ.data ?? EMPTY_ORDERS;
 
   const { newCount, clearNew } = useOrderAlert(orders, isOnline);
+
+  // Keep the tab-bar badge in sync with the new-order count.
+  useEffect(() => {
+    setOrderBadgeCount(newCount);
+  }, [newCount]);
+
+  // Clear the badge as soon as the rider focuses this tab.
+  useFocusEffect(
+    useCallback(() => {
+      clearOrderBadge();
+    }, []),
+  );
 
   const availabilityM = useUpdateRiderAvailability();
   const acceptM = useAcceptOrder();
