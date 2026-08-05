@@ -15,7 +15,7 @@ import {
 import * as Sentry from "@sentry/react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 
 // Initialise Sentry as early as possible — before any component renders.
 // In production the DSN comes from the EAS env var; in dev it falls back
@@ -36,6 +36,7 @@ import { AuthProvider, TOKEN_KEY, useAuth } from "@/lib/auth";
 // Side-effect import — registers the background location task with TaskManager
 // before any screen mounts. Must stay at module level.
 import "@/lib/locationTask";
+import * as Notifications from "expo-notifications";
 import {
   ensureNotificationHandler,
   requestNotificationPermission,
@@ -90,6 +91,30 @@ function RootLayoutNav() {
       requestNotificationPermission().catch(() => {});
     }
   }, [!!token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Navigate to the chat screen when the rider taps a push notification.
+  const responseListener = useRef<Notifications.EventSubscription | null>(null);
+  useEffect(() => {
+    responseListener.current =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data as
+          | Record<string, unknown>
+          | undefined;
+        const orderId = data?.orderId as string | undefined;
+        const customerName = data?.customerName as string | undefined;
+        const orderNum = data?.orderNum as string | undefined;
+        if (orderId) {
+          const params = new URLSearchParams();
+          if (customerName) params.set("customerName", customerName);
+          if (orderNum) params.set("orderNum", orderNum);
+          const qs = params.toString();
+          router.push(`/chat/${orderId}${qs ? `?${qs}` : ""}` as any);
+        }
+      });
+    return () => {
+      responseListener.current?.remove();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isReady) return;

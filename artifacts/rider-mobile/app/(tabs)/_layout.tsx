@@ -1,17 +1,20 @@
 import { Icon as AppIcon, type IconName } from "@/components/Icon";
+import { ChatBanner, type BannerInfo } from "@/components/ChatBanner";
 import {
   getGetActiveOrdersQueryKey,
   useGetActiveOrders,
 } from "@workspace/api-client-react";
 import type { SFSymbol } from "expo-symbols";
+import * as Notifications from "expo-notifications";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
-import React from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
+import { getOpenChatOrderId } from "@/lib/chatBadgeStore";
 import { useChatWatcher } from "@/lib/useChatWatcher";
 
 type TabBarProps = Parameters<
@@ -233,10 +236,42 @@ export default function TabLayout() {
       refetchInterval: 10000,
     },
   });
-  // Chat watcher runs at the tabs-root level so it stays alive on every tab,
-  // not just when the rider is looking at the Active screen.
+
+  // Chat watcher runs at the tabs-root level so it stays alive on every tab.
   const activeOrderIds = (activeQ.data ?? []).map((o) => o.id);
-  const { messagesByOrderId } = useChatWatcher(activeOrderIds);
+
+  // Banner + push notification state lives here so it fires on any tab.
+  const [banner, setBanner] = useState<BannerInfo | null>(null);
+  const activeOrdersRef = useRef(activeQ.data ?? []);
+  activeOrdersRef.current = activeQ.data ?? [];
+
+  const onNewMessage = useCallback((orderId: string) => {
+    // Don't interrupt the rider if they're already in this chat.
+    if (getOpenChatOrderId() === orderId) return;
+
+    const order = activeOrdersRef.current.find((o) => o.id === orderId);
+    setBanner({
+      orderId,
+      customerName: order?.userName ?? undefined,
+      orderNum: order?.orderNum ? String(order.orderNum) : undefined,
+    });
+
+    // Local push — shows a system notification when the app is foregrounded
+    // on a different screen. (Background push requires server-side FCM/APNs.)
+    Notifications.scheduleNotificationAsync({
+      content: {
+        title: order?.userName
+          ? `Message from ${order.userName}`
+          : "New message from customer",
+        body: "Tap to reply",
+        sound: true,
+        data: { orderId, screen: "chat" },
+      },
+      trigger: null,
+    }).catch(() => {});
+  }, []);
+
+  const { messagesByOrderId } = useChatWatcher(activeOrderIds, onNewMessage);
 
   // Total unread customer messages across all active orders — drives the
   // red dot on the Active tab so riders notice new messages from any tab.
@@ -247,7 +282,17 @@ export default function TabLayout() {
   );
 
   if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
+    return (
+      <>
+        <NativeTabLayout />
+        <ChatBanner banner={banner} onDismiss={() => setBanner(null)} />
+      </>
+    );
   }
-  return <ClassicTabLayout unreadMessages={totalUnreadMessages} />;
+  return (
+    <>
+      <ClassicTabLayout unreadMessages={totalUnreadMessages} />
+      <ChatBanner banner={banner} onDismiss={() => setBanner(null)} />
+    </>
+  );
 }

@@ -45,6 +45,13 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-notifications",
+        {
+          "color": "#DB143C",
+          "defaultChannel": "default"
+        }
+      ],
       "expo-web-browser",
       [
         "expo-location",

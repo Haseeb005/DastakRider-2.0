@@ -3,10 +3,11 @@
  *
  * Tracks the number of unread customer messages for a single order.
  * - Polls every POLL_MS and updates on WebSocket "change" events.
- * - Fires a local expo-notifications push when the count increases and the
- *   chat screen for this order is not currently open.
  * - Respects the chatBadgeStore "cleared at" watermark so badges clear the
  *   moment the rider opens the chat screen, even before the server confirms.
+ *
+ * Push notifications for new messages are handled at the tab-layout level
+ * (useChatWatcher → onNewMessage) so they fire on every tab.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -142,37 +143,9 @@ export function useChatUnread(orderId: string, customerName?: string): number {
       if (!seededRef.current) {
         // First fetch: establish the baseline silently — no notification.
         seededRef.current = true;
-      } else if (
-        Platform.OS !== "web" &&
-        count > prevCountRef.current &&
-        getOpenChatOrderId() !== orderId
-      ) {
-        // Subsequent fetches: notify only when the count genuinely increased
-        // and the rider is not already in this order's chat screen.
-        // Throttle per order to avoid duplicate alerts from WS + poll bursts.
-        const lastNotif = notifThrottleByOrder.get(orderId) ?? 0;
-        if (Date.now() - lastNotif > NOTIF_THROTTLE_MS) {
-          notifThrottleByOrder.set(orderId, Date.now());
-          const delta = count - prevCountRef.current;
-          const senderLabel = customerName?.trim() || null;
-          Notifications.scheduleNotificationAsync({
-            content: {
-              title: senderLabel
-                ? `Message from ${senderLabel}`
-                : "New message from customer",
-              body:
-                delta === 1
-                  ? senderLabel
-                    ? `${senderLabel} sent you a message`
-                    : "The customer sent you a message"
-                  : senderLabel
-                    ? `${senderLabel} sent you ${delta} new messages`
-                    : `${delta} new messages from the customer`,
-              sound: true,
-            },
-            trigger: null, // fire immediately
-          }).catch(() => {});
-        }
+        // Note: push notifications for new messages are fired at the tab-layout
+        // level (useChatWatcher onNewMessage) so they work on every tab, not just
+        // when this hook is mounted. This hook is responsible for badge counts only.
       }
 
       prevCountRef.current = count;

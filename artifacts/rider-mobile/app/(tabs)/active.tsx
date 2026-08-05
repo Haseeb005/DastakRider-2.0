@@ -11,7 +11,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -22,7 +22,6 @@ import {
 } from "react-native";
 
 import { ChatBadgeButton } from "@/components/ChatBadgeButton";
-import { ChatBanner, type BannerInfo } from "@/components/ChatBanner";
 import { OrderCard } from "@/components/OrderCard";
 import { OrderDetailModal } from "@/components/OrderDetailModal";
 import { Button, EmptyState, ScreenHeader } from "@/components/ui";
@@ -47,8 +46,6 @@ export default function ActiveScreen() {
   const [seenUnreadIds, setSeenUnreadIds] = useState<
     Record<string, Set<string>>
   >({});
-  const [banner, setBanner] = useState<BannerInfo | null>(null);
-
   const ordersQ = useGetActiveOrders({
     query: {
       queryKey: getGetActiveOrdersQueryKey(),
@@ -59,20 +56,10 @@ export default function ActiveScreen() {
   const orders = ordersQ.data ?? [];
   const orderIds = orders.map((o) => o.id);
 
-  // Stable ref so the callback never re-triggers the watcher subscription.
-  const ordersRef = useRef(orders);
-  ordersRef.current = orders;
-  const onNewMessage = useCallback((orderId: string) => {
-    const order = ordersRef.current.find((o: { id: string; userName?: string | null; orderNum?: string | number | null }) => o.id === orderId);
-    setBanner({
-      orderId,
-      customerName: order?.userName ?? undefined,
-      orderNum: order?.orderNum ? String(order.orderNum) : undefined,
-    });
-  }, []);
-
   // Background chat watcher — keeps message counts fresh for the card-level badge.
-  const { messagesByOrderId } = useChatWatcher(orderIds, onNewMessage);
+  // Banner + push notifications are handled at the tab-layout level (_layout.tsx)
+  // so they work on every tab, not just when this screen is mounted.
+  const { messagesByOrderId } = useChatWatcher(orderIds);
 
   // Returns the number of customer messages that arrived AFTER the rider last
   // opened the chat for this order — used for the OrderCard corner badge.
@@ -306,8 +293,6 @@ export default function ActiveScreen() {
         onClose={() => setSelected(null)}
       />
 
-      {/* Slide-in banner when a customer message arrives */}
-      <ChatBanner banner={banner} onDismiss={() => setBanner(null)} />
     </View>
   );
 }
