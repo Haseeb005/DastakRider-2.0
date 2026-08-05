@@ -9,12 +9,12 @@ import { scheduleNotificationAsync } from "@/lib/localPush";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
-import { getOpenChatOrderId } from "@/lib/chatBadgeStore";
+import { getOpenChatOrderId, subscribe as subscribeBadgeStore } from "@/lib/chatBadgeStore";
 import { useChatWatcher } from "@/lib/useChatWatcher";
 
 type TabBarProps = Parameters<
@@ -240,6 +240,11 @@ export default function TabLayout() {
   // Chat watcher runs at the tabs-root level so it stays alive on every tab.
   const activeOrderIds = (activeQ.data ?? []).map((o) => o.id);
 
+  // Re-render whenever the rider opens or closes a chat screen so the dot
+  // disappears immediately while they are actively reading.
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => subscribeBadgeStore(rerender), []);
+
   // Banner + push notification state lives here so it fires on any tab.
   const [banner, setBanner] = useState<BannerInfo | null>(null);
   const activeOrdersRef = useRef(activeQ.data ?? []);
@@ -275,9 +280,13 @@ export default function TabLayout() {
 
   // Total unread customer messages across all active orders — drives the
   // red dot on the Active tab so riders notice new messages from any tab.
-  const totalUnreadMessages = Object.values(messagesByOrderId).reduce(
-    (sum, msgs) =>
-      sum + msgs.filter((m) => m.fromRole === "customer" && !m.read).length,
+  // Exclude the order whose chat the rider currently has open — no dot while reading.
+  const openChatOrderId = getOpenChatOrderId();
+  const totalUnreadMessages = Object.entries(messagesByOrderId).reduce(
+    (sum, [orderId, msgs]) => {
+      if (orderId === openChatOrderId) return sum;
+      return sum + msgs.filter((m) => m.fromRole === "customer" && !m.read).length;
+    },
     0,
   );
 
