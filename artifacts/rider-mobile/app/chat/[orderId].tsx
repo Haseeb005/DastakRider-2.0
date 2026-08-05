@@ -7,6 +7,7 @@ import { TOKEN_KEY } from "@/lib/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
+import type { ChatMessage } from "@/lib/useChatWatcher";
 
 const CHAT_BASE = process.env.EXPO_PUBLIC_DOMAIN
   ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
@@ -22,12 +23,36 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+/** Returns a human-readable presence string based on the customer's last message. */
+function useCustomerPresence(messages: ChatMessage[]): { label: string; active: boolean } {
+  const [, tick] = useState(0);
+
+  // Re-evaluate every 30 s so "X min ago" stays current.
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const lastCustomer = [...messages].reverse().find((m) => m.fromRole === "customer");
+  if (!lastCustomer?.createdAt) return { label: "Active", active: true };
+
+  const diffMs = Date.now() - new Date(lastCustomer.createdAt).getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+
+  if (diffMin < 5) return { label: "Active now", active: true };
+  if (diffMin < 60) return { label: `Active ${diffMin}m ago`, active: false };
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return { label: `Active ${diffH}h ago`, active: false };
+  return { label: "Active today", active: false };
+}
+
 export default function ChatScreen() {
   const { orderId, orderNum, customerName } = useLocalSearchParams<{ orderId: string; orderNum?: string; customerName?: string }>();
   const router = useRouter();
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { messages, loading, sending, sendMessage } = useOrderChat(orderId);
+  const presence = useCustomerPresence(messages);
   const [text, setText] = useState("");
   const inputRef = useRef<TextInput>(null);
 
@@ -93,18 +118,39 @@ export default function ChatScreen() {
               color: c.foreground,
             }}
           >
-            {customerName ? customerName : "Chat with Customer"}
+            {customerName || "Chat with Customer"}
           </Text>
-          <Text
-            style={{
-              fontFamily: "Inter_400Regular",
-              fontSize: 12,
-              color: c.mutedForeground,
-            }}
-          >
-            {orderNum ? `Order #${orderNum}` : `Order #${String(orderId).slice(-6).toUpperCase()}`}
-          </Text>
+          {/* Presence row */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 }}>
+            <View
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: 4,
+                backgroundColor: presence.active ? "#22c55e" : c.mutedForeground,
+              }}
+            />
+            <Text
+              style={{
+                fontFamily: "Inter_400Regular",
+                fontSize: 12,
+                color: presence.active ? "#22c55e" : c.mutedForeground,
+              }}
+            >
+              {presence.label}
+            </Text>
+          </View>
         </View>
+        {/* Order number — right side of header */}
+        <Text
+          style={{
+            fontFamily: "Inter_400Regular",
+            fontSize: 12,
+            color: c.mutedForeground,
+          }}
+        >
+          {orderNum ? `#${orderNum}` : `#${String(orderId).slice(-6).toUpperCase()}`}
+        </Text>
       </View>
 
       {/* Messages */}

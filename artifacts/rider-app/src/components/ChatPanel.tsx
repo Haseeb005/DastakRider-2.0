@@ -9,8 +9,29 @@ interface ChatPanelProps {
   onClose: () => void;
 }
 
+type Msg = { fromRole: "rider" | "customer"; createdAt?: string };
+
+function useCustomerPresence(messages: Msg[]): { label: string; active: boolean } {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const last = [...messages].reverse().find((m) => m.fromRole === "customer");
+  if (!last?.createdAt) return { label: "Active", active: true };
+
+  const diffMin = Math.floor((Date.now() - new Date(last.createdAt).getTime()) / 60_000);
+  if (diffMin < 5) return { label: "Active now", active: true };
+  if (diffMin < 60) return { label: `Active ${diffMin}m ago`, active: false };
+  const h = Math.floor(diffMin / 60);
+  if (h < 24) return { label: `Active ${h}h ago`, active: false };
+  return { label: "Active today", active: false };
+}
+
 export function ChatPanel({ orderId, orderNum, customerName, onClose }: ChatPanelProps) {
   const { messages, loading, sending, sendMessage } = useOrderChat(orderId);
+  const presence = useCustomerPresence(messages);
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -63,11 +84,20 @@ export function ChatPanel({ orderId, orderNum, customerName, onClose }: ChatPane
         </button>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 truncate">{customerName || "Chat with Customer"}</p>
-          {orderNum && (
-            <p className="text-xs text-gray-500">Order #{orderNum}</p>
-          )}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span
+              className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+                presence.active ? "bg-green-500 animate-pulse" : "bg-gray-400"
+              }`}
+            />
+            <span className={`text-xs ${presence.active ? "text-green-600" : "text-gray-400"}`}>
+              {presence.label}
+            </span>
+          </div>
         </div>
-        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" title="Connected" />
+        {orderNum && (
+          <span className="text-xs text-gray-400 shrink-0">#{orderNum}</span>
+        )}
       </div>
 
       {/* Messages */}
