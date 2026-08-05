@@ -299,39 +299,50 @@ export default function TabLayout() {
     },
   });
 
-  const seenOrderIds = useRef<Set<string>>(new Set());
-  const seededOrders = useRef(false);
+  // seenIds   — all IDs ever seen (prevents re-alerting after re-seed)
+  // newIds    — IDs currently contributing to the badge count
+  // seeded    — whether we've done the silent first-load seed
+  const seenIds = useRef<Set<string>>(new Set());
+  const newIds = useRef<Set<string>>(new Set());
+  const seeded = useRef(false);
 
   useEffect(() => {
     const orders = availableQ.data;
     if (!orders) return;
+
     if (!isOnline) {
-      // Rider went offline — reset so we re-seed when they come back online.
-      seenOrderIds.current = new Set();
-      seededOrders.current = false;
+      // Rider went offline — full reset so re-seeding works on next login.
+      seenIds.current = new Set();
+      newIds.current = new Set();
+      seeded.current = false;
       setOrderBadgeCount(0);
       return;
     }
+
     const presentIds = new Set(orders.map((o) => o.id));
-    if (!seededOrders.current) {
-      // First load: seed seen set silently so existing orders don't trigger badge.
-      orders.forEach((o) => seenOrderIds.current.add(o.id));
-      seededOrders.current = true;
+
+    if (!seeded.current) {
+      // First data load: silently mark all current orders as seen.
+      orders.forEach((o) => seenIds.current.add(o.id));
+      seeded.current = true;
       return;
     }
-    const fresh = orders.filter((o) => !seenOrderIds.current.has(o.id));
-    fresh.forEach((o) => seenOrderIds.current.add(o.id));
 
-    if (fresh.length > 0) {
-      // New orders arrived — add to badge count.
-      setOrderBadgeCount(getOrderBadgeCount() + fresh.length);
-    } else {
-      // Prune orders that left (accepted by another rider); cap badge at remaining.
-      const remaining = Array.from(seenOrderIds.current).filter((id) => presentIds.has(id)).length;
-      // Only reduce if badge would exceed remaining (don't clear manually-cleared badge).
-      const current = getOrderBadgeCount();
-      if (current > remaining) setOrderBadgeCount(remaining);
-    }
+    // Add genuinely new orders to both tracking sets.
+    orders.forEach((o) => {
+      if (!seenIds.current.has(o.id)) {
+        seenIds.current.add(o.id);
+        newIds.current.add(o.id);
+      }
+    });
+
+    // Remove badged orders that are no longer in the available list
+    // (accepted by this rider, taken by another, or cancelled).
+    newIds.current.forEach((id) => {
+      if (!presentIds.has(id)) newIds.current.delete(id);
+    });
+
+    setOrderBadgeCount(newIds.current.size);
   }, [availableQ.data, isOnline]);
   // ─────────────────────────────────────────────────────────────────────────
 
