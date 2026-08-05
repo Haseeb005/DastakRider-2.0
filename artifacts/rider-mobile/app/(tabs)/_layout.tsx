@@ -14,7 +14,7 @@ import { Pressable, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
-import { getOpenChatOrderId, subscribe as subscribeBadgeStore } from "@/lib/chatBadgeStore";
+import { getClearedAt, getOpenChatOrderId, subscribe as subscribeBadgeStore } from "@/lib/chatBadgeStore";
 import { useChatWatcher } from "@/lib/useChatWatcher";
 
 type TabBarProps = Parameters<
@@ -280,12 +280,25 @@ export default function TabLayout() {
 
   // Total unread customer messages across all active orders — drives the
   // red dot on the Active tab so riders notice new messages from any tab.
-  // Exclude the order whose chat the rider currently has open — no dot while reading.
+  // Uses the getClearedAt watermark (set when rider opens a chat) so the dot
+  // clears immediately on the client without waiting for the server read flag.
   const openChatOrderId = getOpenChatOrderId();
   const totalUnreadMessages = Object.entries(messagesByOrderId).reduce(
     (sum, [orderId, msgs]) => {
-      if (orderId === openChatOrderId) return sum;
-      return sum + msgs.filter((m) => m.fromRole === "customer" && !m.read).length;
+      if (orderId === openChatOrderId) return sum; // rider is in this chat right now
+      const clearedAt = getClearedAt(orderId);
+      return (
+        sum +
+        msgs.filter((m) => {
+          if (m.fromRole !== "customer" || m.read) return false;
+          if (clearedAt > 0) {
+            // Only count messages that arrived after the rider last read this chat.
+            if (m.createdAt) return new Date(m.createdAt).getTime() > clearedAt;
+            return false; // no timestamp — assume seen
+          }
+          return true; // rider has never opened this chat
+        }).length
+      );
     },
     0,
   );
