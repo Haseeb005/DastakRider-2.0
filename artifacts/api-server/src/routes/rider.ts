@@ -588,6 +588,7 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       const windowStart = pkt8AMCutoff();
       const staleOrder = await ordersCol().findOne({
         riderId,
+        status: "Delivered",          // only truly delivered orders hold cash
         timeWhenDelivered: { $exists: true, $gt: "" },
         createdAt: { $lt: windowStart },
         $expr: {
