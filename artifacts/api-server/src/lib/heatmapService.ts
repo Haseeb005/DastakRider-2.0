@@ -74,7 +74,8 @@ export function getHeatmapSnapshot(city?: string): HeatmapSnapshot {
   if (!city) return cachedSnapshot;
   return {
     ...cachedSnapshot,
-    zones: cachedSnapshot.zones.filter((z) => z.city === city),
+    zones:       cachedSnapshot.zones.filter((z) => z.city === city),
+    restaurants: cachedSnapshot.restaurants.filter((r) => r.city === city),
   };
 }
 
