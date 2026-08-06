@@ -913,7 +913,17 @@ router.get("/rider/heatmap", async (req: any, res: any) => {
     if (!riderId) return;
 
     const days = Math.min(Math.max(parseInt(String(req.query.days ?? "30"), 10) || 30, 1), 90);
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const todayOnly = req.query.today === "true";
+
+    // For "today": start of current day in Asia/Karachi (UTC+5).
+    // dateForSearching stores midnight-UTC of the local Pakistan date, so we
+    // compare against midnight PKT expressed as a UTC Date.
+    const pktOffsetMs = 5 * 60 * 60 * 1000;
+    const nowPkt = new Date(Date.now() + pktOffsetMs);
+    const todayStartPkt = new Date(
+      Date.UTC(nowPkt.getUTCFullYear(), nowPkt.getUTCMonth(), nowPkt.getUTCDate())
+    );
+    const since = todayOnly ? todayStartPkt : new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     // Pull all delivered orders in the window that have coordinates.
     const raw = await ordersCol()

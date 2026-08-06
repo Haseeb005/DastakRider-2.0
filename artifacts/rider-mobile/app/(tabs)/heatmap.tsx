@@ -18,7 +18,8 @@ const API_BASE =
     ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
     : (process.env.EXPO_PUBLIC_API_URL ?? "https://dastakbites.com");
 
-const PERIODS: { label: string; days: number }[] = [
+const PERIODS: { label: string; days: number; today?: boolean }[] = [
+  { label: "Today", days: 0, today: true },
   { label: "7 days", days: 7 },
   { label: "30 days", days: 30 },
   { label: "90 days", days: 90 },
@@ -93,7 +94,9 @@ export default function HeatmapScreen() {
     setError(null);
     setHtml(null);
 
-    fetch(`${API_BASE}/api/rider/heatmap?days=${selectedDays}`, {
+    const period = PERIODS.find((p) => p.days === selectedDays);
+    const query = period?.today ? "today=true" : `days=${selectedDays}`;
+    fetch(`${API_BASE}/api/rider/heatmap?${query}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => {
