@@ -27,10 +27,7 @@ import { OrderDetailModal } from "@/components/OrderDetailModal";
 import { Button, EmptyState, ScreenHeader } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
-import {
-  ensureLocationPermission,
-  useLocationTracking,
-} from "@/lib/useLocationTracking";
+import { ensureLocationPermission } from "@/lib/useLocationTracking";
 import { useChatWatcher } from "@/lib/useChatWatcher";
 
 export default function ActiveScreen() {
@@ -70,21 +67,8 @@ export default function ActiveScreen() {
     ).length;
   };
 
-  // Track ALL "Rider Picked Up" orders concurrently (fix: was only tracking first one).
-  const trackIds = orders
-    .filter((o) => o.status === "Rider Picked Up")
-    .map((o) => o.id);
-  const locationStatus = useLocationTracking(trackIds);
-
-  // Alert the rider the moment live sharing drops mid-delivery.
-  useEffect(() => {
-    if (locationStatus === "error") {
-      Alert.alert(
-        "Live location sharing stopped",
-        "The customer can't track your delivery. Re-enable location access to keep sharing.",
-      );
-    }
-  }, [locationStatus]);
+  // Location tracking is lifted to _layout.tsx (always mounted) so it
+  // survives tab switches. Nothing to do here.
 
   const statusM = useUpdateOrderStatus();
   const arrivedM = useMarkOrderArrived();

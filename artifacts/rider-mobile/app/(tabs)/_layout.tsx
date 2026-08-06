@@ -14,7 +14,7 @@ import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import React, { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
@@ -26,6 +26,7 @@ import {
   subscribe as subscribeOrderBadge,
 } from "@/lib/orderBadgeStore";
 import { useChatWatcher } from "@/lib/useChatWatcher";
+import { useLocationTracking } from "@/lib/useLocationTracking";
 
 type TabBarProps = Parameters<
   NonNullable<React.ComponentProps<typeof Tabs>["tabBar"]>
@@ -348,6 +349,24 @@ export default function TabLayout() {
 
   // Chat watcher runs at the tabs-root level so it stays alive on every tab.
   const activeOrderIds = (activeQ.data ?? []).map((o) => o.id);
+
+  // ── Live GPS tracking ─────────────────────────────────────────────────────
+  // Lifted here (always-mounted layout) so location sharing survives tab
+  // switches. Only tracks orders whose status is "Rider Picked Up".
+  const trackIds = (activeQ.data ?? [])
+    .filter((o) => o.status === "Rider Picked Up")
+    .map((o) => o.id);
+  const locationStatus = useLocationTracking(trackIds);
+
+  useEffect(() => {
+    if (locationStatus === "error") {
+      Alert.alert(
+        "Live location sharing stopped",
+        "The customer can't track your delivery. Re-enable location access to keep sharing.",
+      );
+    }
+  }, [locationStatus]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Re-render whenever the rider opens or closes a chat screen so the dot
   // disappears immediately while they are actively reading.
