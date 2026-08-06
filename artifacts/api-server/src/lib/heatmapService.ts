@@ -41,8 +41,22 @@ export interface HeatmapZone {
   city: string;
 }
 
+export interface RestaurantHotspot {
+  name: string;
+  lat: number;
+  lng: number;
+  city: string;
+  weeklyOrders: number;   // orders in last 7 days
+  waitingOrders: number;  // currently waiting for a rider
+  recentOrders: number;   // created in last 15 min
+  score: number;          // 0-100 demand score
+  color: string;          // hex colour matching score
+  label: string;
+}
+
 export interface HeatmapSnapshot {
   zones: HeatmapZone[];
+  restaurants: RestaurantHotspot[];
   updatedAt: string;    // ISO timestamp
   cities: string[];
 }
@@ -51,6 +65,7 @@ export interface HeatmapSnapshot {
 
 let cachedSnapshot: HeatmapSnapshot = {
   zones: [],
+  restaurants: [],
   updatedAt: new Date().toISOString(),
   cities: [],
 };
@@ -302,10 +317,122 @@ async function recalculate(): Promise<void> {
     // Sort hottest first (useful for admin / debugging)
     zones.sort((a, b) => b.score - a.score);
 
-    const cities = [...new Set(zones.map((z) => z.city).filter(Boolean))];
+    // ── 6. Restaurant hotspots ────────────────────────────────────────────
+    // Aggregate orders by mart (restaurant) to show which outlets are
+    // generating the most demand right now and over the last 7 days.
+    const since7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Weekly volume per restaurant
+    const weeklyAgg = await ordersCol()
+      .aggregate([
+        {
+          $match: {
+            createdAt: { $gte: since7d },
+            martName: { $exists: true, $nin: [null, ""] },
+            martLatitude: { $exists: true, $nin: [null, ""] },
+            martLongitude: { $exists: true, $nin: [null, ""] },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              name: "$martName",
+              lat: "$martLatitude",
+              lng: "$martLongitude",
+              city: "$city",
+            },
+            weeklyOrders: { $sum: 1 },
+          },
+        },
+        { $sort: { weeklyOrders: -1 } },
+        { $limit: 100 },
+      ])
+      .toArray();
+
+    // Waiting orders per restaurant (Admin Accepted, no riderId)
+    const waitingAgg = await ordersCol()
+      .aggregate([
+        {
+          $match: {
+            status: "Admin Accepted",
+            $or: [{ riderId: { $exists: false } }, { riderId: "" }],
+            martName: { $exists: true, $nin: [null, ""] },
+          },
+        },
+        { $group: { _id: "$martName", waitingOrders: { $sum: 1 } } },
+      ])
+      .toArray();
+    const waitingByMart = new Map<string, number>(
+      waitingAgg.map((r: any) => [r._id, r.waitingOrders]),
+    );
+
+    // New orders in last 15 min per restaurant
+    const recentAgg = await ordersCol()
+      .aggregate([
+        {
+          $match: {
+            createdAt: { $gte: since15 },
+            martName: { $exists: true, $nin: [null, ""] },
+          },
+        },
+        { $group: { _id: "$martName", recentOrders: { $sum: 1 } } },
+      ])
+      .toArray();
+    const recentByMart = new Map<string, number>(
+      recentAgg.map((r: any) => [r._id, r.recentOrders]),
+    );
+
+    // Build scored restaurant list
+    const maxWeekly = Math.max(...weeklyAgg.map((r: any) => r.weeklyOrders), 1);
+    const maxWaiting = Math.max(...[...waitingByMart.values()], 1);
+    const maxRecent  = Math.max(...[...recentByMart.values()], 1);
+
+    const restaurants: RestaurantHotspot[] = weeklyAgg
+      .map((r: any) => {
+        const name = r._id.name as string;
+        const lat  = safeFloat(r._id.lat);
+        const lng  = safeFloat(r._id.lng);
+        if (lat === null || lng === null) return null;
+
+        const waiting = waitingByMart.get(name) ?? 0;
+        const recent  = recentByMart.get(name)  ?? 0;
+
+        // Score: 50% weekly history, 35% waiting now, 15% last-15-min new
+        const rawScore =
+          (r.weeklyOrders / maxWeekly) * 50 +
+          (waiting / maxWaiting) * 35 +
+          (recent / maxRecent) * 15;
+
+        const score = Math.round(Math.min(100, rawScore));
+        const { color, label } = scoreToColor(score);
+
+        return {
+          name,
+          lat,
+          lng,
+          city: (r._id.city as string) ?? "",
+          weeklyOrders: r.weeklyOrders as number,
+          waitingOrders: waiting,
+          recentOrders: recent,
+          score,
+          color,
+          label,
+        } satisfies RestaurantHotspot;
+      })
+      .filter(Boolean) as RestaurantHotspot[];
+
+    // Sort hottest restaurant first
+    restaurants.sort((a, b) => b.score - a.score);
+
+    const cities = [
+      ...new Set(
+        [...zones.map((z) => z.city), ...restaurants.map((r) => r.city)].filter(Boolean),
+      ),
+    ];
 
     cachedSnapshot = {
       zones,
+      restaurants,
       updatedAt: now.toISOString(),
       cities,
     };

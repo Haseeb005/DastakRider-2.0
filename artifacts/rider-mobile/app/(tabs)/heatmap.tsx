@@ -48,8 +48,22 @@ interface HeatmapZone {
   city: string;
 }
 
+interface RestaurantHotspot {
+  name: string;
+  lat: number;
+  lng: number;
+  city: string;
+  weeklyOrders: number;
+  waitingOrders: number;
+  recentOrders: number;
+  score: number;
+  color: string;
+  label: string;
+}
+
 interface HeatmapSnapshot {
   zones: HeatmapZone[];
+  restaurants: RestaurantHotspot[];
   updatedAt: string;
   cities: string[];
   riderCity: string | null;
@@ -57,10 +71,19 @@ interface HeatmapSnapshot {
 
 // ─── Map HTML builder ─────────────────────────────────────────────────────────
 
-function buildHtml(zones: HeatmapZone[]): string {
+function buildHtml(zones: HeatmapZone[], restaurants: RestaurantHotspot[]): string {
   const count = zones.length;
-  const meanLat = count ? zones.reduce((s, z) => s + z.lat, 0) / count : 32.08;
-  const meanLng = count ? zones.reduce((s, z) => s + z.lng, 0) / count : 72.68;
+  // Use restaurant coords for centering if zones are empty
+  const allLats = [
+    ...zones.map((z) => z.lat),
+    ...restaurants.map((r) => r.lat),
+  ];
+  const allLngs = [
+    ...zones.map((z) => z.lng),
+    ...restaurants.map((r) => r.lng),
+  ];
+  const meanLat = allLats.length ? allLats.reduce((s, v) => s + v, 0) / allLats.length : 32.08;
+  const meanLng = allLngs.length ? allLngs.reduce((s, v) => s + v, 0) / allLngs.length : 72.68;
 
   // Adaptive zoom
   const zoom = count > 100 ? 13 : count > 30 ? 12 : 11;
@@ -70,6 +93,14 @@ function buildHtml(zones: HeatmapZone[]): string {
       lat: z.lat, lng: z.lng, score: z.score, color: z.color,
       label: z.label, waiting: z.waitingOrders, newOrders: z.newOrders,
       hist: z.historicalAvg, restaurants: z.restaurantCount,
+    }))
+  );
+
+  const restsJson = JSON.stringify(
+    restaurants.map((r) => ({
+      name: r.name, lat: r.lat, lng: r.lng,
+      score: r.score, color: r.color, label: r.label,
+      weekly: r.weeklyOrders, waiting: r.waitingOrders, recent: r.recentOrders,
     }))
   );
 
@@ -193,33 +224,71 @@ function setLayer(name) {
 var HALF_LAT = ${CELL_LAT / 2};
 var HALF_LNG = ${CELL_LNG / 2};
 var zones = ${zonesJson};
+var rests = ${restsJson};
 var allBounds = [];
 
+// ── Zone rectangles (background demand context) ──
 zones.forEach(function(z) {
   var sw = [z.lat - HALF_LAT, z.lng - HALF_LNG];
   var ne = [z.lat + HALF_LAT, z.lng + HALF_LNG];
   allBounds.push(sw); allBounds.push(ne);
 
   var rect = L.rectangle([sw, ne], {
-    color: z.color,
-    weight: 1.5,
-    opacity: 0.8,
-    fillColor: z.color,
-    fillOpacity: 0.38,
+    color: z.color, weight: 1, opacity: 0.5,
+    fillColor: z.color, fillOpacity: 0.22,
   });
 
   var popupHtml =
     '<div style="font-family:-apple-system,sans-serif;min-width:160px">' +
-    '<div style="font-size:15px;font-weight:700;color:'+z.color+';margin-bottom:6px">'+z.label+' — '+z.score+'/100</div>' +
+    '<div style="font-size:14px;font-weight:700;color:'+z.color+';margin-bottom:5px">Area: '+z.label+' ('+z.score+'/100)</div>' +
     '<div style="font-size:12px;color:#374151;line-height:1.8">' +
-    '🕐 Waiting orders: <b>'+z.waiting+'</b><br>' +
-    '🆕 New (15 min): <b>'+z.newOrders+'</b><br>' +
-    '📈 Historical avg: <b>'+z.hist+'</b><br>' +
-    '🍽️ Restaurants nearby: <b>'+z.restaurants+'</b>' +
+    '🕐 Waiting: <b>'+z.waiting+'</b> &nbsp;🆕 New: <b>'+z.newOrders+'</b><br>' +
+    '📈 Hist avg: <b>'+z.hist+'</b> &nbsp;🍽️ Outlets: <b>'+z.restaurants+'</b>' +
     '</div></div>';
 
   rect.bindPopup(popupHtml, { maxWidth: 220 });
   rect.addTo(map);
+});
+
+// ── Restaurant markers (main feature) ──
+// Radius scales with score; pulsing ring for outlets with waiting orders.
+var maxScore = rests.length ? rests[0].score : 1;
+rests.forEach(function(r) {
+  var radius = 10 + Math.round((r.score / Math.max(maxScore, 1)) * 18);
+  allBounds.push([r.lat, r.lng]);
+
+  // Outer pulse ring for restaurants with active waiting orders
+  if (r.waiting > 0) {
+    L.circleMarker([r.lat, r.lng], {
+      radius: radius + 7,
+      color: r.color, weight: 2, opacity: 0.35,
+      fillColor: r.color, fillOpacity: 0.08,
+      interactive: false,
+    }).addTo(map);
+  }
+
+  var marker = L.circleMarker([r.lat, r.lng], {
+    radius: radius,
+    color: r.color, weight: 2.5, opacity: 0.95,
+    fillColor: r.color, fillOpacity: 0.82,
+  });
+
+  var badge = r.waiting > 0
+    ? '<span style="background:#fff;color:'+r.color+';font-weight:800;font-size:11px;padding:1px 6px;border-radius:8px;margin-left:6px">'+r.waiting+' waiting</span>'
+    : '';
+
+  var popupHtml =
+    '<div style="font-family:-apple-system,sans-serif;min-width:180px">' +
+    '<div style="font-size:14px;font-weight:800;color:'+r.color+';margin-bottom:6px">🍽️ '+r.name+badge+'</div>' +
+    '<div style="font-size:12px;color:#374151;line-height:2">' +
+    '🕐 Waiting for rider: <b style="color:'+(r.waiting>0?'#dc2626':'#22c55e')+'">'+r.waiting+'</b><br>' +
+    '🆕 New (15 min): <b>'+r.recent+'</b><br>' +
+    '📅 Last 7 days: <b>'+r.weekly+'</b> orders<br>' +
+    '📊 Demand score: <b>'+r.score+'/100</b>' +
+    '</div></div>';
+
+  marker.bindPopup(popupHtml, { maxWidth: 240 });
+  marker.addTo(map);
 });
 
 if (allBounds.length > 0) {
@@ -274,7 +343,7 @@ export default function HeatmapScreen() {
         if (!r.ok) throw new Error(`Server error ${r.status}`);
         const body: HeatmapSnapshot = await r.json();
         setSnapshot(body);
-        setHtml(buildHtml(body.zones));
+        setHtml(buildHtml(body.zones, body.restaurants ?? []));
         setError(null);
       } catch (e: any) {
         if (!silent) setError(e.message ?? "Failed to load heatmap");
