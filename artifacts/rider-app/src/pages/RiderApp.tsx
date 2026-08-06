@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useRef, useCallback, type ReactNode, lazy, Suspense } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetRiderMe,
@@ -58,6 +58,11 @@ import { ChatPanel } from "@/components/ChatPanel";
 import { ChatNotificationBanner, type BannerInfo } from "@/components/ChatNotificationBanner";
 import { saveRiderChatToken, useOrderChat } from "@/hooks/useOrderChat";
 import { useChatWatcher } from "@/hooks/useChatWatcher";
+import { useRiderLocation } from "@/hooks/useRiderLocation";
+// Leaflet imports CSS at module level — lazy-load to avoid SSR issues
+const RiderLiveMap = lazy(() =>
+  import("@/components/RiderLiveMap").then((m) => ({ default: m.RiderLiveMap })),
+);
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -405,6 +410,10 @@ function RiderOrderDetailModal({
   const isCod = (order.paymentType || "").toLowerCase().includes("cod") ||
     (order.paymentType || "").toLowerCase().includes("cash");
   const isDelivered = order.status === "Delivered";
+  const isInTransit = order.status === "Rider Picked Up";
+
+  // Poll live rider location only while order is in transit
+  const riderLocation = useRiderLocation(order.id, isInTransit);
 
   const mapsUrl = (query: string) =>
     `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
@@ -454,6 +463,30 @@ function RiderOrderDetailModal({
         </div>
 
         <div className="p-4 space-y-4">
+          {/* Live rider map — only visible while order is in transit */}
+          {isInTransit && (
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1.5">
+                <Navigation className="w-3.5 h-3.5" /> Live Location
+              </h4>
+              {riderLocation ? (
+                <Suspense fallback={<div className="h-[220px] rounded-xl bg-gray-100 animate-pulse" />}>
+                  <RiderLiveMap
+                    riderLat={riderLocation.lat}
+                    riderLng={riderLocation.lng}
+                    destLat={hasCustomerCoords ? (order.latitude ?? undefined) : undefined}
+                    destLng={hasCustomerCoords ? (order.longitude ?? undefined) : undefined}
+                    className="w-full"
+                  />
+                </Suspense>
+              ) : (
+                <div className="h-[80px] rounded-xl border border-dashed border-gray-200 flex items-center justify-center">
+                  <p className="text-xs text-gray-400">Waiting for rider location…</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Timeline */}
           <div className="space-y-1.5">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1.5">
