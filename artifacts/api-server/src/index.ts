@@ -1,6 +1,7 @@
 import app from "./app";
 import { startChatPushWatcher } from "./lib/chatPushWatcher";
 import { startOrderPushWatcher } from "./lib/orderPushWatcher";
+import { startHeatmapScheduler } from "./lib/heatmapService";
 import { logger } from "./lib/logger";
 import { connectMongo } from "./lib/mongo";
 
@@ -25,6 +26,7 @@ async function start() {
   // riders when a customer message arrives while their app is backgrounded.
   startChatPushWatcher();
   startOrderPushWatcher();
+  startHeatmapScheduler();
 
   app.listen(port, (err) => {
     if (err) {
