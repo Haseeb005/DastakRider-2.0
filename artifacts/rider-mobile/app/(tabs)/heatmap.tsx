@@ -10,7 +10,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -53,6 +52,7 @@ interface HeatmapSnapshot {
   zones: HeatmapZone[];
   updatedAt: string;
   cities: string[];
+  riderCity: string | null;
 }
 
 // ─── Map HTML builder ─────────────────────────────────────────────────────────
@@ -260,7 +260,6 @@ export default function HeatmapScreen() {
   const [html, setHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCity, setSelectedCity] = useState<string>("");
   const webRef = useRef<WebView>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -269,10 +268,9 @@ export default function HeatmapScreen() {
       if (!token) return;
       if (!silent) { setLoading(true); setError(null); }
       try {
-        const url = selectedCity
-          ? `${API_BASE}/api/rider/heatmap?city=${encodeURIComponent(selectedCity)}`
-          : `${API_BASE}/api/rider/heatmap`;
-        const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        const r = await fetch(`${API_BASE}/api/rider/heatmap`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!r.ok) throw new Error(`Server error ${r.status}`);
         const body: HeatmapSnapshot = await r.json();
         setSnapshot(body);
@@ -284,7 +282,7 @@ export default function HeatmapScreen() {
         if (!silent) setLoading(false);
       }
     },
-    [token, selectedCity],
+    [token],
   );
 
   // Initial load + poll every 2 min
@@ -299,7 +297,7 @@ export default function HeatmapScreen() {
   const zones = snapshot?.zones ?? [];
   const totalWaiting = zones.reduce((s, z) => s + z.waitingOrders, 0);
   const topScore = zones.length ? zones[0].score : 0; // sorted hottest-first by server
-  const cities = snapshot?.cities ?? [];
+  const riderCity = snapshot?.riderCity ?? null;
 
   return (
     <View style={[s.root, { backgroundColor: c.background }]}>
@@ -307,7 +305,9 @@ export default function HeatmapScreen() {
       {/* ── Header ── */}
       <View style={[s.header, { paddingTop: insets.top + 12 }]}>
         <View style={s.headerLeft}>
-          <Text style={[s.title, { color: c.foreground }]}>Live Demand Map</Text>
+          <Text style={[s.title, { color: c.foreground }]}>
+            {riderCity ? `${riderCity} Demand` : "Live Demand Map"}
+          </Text>
           <Text style={[s.subtitle, { color: c.mutedForeground }]}>
             {snapshot ? formatUpdatedAt(snapshot.updatedAt) : "Loading…"} · refreshes every 2 min
           </Text>
@@ -321,32 +321,6 @@ export default function HeatmapScreen() {
         </Pressable>
       </View>
 
-      {/* ── City filter ── */}
-      {cities.length > 1 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.cityRow}
-        >
-          {["", ...cities].map((city) => {
-            const active = selectedCity === city;
-            return (
-              <Pressable
-                key={city || "__all__"}
-                onPress={() => setSelectedCity(city)}
-                style={[
-                  s.cityBtn,
-                  { backgroundColor: active ? "#DB143C" : c.muted },
-                ]}
-              >
-                <Text style={[s.cityBtnText, { color: active ? "#fff" : c.mutedForeground }]}>
-                  {city || "All Cities"}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      )}
 
       {/* ── Stats bar ── */}
       <View style={[s.statsBar, { backgroundColor: c.card, borderColor: c.border }]}>
@@ -434,10 +408,6 @@ const s = StyleSheet.create({
     width: 38, height: 38, borderRadius: 19,
     alignItems: "center", justifyContent: "center",
   },
-
-  cityRow: { paddingHorizontal: 16, gap: 8, marginBottom: 10 },
-  cityBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 },
-  cityBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
 
   statsBar: {
     flexDirection: "row", marginHorizontal: 16, marginBottom: 10,

@@ -906,16 +906,16 @@ router.post("/rider/location", async (req: any, res: any) => {
 });
 
 // ── Live demand heatmap ──────────────────────────────────────────────────────
-// Returns pre-computed demand-score zones from the in-memory cache.
+// Returns pre-computed demand-score zones filtered to the rider's own city.
 // The cache is refreshed every 2 minutes by heatmapService.startHeatmapScheduler().
-// Optional query param: ?city=Sargodha — filters zones to a single city.
-router.get("/rider/heatmap", (req: any, res: any) => {
+router.get("/rider/heatmap", async (req: any, res: any) => {
   try {
     const riderId = requireRiderId(req, res);
     if (!riderId) return;
-    const city = req.query.city ? String(req.query.city) : undefined;
+    const rider = await findRiderById(riderId);
+    const city: string | undefined = rider?.city ?? undefined;
     const snapshot = getHeatmapSnapshot(city);
-    res.json(snapshot);
+    res.json({ ...snapshot, riderCity: city ?? null });
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
