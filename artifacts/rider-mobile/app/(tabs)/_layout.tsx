@@ -27,6 +27,7 @@ import {
 } from "@/lib/orderBadgeStore";
 import { useChatWatcher } from "@/lib/useChatWatcher";
 import { useLocationTracking } from "@/lib/useLocationTracking";
+import { setLocationShare } from "@/lib/locationShareStore";
 
 type TabBarProps = Parameters<
   NonNullable<React.ComponentProps<typeof Tabs>["tabBar"]>
@@ -357,6 +358,11 @@ export default function TabLayout() {
     .filter((o) => o.status === "Rider Picked Up")
     .map((o) => o.id);
   const locationStatus = useLocationTracking(trackIds);
+
+  // Publish tracking state to the store so active.tsx banner can read it.
+  useEffect(() => {
+    setLocationShare(locationStatus, trackIds.length);
+  }, [locationStatus, trackIds.length]);
 
   useEffect(() => {
     if (locationStatus === "error") {

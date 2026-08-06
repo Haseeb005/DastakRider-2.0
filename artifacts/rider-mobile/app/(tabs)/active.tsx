@@ -11,7 +11,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useReducer, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -28,6 +28,11 @@ import { Button, EmptyState, ScreenHeader } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
 import { ensureLocationPermission } from "@/lib/useLocationTracking";
+import {
+  getLocationStatus,
+  getTrackCount,
+  subscribe as subscribeLocationStore,
+} from "@/lib/locationShareStore";
 import { useChatWatcher } from "@/lib/useChatWatcher";
 
 export default function ActiveScreen() {
@@ -68,7 +73,11 @@ export default function ActiveScreen() {
   };
 
   // Location tracking is lifted to _layout.tsx (always mounted) so it
-  // survives tab switches. Nothing to do here.
+  // survives tab switches. Subscribe to the store for the status banner.
+  const [, rerenderLocation] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => subscribeLocationStore(rerenderLocation), []);
+  const locationStatus = getLocationStatus();
+  const trackCount = getTrackCount();
 
   const statusM = useUpdateOrderStatus();
   const arrivedM = useMarkOrderArrived();
@@ -179,7 +188,7 @@ export default function ActiveScreen() {
         }
       />
 
-      {trackIds.length > 0 ? (
+      {trackCount > 0 ? (
         <View
           style={{
             marginHorizontal: 20,
