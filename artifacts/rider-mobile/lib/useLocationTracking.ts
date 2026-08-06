@@ -117,8 +117,8 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
 
             await Location.startLocationUpdatesAsync(LOCATION_TASK, {
               accuracy: Location.Accuracy.High,
-              timeInterval: 10_000,
-              distanceInterval: 25,
+              timeInterval: 5_000,
+              distanceInterval: 10,
               showsBackgroundLocationIndicator: true,
               foregroundService: {
                 notificationTitle: "Dastak — Live Delivery",
@@ -135,7 +135,7 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
           // Foreground watch — runs in parallel with the background task for
           // immediate pushes while the app is on screen.
           const sub = await Location.watchPositionAsync(
-            { accuracy: Location.Accuracy.High, timeInterval: 10_000, distanceInterval: 25 },
+            { accuracy: Location.Accuracy.High, timeInterval: 5_000, distanceInterval: 10 },
             (pos) => push(pos.coords.latitude, pos.coords.longitude),
           );
           if (cancelled) { sub.remove(); return; }

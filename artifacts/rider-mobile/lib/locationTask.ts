@@ -11,9 +11,10 @@ import { TOKEN_KEY } from "./auth";
 export const LOCATION_TASK = "DASTAK_BG_LOCATION";
 export const ACTIVE_ORDER_IDS_KEY = "dastak_active_order_ids";
 
+// Priority: dev-injected Replit domain → explicit API URL env var → empty (no-op)
 const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN
   ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-  : "";
+  : (process.env.EXPO_PUBLIC_API_URL ?? "");
 
 TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
   if (error || !data?.locations?.length) return;
