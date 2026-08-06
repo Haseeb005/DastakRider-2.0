@@ -1,0 +1,462 @@
+# Dastak Rider Heatmap Feature – Complete Replit AI Implementation Prompt
+
+You are working on the existing **Dastak Delivery** project.
+
+The project already has a centralized backend that serves the **Customer App, Rider App, and Restaurant App** using **Node.js, Express, MongoDB, Socket.IO, and Google Maps**.
+
+Your task is to **implement a production-quality Rider Heatmap system** similar to Uber Eats, DoorDash, Foodpanda, and Careem Food.
+
+**IMPORTANT RULES**
+
+* Do NOT break any existing functionality.
+* Do NOT modify existing order assignment logic unless absolutely necessary.
+* Do NOT change any existing APIs.
+* Integrate with the existing authentication and authorization.
+* Reuse existing MongoDB models whenever possible.
+* Follow the current project architecture and coding style.
+* Write clean, modular, reusable code.
+* Every new file must include comments explaining its purpose.
+
+---
+
+# OBJECTIVE
+
+Create a real-time Heatmap feature that shows riders where delivery demand is highest.
+
+The heatmap should be generated completely from live backend data.
+
+It must NOT use fake, hardcoded, or randomly generated hotspots.
+
+---
+
+# DATA SOURCES
+
+Use existing project data including:
+
+Orders
+
+Restaurants
+
+Riders
+
+Driver Locations
+
+Order Status
+
+Online Restaurants
+
+Order Queue
+
+Completed Orders
+
+Historical Order Data
+
+Current Rider Availability
+
+Do NOT create duplicate collections if the information already exists.
+
+---
+
+# HEATMAP CALCULATION
+
+Create a Heatmap Service.
+
+The service should calculate demand scores every 2 minutes.
+
+Demand should consider:
+
+## Waiting Orders
+
+Orders waiting for rider assignment.
+
+Weight: 40%
+
+---
+
+## New Orders
+
+Orders created during the last 15 minutes.
+
+Weight: 25%
+
+---
+
+## Restaurant Density
+
+Number of active restaurants in that zone.
+
+Weight: 10%
+
+---
+
+## Historical Demand
+
+Average order volume for the same weekday and hour.
+
+Weight: 15%
+
+---
+
+## Rider Availability
+
+Number of available riders.
+
+Subtract score when many riders already exist.
+
+Weight: -20%
+
+---
+
+Normalize every zone score between
+
+0 and 100
+
+Example
+
+0-20
+
+Low Demand
+
+Green
+
+21-40
+
+Moderate
+
+Light Green
+
+41-60
+
+Busy
+
+Yellow
+
+61-80
+
+Very Busy
+
+Orange
+
+81-100
+
+Extremely Busy
+
+Red
+
+---
+
+# CITY GRID
+
+Automatically divide every supported city into square zones.
+
+Each zone should cover approximately
+
+500m × 500m
+
+Each zone must contain
+
+zoneId
+
+centerLatitude
+
+centerLongitude
+
+city
+
+score
+
+color
+
+waitingOrders
+
+availableRiders
+
+restaurantCount
+
+updatedAt
+
+---
+
+# MONGODB
+
+Create a HeatmapZone model only if one does not already exist.
+
+Store
+
+Current score
+
+Color
+
+Zone center
+
+Statistics
+
+Timestamp
+
+Create proper indexes.
+
+---
+
+# BACKGROUND JOB
+
+Implement a scheduler.
+
+Every 2 minutes
+
+Recalculate every zone.
+
+Store results.
+
+Broadcast changes.
+
+Do NOT calculate heatmap during every API request.
+
+---
+
+# SOCKET.IO
+
+Whenever a zone changes
+
+Broadcast updates.
+
+Only riders inside the same city should receive updates.
+
+Events
+
+heatmap:update
+
+heatmap:refresh
+
+Support automatic reconnect.
+
+---
+
+# REST API
+
+Create
+
+GET /api/rider/heatmap
+
+Returns
+
+[
+{
+"zoneId":"A12",
+"lat":32.086,
+"lng":72.661,
+"score":88,
+"color":"#FF4500"
+}
+]
+
+Optional filters
+
+city
+
+bounds
+
+zoom
+
+Return only visible zones.
+
+---
+
+# RIDER APPLICATION
+
+Inside the Rider App
+
+Add
+
+Heatmap Toggle
+
+When enabled
+
+Display colored Google Maps overlays.
+
+The heatmap should update automatically.
+
+Do NOT block map interaction.
+
+Markers should remain visible.
+
+Current rider location should remain visible.
+
+Restaurant markers should remain visible.
+
+Support smooth animation when hotspot values change.
+
+---
+
+# PERFORMANCE
+
+Use MongoDB aggregation.
+
+Cache results.
+
+Avoid unnecessary database queries.
+
+Update only changed zones.
+
+Minimize Socket.IO traffic.
+
+Support thousands of riders.
+
+---
+
+# SECURITY
+
+Only authenticated riders can access the endpoint.
+
+Never expose
+
+Customer information
+
+Restaurant private information
+
+Exact order locations
+
+Order IDs
+
+Internal analytics
+
+Return only aggregated statistics.
+
+---
+
+# ADMIN FEATURES
+
+Create optional admin endpoint
+
+GET /admin/heatmap
+
+Return
+
+Top demand zones
+
+Lowest demand zones
+
+Average score
+
+Waiting orders
+
+Available riders
+
+Historical comparison
+
+---
+
+# FUTURE SUPPORT
+
+Design the architecture for future features.
+
+Easy to add
+
+AI demand prediction
+
+Machine learning
+
+Weather effects
+
+Holiday demand
+
+Traffic congestion
+
+Special event hotspots
+
+Festival demand
+
+Restaurant popularity
+
+Dynamic rider bonuses
+
+Surge pricing
+
+Estimated rider earnings
+
+---
+
+# CODE STRUCTURE
+
+Create modules similar to:
+
+HeatmapController
+
+HeatmapService
+
+HeatmapScheduler
+
+HeatmapRoutes
+
+HeatmapSocket
+
+HeatmapModel
+
+HeatmapHelpers
+
+HeatmapUtils
+
+Reuse existing utilities whenever possible.
+
+---
+
+# TESTING
+
+Verify
+
+Heatmap updates when orders are created.
+
+Heatmap updates when riders go online/offline.
+
+Heatmap updates after delivery completion.
+
+No duplicate zones.
+
+No memory leaks.
+
+Socket reconnect works.
+
+API response under 300ms.
+
+No existing APIs are broken.
+
+---
+
+# DOCUMENTATION
+
+After implementation provide:
+
+1. Every new file created.
+
+2. Every existing file modified.
+
+3. Database schema changes.
+
+4. API documentation.
+
+5. Socket events documentation.
+
+6. Environment variables required.
+
+7. Testing checklist.
+
+8. Performance optimizations applied.
+
+9. Deployment instructions.
+
+10. Rollback instructions.
+
+---
+
+# FINAL REQUIREMENTS
+
+Before making any code changes:
+
+1. Analyze the entire existing backend architecture.
+2. Reuse existing models and services whenever possible.
+3. Identify where the new Heatmap feature integrates best.
+4. Avoid duplicate logic.
+5. Keep the implementation backward compatible.
+6. If any existing code must be changed, explain why before modifying it.
+7. After coding, verify that Customer, Rider, Restaurant, Authentication, Orders, Payments, Notifications, and Socket.IO continue to work without regressions.
+
+The final implementation should be production-ready, scalable, optimized, secure, and maintainable, with code quality comparable to enterprise food delivery platforms such as Uber Eats and DoorDash.
