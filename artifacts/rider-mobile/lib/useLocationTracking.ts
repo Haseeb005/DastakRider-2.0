@@ -134,8 +134,10 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
 
           // Foreground watch — runs in parallel with the background task for
           // immediate pushes while the app is on screen.
+          // No distanceInterval here: updates must arrive every 5 s even when
+          // the rider is stationary, otherwise the stale monitor fires a false alert.
           const sub = await Location.watchPositionAsync(
-            { accuracy: Location.Accuracy.High, timeInterval: 5_000, distanceInterval: 10 },
+            { accuracy: Location.Accuracy.High, timeInterval: 5_000 },
             (pos) => push(pos.coords.latitude, pos.coords.longitude),
           );
           if (cancelled) { sub.remove(); return; }
@@ -148,10 +150,15 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
 
     // Stale-fix monitor: warn if no GPS update arrives for STALE_THRESHOLD_MS.
     // Gated on the first successful fix to avoid false alarms during cold GPS lock.
-    const monitor = setInterval(() => {
-      if (!cancelled && hasFixed && Date.now() - lastOk > STALE_THRESHOLD_MS) {
-        setStatus("error");
+    // Also skips the error when the background task is still running (app minimised) —
+    // in that case the foreground watch is paused but GPS is still being pushed.
+    const monitor = setInterval(async () => {
+      if (cancelled || !hasFixed || Date.now() - lastOk <= STALE_THRESHOLD_MS) return;
+      if (Platform.OS !== "web") {
+        const bgRunning = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false);
+        if (bgRunning) return; // background task is alive — not truly stale
       }
+      if (!cancelled) setStatus("error");
     }, 10_000);
 
     return () => {
