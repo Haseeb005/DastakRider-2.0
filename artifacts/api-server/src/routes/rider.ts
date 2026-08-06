@@ -904,6 +904,81 @@ router.post("/rider/location", async (req: any, res: any) => {
   }
 });
 
+// ── Order heatmap ───────────────────────────────────────────────────────────
+// Returns a sampled list of customer delivery lat/lng points so the rider app
+// can render a heatmap of high-demand areas. Requires rider auth.
+router.get("/rider/heatmap", async (req: any, res: any) => {
+  try {
+    const riderId = requireRiderId(req, res);
+    if (!riderId) return;
+
+    const days = Math.min(Math.max(parseInt(String(req.query.days ?? "30"), 10) || 30, 1), 90);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    // Pull all delivered orders in the window that have coordinates.
+    const raw = await ordersCol()
+      .find(
+        {
+          status: "Delivered",
+          dateForSearching: { $gte: since },
+          latitude: { $exists: true, $nin: [null, ""] },
+          longitude: { $exists: true, $nin: [null, ""] },
+        },
+        { projection: { latitude: 1, longitude: 1, _id: 0 } },
+      )
+      .toArray();
+
+    // Parse and validate coordinates.
+    const points: { lat: number; lng: number }[] = [];
+    for (const doc of raw) {
+      const lat = parseFloat(String(doc.latitude));
+      const lng = parseFloat(String(doc.longitude));
+      if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) {
+        points.push({ lat, lng });
+      }
+    }
+
+    // If there are no recent delivered orders, fall back to ALL delivered orders
+    // so the heatmap is never empty on first use.
+    if (points.length === 0) {
+      const fallback = await ordersCol()
+        .find(
+          { status: "Delivered", latitude: { $exists: true, $nin: [null, ""] } },
+          { projection: { latitude: 1, longitude: 1, _id: 0 } },
+        )
+        .limit(3000)
+        .toArray();
+      for (const doc of fallback) {
+        const lat = parseFloat(String(doc.latitude));
+        const lng = parseFloat(String(doc.longitude));
+        if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) {
+          points.push({ lat, lng });
+        }
+      }
+    }
+
+    // Reservoir-sample down to 3 000 points so the response stays small.
+    const MAX = 3_000;
+    let sampled = points;
+    if (points.length > MAX) {
+      sampled = [];
+      for (let i = 0; i < points.length; i++) {
+        if (sampled.length < MAX) {
+          sampled.push(points[i]);
+        } else {
+          const j = Math.floor(Math.random() * (i + 1));
+          if (j < MAX) sampled[j] = points[i];
+        }
+      }
+    }
+
+    res.json({ points: sampled, total: points.length, days });
+  } catch (e: any) {
+    req.log.error(e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
 // Public — customer's tracking page reads the rider's current location
 router.get("/orders/:orderId/rider-location", (req: any, res: any) => {
   const loc = riderLocations.get(String(req.params.orderId));

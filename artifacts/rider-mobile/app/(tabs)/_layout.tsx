@@ -62,6 +62,13 @@ const TABS: {
     sfSelected: "creditcard.fill",
   },
   {
+    name: "heatmap",
+    title: "Heatmap",
+    feather: "map",
+    sf: "map",
+    sfSelected: "map.fill",
+  },
+  {
     name: "profile",
     title: "Profile",
     feather: "user",
