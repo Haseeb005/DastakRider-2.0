@@ -1216,4 +1216,36 @@ router.patch("/orders/:orderId/chat/read", async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Version check
+// ---------------------------------------------------------------------------
+const IOS_VERSIONS     = ["2.0", "3.0"];
+const ANDROID_VERSIONS = ["4.3.0", "4.5.0"];
+
+router.post("/ridersCheckVersion", (req, res) => {
+  try {
+    const { version, platform } = req.body as { version?: string; platform?: string };
+
+    if (platform === "ios" && IOS_VERSIONS.includes(version ?? "")) {
+      return res.json({ status: "200" });
+    }
+
+    if (platform === "android" && ANDROID_VERSIONS.includes(version ?? "")) {
+      return res.json({ status: "200" });
+    }
+
+    return res.json({
+      status: "404",
+      msg: "A new update is now available. kindly update your App to get the best experience.",
+    });
+  } catch (err) {
+    console.error("POST /ridersCheckVersion error", err);
+    return res.json({
+      status: "404",
+      msg: "Looks like something went wrong on our side. Sorry for the inconvenience.",
+      error: String(err),
+    });
+  }
+});
+
 export default router;
