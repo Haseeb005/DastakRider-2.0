@@ -48,10 +48,9 @@
     "plugins": [
       "expo-router",
       [
-        "expo-notifications",
+        "onesignal-expo-plugin",
         {
-          "color": "#DB143C",
-          "defaultChannel": "default"
+          "mode": "production"
         }
       ],
       "expo-web-browser",

@@ -19,8 +19,13 @@ import { OneSignal } from "react-native-onesignal";
 
 import { getOpenChatOrderId } from "./chatBadgeStore";
 
+// EXPO_PUBLIC_ONESIGNAL_APP_ID_RIDER is the preferred source — it is embedded
+// in the JS bundle at EAS build time. The extra.oneSignalAppId fallback
+// supports older builds that used the dynamic app.config.js.
 const APP_ID: string =
-  (Constants.expoConfig?.extra?.oneSignalAppId as string | undefined) ?? "";
+  process.env.EXPO_PUBLIC_ONESIGNAL_APP_ID_RIDER ??
+  (Constants.expoConfig?.extra?.oneSignalAppId as string | undefined) ??
+  "";
 
 let initialized = false;
 
