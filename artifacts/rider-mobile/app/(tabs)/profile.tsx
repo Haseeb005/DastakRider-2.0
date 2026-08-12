@@ -8,6 +8,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "expo-router";
+import * as Sentry from "@sentry/react-native";
 import React, { useCallback } from "react";
 import {
   Alert,
@@ -15,6 +16,7 @@ import {
   ScrollView,
   Switch,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 
@@ -344,6 +346,36 @@ export default function ProfileScreen() {
             value={money(rider.totalEarnings)}
           />
         </View>
+
+        {/* DEV-ONLY: tap to send a test exception to Sentry */}
+        {__DEV__ && (
+          <TouchableOpacity
+            onPress={() => {
+              Sentry.captureException(new Error("Sentry test"));
+              Alert.alert(
+                "Sentry test fired",
+                "Check your Sentry dashboard — the event should arrive within ~30 seconds.",
+              );
+            }}
+            style={{
+              backgroundColor: "#1a1a2e",
+              borderRadius: c.radius,
+              padding: 14,
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: "Inter_600SemiBold",
+                fontSize: 14,
+                color: "#ffffff",
+              }}
+            >
+              🐛 Test Sentry (dev only)
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <Button
           label="Logout"
