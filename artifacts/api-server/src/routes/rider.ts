@@ -781,6 +781,8 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
         let collectAmt = orderTotal;
         if (updated.billingMode === "prepaid") {
           // Prepaid COD: rider collects only the margin (orderTotal − items actualPrice).
+          // For restaurant orders with vatAmount > 0, VAT is also pre-settled with the
+          // restaurant, so deduct vatAmount too: margin = orderTotal − (actualPrice + VAT).
           const products: any[] = Array.isArray(updated.products)
             ? updated.products
             : [];
@@ -790,7 +792,11 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
               toNum(p.actualPrice ?? p.price ?? p.net) * (Number(p.count) || 1),
             0
           );
-          collectAmt = Math.max(orderTotal - actualPriceTotal, 0);
+          const vatAmount =
+            String(updated.shopType || "").toLowerCase() === "restaurant"
+              ? toNum(updated.vatAmount)
+              : 0;
+          collectAmt = Math.max(orderTotal - actualPriceTotal - vatAmount, 0);
         }
         // Postpaid COD: rider collects full orderTotal (collectAmt already = orderTotal).
         if (collectAmt > 0) {
@@ -801,7 +807,7 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
         }
       } else if (updated.billingMode === "prepaid") {
         // Prepaid non-COD: customer paid online — rider never held this cash.
-        // Deduct the actualPrice total from pendingCollection to correct the balance.
+        // Deduct actualPrice total (+ vatAmount for restaurant orders) from pendingCollection.
         const products: any[] = Array.isArray(updated.products)
           ? updated.products
           : [];
@@ -810,10 +816,15 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
             s + toNum(p.actualPrice ?? p.price ?? p.net) * (Number(p.count) || 1),
           0
         );
-        if (actualPriceTotal > 0) {
+        const vatAmount =
+          String(updated.shopType || "").toLowerCase() === "restaurant"
+            ? toNum(updated.vatAmount)
+            : 0;
+        const deductAmt = actualPriceTotal + vatAmount;
+        if (deductAmt > 0) {
           await usersCol().updateOne(
             { _id: new ObjectId(riderId) },
-            { $inc: { pendingCollection: -actualPriceTotal } }
+            { $inc: { pendingCollection: -deductAmt } }
           );
         }
       }
