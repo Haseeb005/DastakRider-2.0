@@ -1219,7 +1219,7 @@ router.patch("/orders/:orderId/chat/read", async (req, res) => {
 // ---------------------------------------------------------------------------
 // Version check
 // ---------------------------------------------------------------------------
-const IOS_VERSIONS     = ["2.0", "3.0"];
+const IOS_VERSIONS     = ["2.0", "3.0", "4.3.0"];
 const ANDROID_VERSIONS = ["4.3.0", "4.5.0"];
 
 router.post("/ridersCheckVersion", (req, res) => {

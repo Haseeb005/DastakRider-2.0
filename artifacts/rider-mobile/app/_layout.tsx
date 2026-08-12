@@ -16,6 +16,7 @@ import * as Sentry from "@sentry/react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef } from "react";
+import { Alert, Platform } from "react-native";
 
 // Initialise Sentry as early as possible — before any component renders.
 // In production the DSN comes from the EAS env var; in dev it falls back
@@ -184,6 +185,11 @@ function RootLayoutNav() {
   );
 }
 
+const APP_VERSION = "4.3.0";
+const API_BASE = process.env.EXPO_PUBLIC_DOMAIN
+  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+  : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000");
+
 function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
@@ -192,6 +198,30 @@ function RootLayout() {
     Inter_700Bold,
     Inter_800ExtraBold,
   });
+
+  // Version check — runs once on launch before any screen is shown.
+  useEffect(() => {
+    const platform = Platform.OS === "ios" ? "ios" : "android";
+    fetch(`${API_BASE}/ridersCheckVersion`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: APP_VERSION, platform }),
+    })
+      .then((r) => r.json())
+      .then((data: { status: string; msg?: string }) => {
+        if (data.status === "404") {
+          Alert.alert(
+            "Update Required",
+            data.msg ?? "A new update is now available. Please update your app.",
+            [{ text: "OK" }],
+            { cancelable: false },
+          );
+        }
+      })
+      .catch(() => {
+        // Network failure — silently ignore; don't block the rider.
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
