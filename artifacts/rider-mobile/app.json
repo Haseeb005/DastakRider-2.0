@@ -25,11 +25,11 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.ios.DastakRiders",
-      "buildNumber": "28"
+      "buildNumber": "29"
     },
     "android": {
       "package": "com.dastakriders",
-      "versionCode": 28,
+      "versionCode": 29,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#E6ECEA"
