@@ -1,0 +1,21 @@
+Cannot get Expo config from an Expo project - node /Users/abdul/Work/DastakRider/DastakRider-2.0/node_modules/.pnpm/@expo+fingerprint@0.15.5/node_modules/@expo/fingerprint/build/ExpoConfigLoader.js /Users/abdul/Work/DastakRider/DastakRider-2.0/artifacts/rider-mobile /var/folders/j8/tvqt1nhn3wq1c85fnnqv_6h40000gn/T/expo-fingerprint-4Abv96/.fingerprintignore exited with non-zero code: 1:  Error: node /Users/abdul/Work/DastakRider/DastakRider-2.0/node_modules/.pnpm/@expo+fingerprint@0.15.5/node_modules/@expo/fingerprint/build/ExpoConfigLoader.js /Users/abdul/Work/DastakRider/DastakRider-2.0/artifacts/rider-mobile /var/folders/j8/tvqt1nhn3wq1c85fnnqv_6h40000gn/T/expo-fingerprint-4Abv96/.fingerprintignore exited with non-zero code: 1
+    at ChildProcess.completionListener (/Users/abdul/Work/DastakRider/DastakRider-2.0/node_modules/.pnpm/@expo+spawn-async@1.8.0/node_modules/@expo/spawn-async/build/spawnAsync.js:113:23)
+    at Object.onceWrapper (node:events:622:26)
+    at ChildProcess.emit (node:events:507:28)
+    at ChildProcess.emit (node:domain:489:12)
+    at maybeClose (node:internal/child_process:1101:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:305:5)
+    ...
+    at spawnAsync (/Users/abdul/Work/DastakRider/DastakRider-2.0/node_modules/.pnpm/@expo+spawn-async@1.8.0/node_modules/@expo/spawn-async/build/spawnAsync.js:9:23)
+    at spawnWithIpcAsync (/Users/abdul/Work/DastakRider/DastakRider-2.0/node_modules/.pnpm/@expo+fingerprint@0.15.5/node_modules/@expo/fingerprint/build/utils/SpawnIPC.js:13:47)
+    at getExpoConfigAsync (/Users/abdul/Work/DastakRider/DastakRider-2.0/node_modules/.pnpm/@expo+fingerprint@0.15.5/node_modules/@expo/fingerprint/build/ExpoConfig.js:27:68)
+    at async getHashSourcesAsync (/Users/abdul/Work/DastakRider/DastakRider-2.0/node_modules/.pnpm/@expo+fingerprint@0.15.5/node_modules/@expo/fingerprint/build/sourcer/Sourcer.js:18:51)
+    at async Object.createFingerprintAsync (/Users/abdul/Work/DastakRider/DastakRider-2.0/node_modules/.pnpm/@expo+fingerprint@0.15.5/node_modules/@expo/fingerprint/build/Fingerprint.js:22:21)
+    at async withTemporaryEnvAsync (/usr/local/lib/node_modules/eas-cli/build/fingerprint/cli.js:79:16)
+    at async createFingerprintWithoutLoggingAsync (/usr/local/lib/node_modules/eas-cli/build/fingerprint/cli.js:73:12)
+    at async createFingerprintAsync (/usr/local/lib/node_modules/eas-cli/build/fingerprint/cli.js:37:29)
+    at async computeAndMaybeUploadFingerprintWithoutExpoUpdatesAsync (/usr/local/lib/node_modules/eas-cli/build/build/build.js:509:25)
+    at async computeAndMaybeUploadRuntimeAndFingerprintMetadataAsync (/usr/local/lib/node_modules/eas-cli/build/build/build.js:461:29)
+✔ Computed project fingerprint
+
+See logs: https://expo.dev/accounts/haseeb0042-2/projects/rider-mobile/builds/3ef950f1-811a-41a7-b594-14d61343402f
