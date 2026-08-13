@@ -17,3 +17,6 @@ export function initOneSignal(_onTap: (e: PushTapEvent) => void) {}
 export function oneSignalLogin(_riderId: string) {}
 
 export function oneSignalLogout() {}
+
+/** No-op on web — subscription IDs are native-only. */
+export function setPlayerIdSaver(_fn: (id: string) => void) {}
