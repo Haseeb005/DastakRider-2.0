@@ -72,7 +72,7 @@ async function handleOrderChange(rawId: string): Promise<void> {
     }
 
     const riders = await usersCol()
-      .find(riderQuery, { projection: { _id: 1 } })
+      .find(riderQuery, { projection: { _id: 1, playerId: 1 } })
       .limit(500)
       .toArray();
 
@@ -81,11 +81,18 @@ async function handleOrderChange(rawId: string): Promise<void> {
       return;
     }
 
-    const riderIds = riders.map((r: any) => String(r._id));
+    // Prefer subscription IDs (stored in riders.playerId) for direct targeting.
+    // Fall back to external_id alias for riders that haven't saved a playerId yet.
+    const playerIds = riders
+      .filter((r: any) => r.playerId)
+      .map((r: any) => String(r.playerId));
+    const riderIds = riders
+      .filter((r: any) => !r.playerId)
+      .map((r: any) => String(r._id));
 
-    await sendNewOrderPush({ riderIds, orderId, orderNum, area });
+    await sendNewOrderPush({ playerIds, riderIds, orderId, orderNum, area });
     logger.info(
-      { orderId, riderCount: riderIds.length, city, zone },
+      { orderId, withPlayerId: playerIds.length, withExternalId: riderIds.length, city, zone },
       "orderPushWatcher: sent new-order push",
     );
   } catch (err) {

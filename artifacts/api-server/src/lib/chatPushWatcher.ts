@@ -22,7 +22,7 @@ import { ObjectId } from "mongodb";
 import WebSocket from "ws";
 
 import { logger } from "./logger";
-import { chatsCol, ordersCol } from "./mongo";
+import { chatsCol, ordersCol, usersCol } from "./mongo";
 import { sendChatPush } from "./onesignal";
 
 const WS_URL = "wss://dastakbites.com/ws/live";
@@ -95,8 +95,21 @@ async function handleChatsChange(rawId: string): Promise<void> {
       ? String(lastMsg.txt).slice(0, 80)
       : undefined;
 
-    await sendChatPush({ riderId, orderId, customerName, orderNum, messageText });
-    logger.info({ riderId, orderId }, "chatPushWatcher: sent OneSignal push");
+    // Look up the rider's OneSignal subscription ID (playerId) for direct targeting.
+    let playerId: string | undefined;
+    try {
+      const { ObjectId: OID } = await import("mongodb");
+      const rider = await usersCol().findOne(
+        { _id: new OID(riderId) } as any,
+        { projection: { playerId: 1 } },
+      );
+      playerId = rider?.playerId ? String(rider.playerId) : undefined;
+    } catch {
+      // riderId not a valid ObjectId or lookup failed — fall back to external_id
+    }
+
+    await sendChatPush({ riderId, playerId, orderId, customerName, orderNum, messageText });
+    logger.info({ riderId, orderId, hasPlayerId: !!playerId }, "chatPushWatcher: sent OneSignal push");
   } catch (err) {
     logger.error({ err, rawId }, "chatPushWatcher: error processing change");
   }

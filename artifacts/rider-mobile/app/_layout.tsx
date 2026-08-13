@@ -45,6 +45,7 @@ import {
   initOneSignal,
   oneSignalLogin,
   oneSignalLogout,
+  setPlayerIdSaver,
 } from "@/lib/onesignal";
 import {
   ensureNotificationHandler,
@@ -134,6 +135,24 @@ function RootLayoutNav() {
       requestNotificationPermission().catch(() => {});
       const riderId = riderIdFromToken(token);
       if (riderId) oneSignalLogin(riderId);
+
+      // Save the OneSignal subscription (player) ID to the server so the API
+      // can target this device via include_player_ids instead of external_id.
+      setPlayerIdSaver((playerId) => {
+        AsyncStorage.getItem(TOKEN_KEY)
+          .then((storedToken) => {
+            if (!storedToken) return;
+            return fetch(`${API_BASE}/api/rider/player-id`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${storedToken}`,
+              },
+              body: JSON.stringify({ playerId }),
+            });
+          })
+          .catch(() => {});
+      });
     } else {
       oneSignalLogout();
     }

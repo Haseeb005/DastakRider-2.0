@@ -15,8 +15,10 @@ const APP_ID = process.env.ONESIGNAL_APP_ID_RIDER ?? "";
 const REST_KEY = process.env.ONESIGNAL_REST_API_KEY_RIDER ?? "";
 
 export interface ChatPushPayload {
-  /** Rider's MongoDB _id (string) — used as OneSignal external_id. */
+  /** Rider's MongoDB _id (string) — fallback if playerId is absent. */
   riderId: string;
+  /** OneSignal subscription / player ID stored on the rider document. Preferred. */
+  playerId?: string;
   orderId: string;
   customerName?: string;
   orderNum?: string;
@@ -25,8 +27,10 @@ export interface ChatPushPayload {
 }
 
 export interface NewOrderPushPayload {
-  /** Array of rider MongoDB _ids to notify (OneSignal accepts up to 2 000). */
-  riderIds: string[];
+  /** OneSignal subscription IDs (from riders.playerId). Primary targeting method. */
+  playerIds: string[];
+  /** Rider MongoDB _ids for devices that have no playerId yet — uses external_id alias. */
+  riderIds?: string[];
   orderId: string;
   orderNum?: string;
   area?: string;
@@ -62,9 +66,13 @@ export async function sendChatPush(payload: ChatPushPayload): Promise<void> {
     logger.warn("sendChatPush: ONESIGNAL env vars not set — skipping");
     return;
   }
-  const { riderId, orderId, customerName, orderNum, messageText } = payload;
+  const { riderId, playerId, orderId, customerName, orderNum, messageText } = payload;
+  // Prefer playerId (subscription ID stored in DB) over external_id alias.
+  const target = playerId
+    ? { include_player_ids: [playerId] }
+    : { include_aliases: { external_id: [riderId] }, target_channel: "push" };
   await postNotification({
-    include_aliases: { external_id: [riderId] },
+    ...target,
     target_channel: "push",
     headings: { en: customerName ? `Message from ${customerName}` : "New message from customer" },
     contents: { en: messageText || "Tap to reply" },
@@ -89,8 +97,8 @@ export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<vo
     logger.warn("sendNewOrderPush: ONESIGNAL env vars not set — skipping");
     return;
   }
-  const { riderIds, orderId, orderNum, area } = payload;
-  if (riderIds.length === 0) return;
+  const { playerIds, riderIds = [], orderId, orderNum, area } = payload;
+  if (playerIds.length === 0 && riderIds.length === 0) return;
 
   const heading = "New Order Available";
   const body = [
@@ -100,18 +108,30 @@ export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<vo
     .join(" ")
     .trim();
 
-  await postNotification({
-    include_aliases: { external_id: riderIds },
+  const data = {
+    screen: "newOrder",
+    orderId,
+    ...(orderNum ? { orderNum } : {}),
+  };
+  const common = {
     target_channel: "push",
     headings: { en: heading },
     contents: { en: body },
-    data: {
-      screen: "newOrder",
-      orderId,
-      ...(orderNum ? { orderNum } : {}),
-    },
+    data,
     android_channel_id: "978916b0-393b-4003-a090-405ccab2d321",
     ios_badge_type: "Increase",
     ios_badge_count: 1,
-  });
+  };
+
+  // Send via subscription IDs (preferred — direct device targeting).
+  if (playerIds.length > 0) {
+    await postNotification({ include_player_ids: playerIds, ...common });
+  }
+  // Send via external_id alias for riders that haven't saved a playerId yet.
+  if (riderIds.length > 0) {
+    await postNotification({
+      include_aliases: { external_id: riderIds },
+      ...common,
+    });
+  }
 }

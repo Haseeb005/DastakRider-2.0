@@ -29,6 +29,25 @@ const APP_ID: string =
 
 let initialized = false;
 
+/** Callback registered by the app to persist the subscription ID to the server. */
+let _savePlayerId: ((id: string) => void) | null = null;
+
+/**
+ * Register a function that will be called whenever a valid OneSignal
+ * subscription ID (player ID) is available. Called immediately if one
+ * is already present, and again whenever it changes.
+ */
+export function setPlayerIdSaver(fn: (id: string) => void): void {
+  _savePlayerId = fn;
+  // If a subscription ID already exists (e.g. rider re-opens app), fire now.
+  try {
+    const id = OneSignal.User.pushSubscription.id;
+    if (id) fn(id);
+  } catch {
+    // SDK not initialised yet — listener below will fire when ready.
+  }
+}
+
 export type PushScreen = "chat" | "newOrder";
 
 export interface PushTapEvent {
@@ -48,6 +67,14 @@ export function initOneSignal(onTap: (e: PushTapEvent) => void) {
   initialized = true;
 
   OneSignal.initialize(APP_ID);
+
+  // Capture the subscription ID (player ID) whenever it is assigned or changes.
+  // This fires after the SDK links the device to a push subscription, which may
+  // happen slightly after initialize() returns.
+  OneSignal.User.pushSubscription.addEventListener("change", (event: any) => {
+    const id: string | undefined = event?.current?.id;
+    if (id && _savePlayerId) _savePlayerId(id);
+  });
 
   // Suppress the system notification banner when the rider is already reading
   // that order's chat — the in-app ChatBanner already handles foreground alerts.

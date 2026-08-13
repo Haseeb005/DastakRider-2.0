@@ -1238,6 +1238,28 @@ router.patch("/orders/:orderId/chat/read", async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Save OneSignal subscription (player) ID
+// ---------------------------------------------------------------------------
+router.post("/api/rider/player-id", async (req, res) => {
+  const riderId = requireRiderId(req, res);
+  if (!riderId) return;
+  const { playerId } = req.body as { playerId?: string };
+  if (!playerId || typeof playerId !== "string") {
+    return res.status(400).json({ message: "playerId is required" });
+  }
+  try {
+    await usersCol().updateOne(
+      { _id: new ObjectId(riderId) } as any,
+      { $set: { playerId } },
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("POST /api/rider/player-id error", err);
+    return res.status(500).json({ message: "Failed to save playerId" });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Version check
 // ---------------------------------------------------------------------------
 const IOS_VERSIONS     = ["2.0", "3.0", "4.3.0"];
