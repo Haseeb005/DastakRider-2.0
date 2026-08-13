@@ -258,13 +258,34 @@ async function computeEarnings(riderId: string, tillNoonFare = 0) {
       },
     },
   };
+  // VAT amount on this order (0 if absent).
+  const vatAmountDbl = {
+    $convert: { input: { $ifNull: ["$vatAmount", 0] }, to: "double", onError: 0, onNull: 0 },
+  };
+  const isRestaurantExpr = { $eq: ["$shopType", "restaurant"] };
+  // For prepaid COD, the margin the rider physically owes is:
+  //   restaurant + vatAmount > 0 → orderTotal − actualPriceTotal − vatAmount
+  //   otherwise                  → orderTotal − actualPriceTotal
+  // This mirrors the pendingCollection increment logic applied on delivery.
+  const prepaidCodMarginExpr = {
+    $cond: [
+      { $and: [isRestaurantExpr, { $gt: [vatAmountDbl, 0] }] },
+      {
+        $max: [
+          { $subtract: [{ $subtract: [orderTotalDbl, prepaidActualTotalExpr] }, vatAmountDbl] },
+          0,
+        ],
+      },
+      { $max: [{ $subtract: [orderTotalDbl, prepaidActualTotalExpr] }, 0] },
+    ],
+  };
   const codAmountExpr = {
     $cond: [
       isCodExpr,
       {
         $cond: [
           isPrepaidExpr,
-          { $max: [{ $subtract: [orderTotalDbl, prepaidActualTotalExpr] }, 0] },
+          prepaidCodMarginExpr,
           orderTotalDbl,
         ],
       },
