@@ -596,10 +596,10 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       });
 
     // Previous-day cash clearance gate.
-    // Two conditions must both be true to block:
-    //   1. The rider's pendingCollection > 0 (admin resets this to 0 when cash is received).
-    //   2. At least one COD order delivered in a prior collection window exists — meaning
-    //      the pending cash is from a previous day, not just today's fresh deliveries.
+    // Blocks only when pendingCollection > 0 AND the rider has NO COD deliveries
+    // in the current collection window (after today's 8AM PKT cutoff).
+    // If any COD order was delivered today (after 8AM PKT), the pending cash is
+    // from the current window — legitimate — and the rider is not blocked.
     // Non-COD orders are excluded: the rider never holds physical cash for them.
     const pendingCollectionRaw = Number(rider?.pendingCollection || 0);
     const targetPayType = String(
@@ -608,11 +608,14 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
     const isTargetCod = COD_TYPES.some((t) => t.toLowerCase() === targetPayType);
     if (pendingCollectionRaw > 0 && isTargetCod) {
       const windowStart = pkt8AMCutoff();
-      const staleOrder = await ordersCol().findOne({
+      // Look for any COD delivery in today's window (after 8AM PKT).
+      // If found, the pending cash is from the current window — do not block.
+      // If none found, the pending cash is from a previous day — block.
+      const todayDelivery = await ordersCol().findOne({
         riderId,
-        status: "Delivered",          // only truly delivered orders hold cash
+        status: "Delivered",
         timeWhenDelivered: { $exists: true, $gt: "" },
-        createdAt: { $lt: windowStart },
+        createdAt: { $gte: windowStart },
         $expr: {
           $in: [
             { $ifNull: ["$paymentType", "$paymentMethod"] },
@@ -620,7 +623,7 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
           ],
         },
       });
-      if (staleOrder) {
+      if (!todayDelivery) {
         return res.status(400).json({
           message:
             "You have uncollected cash from a previous day. Please submit your cash to the company before accepting new orders.",
