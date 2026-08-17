@@ -584,6 +584,20 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
     const targetOrder = await ordersCol().findOne({ _id: orderObjectId });
     if (!targetOrder) return res.status(404).json({ message: "Order not found" });
 
+    // maxOrderLimit caps how many orders a rider can carry at once (admin-owned field).
+    // Uses a live DB count instead of the cached orderCount field (which can drift).
+    const maxOrderLimit = Number(rider?.maxOrderLimit || 0);
+    if (maxOrderLimit > 0) {
+      const activeCount = await ordersCol().countDocuments({
+        riderId,
+        status: { $in: ACTIVE_STATUSES },
+      });
+      if (activeCount >= maxOrderLimit)
+        return res.status(400).json({
+          message: `You can only have ${maxOrderLimit} active order${maxOrderLimit === 1 ? "" : "s"} at a time. Complete a current delivery before accepting more.`,
+        });
+    }
+
     // Previous-day cash clearance gate.
     // Blocks only when pendingCollection > 0 AND the rider has NO COD deliveries
     // in the current collection window (after today's 8AM PKT cutoff).
