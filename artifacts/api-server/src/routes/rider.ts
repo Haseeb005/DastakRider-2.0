@@ -606,7 +606,7 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       targetOrder?.paymentType || targetOrder?.paymentMethod || ""
     ).toLowerCase();
     const isTargetCod = COD_TYPES.some((t) => t.toLowerCase() === targetPayType);
-    if (pendingCollectionRaw > 0 && isTargetCod) {
+    if (pendingCollectionRaw > 0) {
       const windowStart = pkt8AMCutoff();
       // Look for any COD delivery in today's window (after 8AM PKT).
       // If found, the pending cash is from the current window — do not block.
