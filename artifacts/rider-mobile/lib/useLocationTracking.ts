@@ -2,9 +2,27 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { usePushRiderLocation } from "@workspace/api-client-react";
 import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 
 import { ACTIVE_ORDER_IDS_KEY, LOCATION_TASK } from "./locationTask";
+
+/**
+ * Google Play "Prominent Disclosure" requirement for BACKGROUND_LOCATION.
+ * Must be shown before requesting background location permission.
+ * Resolves when the user dismisses the dialog.
+ */
+function showBackgroundLocationDisclosure(): Promise<void> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      "Background Location Access",
+      "Dastak Rider uses your location in the background to share your live position with customers during active deliveries. " +
+        "This allows customers to track their order in real time, even when the app is minimised.\n\n" +
+        "Your location is only shared while you have an active delivery and stops automatically once the delivery is complete.",
+      [{ text: "Continue", onPress: () => resolve() }],
+      { cancelable: false },
+    );
+  });
+}
 
 export type LocationShareStatus = "idle" | "sharing" | "error";
 
@@ -32,7 +50,9 @@ export async function ensureLocationPermission(): Promise<boolean> {
     const { status: fg } = await Location.requestForegroundPermissionsAsync();
     if (fg !== "granted") return false;
     // Background permission — needed for tracking when the app is minimised.
+    // Show prominent disclosure (Google Play requirement) before the system prompt.
     // Proceed even if denied; foreground-only tracking still works.
+    await showBackgroundLocationDisclosure();
     await Location.requestBackgroundPermissionsAsync().catch(() => {});
     return true;
   } catch {
@@ -107,6 +127,8 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
           if (fg !== "granted") { setStatus("error"); return; }
 
           // Try to start the background task when background permission is available.
+          // Show prominent disclosure (Google Play requirement) before the system prompt.
+          await showBackgroundLocationDisclosure();
           const { status: bg } = await Location.requestBackgroundPermissionsAsync().catch(
             () => ({ status: "denied" as const }),
           );
