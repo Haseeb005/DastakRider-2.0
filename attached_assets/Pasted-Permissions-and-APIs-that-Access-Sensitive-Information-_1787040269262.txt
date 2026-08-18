@@ -1,0 +1,22 @@
+Permissions and APIs that Access Sensitive Information policy: Feature not eligible to access location in the background
+
+Based on your declaration, we found that your feature:
+
+    Doesn’t require access to location in the background in order to function, or
+    Can use foreground location access instead of access to location in the background.
+
+How to fix
+
+    Read through the Help Center article about understanding location in the background permissions for more information.
+    Remove access to location in the background from your app and/or use foreground location access instead. The following list shows features that could potentially use foreground instead of background location access. Having these features doesn’t automatically mean that your app will be rejected, but if features like these are the only reason your app requires access to location in the background, then the chances of rejection are high because these features can be conducted through foreground location access.
+        Feature that suggests nearby friends/players/connections to add only when the user is in the app (excludes suggesting nearby friends/players/connections when the app is closed).
+        One that personalizes in-app content like, local news or music playlists for home, based on user location (without any notification/alert/feature to user when the app is closed).
+        Feature that restricts content to enforce region-based digital rights management.
+        Delivery/service tracking (for things like food, packages, or a ride) for users (not drivers).
+        Turn-by-turn navigation (not applicable if any functionality is conducted while the user is outside the app, such as passive tracking of routes/steps and monitoring when a user starts or stops driving).
+        Feature that aggregates user location data to show traffic patterns/high congestion points or map nearby internet speeds.
+
+Additionally, follow these steps to bring your app into compliance:
+
+    To continue using location in the background, resubmit or update your Permissions Declaration Form via your Play Console account.
+    If your app is not eligible to access location in the background or doesn't meet requirements for accessing location in the background, please remove the permission from your manifest and in-app functionality.
