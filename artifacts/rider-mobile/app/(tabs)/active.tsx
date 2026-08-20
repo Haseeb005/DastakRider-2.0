@@ -15,6 +15,7 @@ import React, { useEffect, useReducer, useState } from "react";
 import {
   Alert,
   FlatList,
+  Modal,
   Platform,
   RefreshControl,
   Text,
@@ -27,7 +28,11 @@ import { OrderDetailModal } from "@/components/OrderDetailModal";
 import { Button, EmptyState, ScreenHeader } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
-import { ensureLocationPermission } from "@/lib/useLocationTracking";
+import {
+  ensureLocationPermission,
+  needsBackgroundLocationPermission,
+  requestBackgroundLocationPermissionAfterDisclosure,
+} from "@/lib/useLocationTracking";
 import {
   getLocationStatus,
   getTrackCount,
@@ -41,6 +46,9 @@ export default function ActiveScreen() {
   const router = useRouter();
   const { token } = useAuth();
   const [selected, setSelected] = useState<RiderOrder | null>(null);
+  const [pickupAwaitingConsent, setPickupAwaitingConsent] =
+    useState<RiderOrder | null>(null);
+  const [requestingLocation, setRequestingLocation] = useState(false);
   // Snapshot of unread message IDs seen when the rider last opened each order's
   // chat.  The card badge shows only messages NOT in this snapshot, so:
   //   • it clears immediately when the chat screen is opened (optimistic UX)
@@ -117,9 +125,8 @@ export default function ActiveScreen() {
     );
   };
 
-  const pickUp = async (order: RiderOrder) => {
-    // Force live-location sharing: a delivery cannot start until the rider grants
-    // location access, so the customer can always track the order in transit.
+  const completePickup = async (order: RiderOrder, requestBackground: boolean) => {
+    // Foreground location is required before a delivery begins.
     const granted = await ensureLocationPermission();
     if (!granted) {
       Alert.alert(
@@ -128,7 +135,35 @@ export default function ActiveScreen() {
       );
       return;
     }
+    if (requestBackground) {
+      // The rider just accepted the dedicated prominent disclosure modal.
+      // This immediately opens Android's background-location permission screen.
+      await requestBackgroundLocationPermissionAfterDisclosure();
+    }
     setStatus(order, "Rider Picked Up");
+  };
+
+  const pickUp = async (order: RiderOrder) => {
+    // The prominent disclosure must be shown immediately before any possible
+    // background-location permission request. Do not use an Alert for this:
+    // Play reviewers need a clear, in-app consent screen with an affirmative CTA.
+    if (Platform.OS !== "web" && await needsBackgroundLocationPermission()) {
+      setPickupAwaitingConsent(order);
+      return;
+    }
+    await completePickup(order, false);
+  };
+
+  const continueWithBackgroundLocation = async () => {
+    const order = pickupAwaitingConsent;
+    if (!order) return;
+    setRequestingLocation(true);
+    try {
+      await completePickup(order, true);
+      setPickupAwaitingConsent(null);
+    } finally {
+      setRequestingLocation(false);
+    }
   };
 
   const deliver = (order: RiderOrder) => {
@@ -285,6 +320,104 @@ export default function ActiveScreen() {
         visible={!!selected}
         onClose={() => setSelected(null)}
       />
+
+      <Modal
+        animationType="slide"
+        transparent
+        visible={!!pickupAwaitingConsent}
+        onRequestClose={() => {
+          if (!requestingLocation) setPickupAwaitingConsent(null);
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "flex-end",
+            backgroundColor: "rgba(17, 24, 39, 0.58)",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: c.card,
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              paddingHorizontal: 24,
+              paddingTop: 28,
+              paddingBottom: 36,
+              gap: 16,
+            }}
+          >
+            <View
+              style={{
+                alignSelf: "flex-start",
+                backgroundColor: c.secondary,
+                borderRadius: 999,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+              }}
+            >
+              <Text
+                style={{
+                  color: c.primary,
+                  fontFamily: "Inter_700Bold",
+                  fontSize: 12,
+                }}
+              >
+                LOCATION SHARING DURING DELIVERY
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: c.foreground,
+                fontFamily: "Inter_700Bold",
+                fontSize: 24,
+                lineHeight: 31,
+              }}
+            >
+              Allow background location?
+            </Text>
+            <Text
+              style={{
+                color: c.mutedForeground,
+                fontFamily: "Inter_400Regular",
+                fontSize: 15,
+                lineHeight: 23,
+              }}
+            >
+              Dastak Rider collects and shares your precise location with the
+              customer while you are completing an active delivery, including
+              when the app is closed or not in use. This lets the customer
+              track the delivery in real time while you use navigation or
+              switch apps.
+            </Text>
+            <Text
+              style={{
+                color: c.mutedForeground,
+                fontFamily: "Inter_400Regular",
+                fontSize: 13,
+                lineHeight: 20,
+              }}
+            >
+              Location sharing stops automatically after the delivery is marked
+              as delivered.
+            </Text>
+            <Button
+              label="Continue and allow location"
+              icon="navigation"
+              loading={requestingLocation}
+              onPress={continueWithBackgroundLocation}
+              style={{ alignSelf: "stretch", marginTop: 4 }}
+            />
+            <Button
+              label="Not now"
+              variant="outline"
+              disabled={requestingLocation}
+              onPress={() => setPickupAwaitingConsent(null)}
+              style={{ alignSelf: "stretch" }}
+            />
+          </View>
+        </View>
+      </Modal>
 
     </View>
   );

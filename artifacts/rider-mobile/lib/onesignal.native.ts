@@ -40,12 +40,14 @@ let _savePlayerId: ((id: string) => void) | null = null;
 export function setPlayerIdSaver(fn: (id: string) => void): void {
   _savePlayerId = fn;
   // If a subscription ID already exists (e.g. rider re-opens app), fire now.
-  try {
-    const id = OneSignal.User.pushSubscription.id;
-    if (id) fn(id);
-  } catch {
-    // SDK not initialised yet — listener below will fire when ready.
-  }
+  OneSignal.User.pushSubscription
+    .getIdAsync()
+    .then((id) => {
+      if (id) fn(id);
+    })
+    .catch(() => {
+      // SDK not initialised yet — listener below will fire when ready.
+    });
 }
 
 export type PushScreen = "chat" | "newOrder";

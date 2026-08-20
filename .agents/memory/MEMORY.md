@@ -7,3 +7,4 @@
 - [Dastak mobile icons](dastak-mobile-icons.md) — Expo app uses lucide SVG icons (font icons rendered blank); add/change icons via components/Icon.tsx, not @expo/vector-icons.
 - [Rider accept-order limits](rider-order-accept-limits.md) — paymentLimit/maxOrderLimit gate accept; grep pasted "legacy specs" before porting them, they may not match this repo.
 - [Delivered filter race condition](delivered-filter-race.md) — admin system reverts status within seconds; gate "Delivered" on pickUpTime+!timeWhenDelivered, not status field.
+- [Background-location consent](background-location-consent.md) — Android background location may only be requested after explicit action on the dedicated rider disclosure screen.
