@@ -1246,7 +1246,7 @@ router.patch("/orders/:orderId/chat/read", async (req, res) => {
 // ---------------------------------------------------------------------------
 // Save OneSignal subscription (player) ID
 // ---------------------------------------------------------------------------
-router.post("/api/rider/player-id", async (req, res) => {
+router.post("/rider/player-id", async (req, res) => {
   const riderId = requireRiderId(req, res);
   if (!riderId) return;
   const { playerId } = req.body as { playerId?: string };
