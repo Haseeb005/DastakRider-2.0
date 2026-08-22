@@ -6,7 +6,7 @@ description: How cash-collection and concurrent-order limits work on the rider o
 The rider order-accept endpoint enforces two independent, admin-owned limits on the rider document, both optional (0/missing = unlimited, never block by default):
 
 - `paymentLimit` / `pendingCollection`: only COD orders count against this cash-in-hand limit. Online/wallet/split payments never block. Blocks if already at/over limit, or if accepting a COD order would push the rider over `paymentLimit - pendingCollection`.
-- `maxOrderLimit`: caps concurrent active orders a rider can hold (replaces an old hardcoded cap of 1). Confirmed with user: it means "how many orders a rider can accept at a time," not a daily count.
+- `maxOrderLimit`: caps concurrent active orders a rider can hold (replaces an old hardcoded cap of 1). It is the only concurrent-order limit; `orderCount` is legacy data and must never be read or written. Confirmed with user: it means "how many orders a rider can accept at a time," not a daily count.
 
 Both apps already render active orders as an array (badge = `activeOrders.length`), so raising `maxOrderLimit` above 1 is UI-compatible — except the GPS location-tracking hook does `activeOrders.find(status === "Rider Picked Up")`, so it only tracks one order if multiple are picked up simultaneously.
 

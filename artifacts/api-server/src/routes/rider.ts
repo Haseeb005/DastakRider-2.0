@@ -136,7 +136,7 @@ async function safeRider(user: any) {
     vehicleType: user.vehicleType || "bike",
     isOnline: !!user.isOnline,
     totalEarnings: 0,
-    totalDeliveries: Number(user.orderCount) || 0,
+    totalDeliveries: 0,
     rating,
     ratingCount,
     riderZones: Array.isArray(user.riderZones) ? user.riderZones.filter(Boolean) : [],
@@ -394,7 +394,6 @@ router.post("/rider/register", async (req: any, res: any) => {
       status: "idle",
       deleted: false,
       verified: false,
-      orderCount: 0,
       riderZones: [],
       pendingCollection: 0,
       unpaidCollection: 0,
@@ -457,7 +456,7 @@ router.get("/rider/me", async (req: any, res: any) => {
       ...base,
       pendingCollection: base.pendingCollection,
       totalEarnings: earn.totalEarnings,
-      totalDeliveries: earn.totalDeliveries || Number(rider.orderCount) || 0,
+      totalDeliveries: earn.totalDeliveries,
     });
   } catch (e: any) {
     req.log.error(e);
@@ -585,7 +584,7 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
     if (!targetOrder) return res.status(404).json({ message: "Order not found" });
 
     // maxOrderLimit caps how many orders a rider can carry at once (admin-owned field).
-    // Uses a live DB count instead of the cached orderCount field (which can drift).
+    // The limit is enforced from the current active-order count.
     const maxOrderLimit = Number(rider?.maxOrderLimit || 0);
     if (maxOrderLimit > 0) {
       const activeCount = await ordersCol().countDocuments({
@@ -701,10 +700,10 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       { returnDocument: "after" }
     );
     if (!updated) return res.status(409).json({ message: "Order already taken or unavailable." });
-    // Rider is now carrying at least one order — mark "on delivery" and bump active count.
+    // Rider is now carrying at least one order — mark "on delivery".
     await usersCol().updateOne(
       { _id: new ObjectId(riderId) },
-      { $set: { status: "on delivery" }, $inc: { orderCount: 1 } }
+      { $set: { status: "on delivery" } }
     );
     res.json(normalizeOrder(updated, Number(rider.tillNoonFare) || 0));
   } catch (e: any) {
@@ -855,16 +854,15 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
           );
         }
       }
-      // Decrement active order count. If it hits 0 (or below), rider is idle again.
-      const updatedRider = await usersCol().findOneAndUpdate(
-        { _id: new ObjectId(riderId) },
-        { $inc: { orderCount: -1 } },
-        { returnDocument: "after" }
-      );
-      if ((updatedRider?.orderCount ?? 0) <= 0) {
+      // Rider status follows the current active-order count.
+      const remainingActiveOrders = await ordersCol().countDocuments({
+        riderId,
+        status: { $in: ACTIVE_STATUSES },
+      });
+      if (remainingActiveOrders === 0) {
         await usersCol().updateOne(
           { _id: new ObjectId(riderId) },
-          { $set: { status: "idle", orderCount: 0 } }
+          { $set: { status: "idle" } }
         );
       }
     }

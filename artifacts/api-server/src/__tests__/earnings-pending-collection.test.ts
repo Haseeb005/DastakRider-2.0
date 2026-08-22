@@ -63,7 +63,6 @@ before(async () => {
     status: "idle",
     deleted: false,
     verified: false,
-    orderCount: 0,
     riderZones: [],
     pendingCollection: 750,   // ← the known DB value assertions check against
     unpaidCollection: 0,
