@@ -137,7 +137,7 @@ function RootLayoutNav() {
       if (riderId) oneSignalLogin(riderId);
 
       // Save the OneSignal subscription (player) ID to the server so the API
-      // can target this device via include_player_ids instead of external_id.
+      // can target this device via include_subscription_ids instead of external_id.
       setPlayerIdSaver((playerId) => {
         AsyncStorage.getItem(TOKEN_KEY)
           .then((storedToken) => {

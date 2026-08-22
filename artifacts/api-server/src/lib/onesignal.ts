@@ -17,7 +17,7 @@ const REST_KEY = process.env.ONESIGNAL_REST_API_KEY_RIDER ?? "";
 export interface ChatPushPayload {
   /** Rider's MongoDB _id (string) — fallback if playerId is absent. */
   riderId: string;
-  /** OneSignal subscription / player ID stored on the rider document. Preferred. */
+  /** OneSignal subscription ID stored on the rider document. Preferred. */
   playerId?: string;
   orderId: string;
   customerName?: string;
@@ -67,9 +67,9 @@ export async function sendChatPush(payload: ChatPushPayload): Promise<void> {
     return;
   }
   const { riderId, playerId, orderId, customerName, orderNum, messageText } = payload;
-  // Prefer playerId (subscription ID stored in DB) over external_id alias.
+  // Prefer the subscription ID stored in DB over the external_id alias.
   const target = playerId
-    ? { include_player_ids: [playerId] }
+    ? { include_subscription_ids: [playerId] }
     : { include_aliases: { external_id: [riderId] }, target_channel: "push" };
   await postNotification({
     ...target,
@@ -125,7 +125,7 @@ export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<vo
 
   // Send via subscription IDs (preferred — direct device targeting).
   if (playerIds.length > 0) {
-    await postNotification({ include_player_ids: playerIds, ...common });
+    await postNotification({ include_subscription_ids: playerIds, ...common });
   }
   // Send via external_id alias for riders that haven't saved a playerId yet.
   if (riderIds.length > 0) {
