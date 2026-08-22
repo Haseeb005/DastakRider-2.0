@@ -76,6 +76,8 @@ export async function sendChatPush(payload: ChatPushPayload): Promise<void> {
     target_channel: "push",
     headings: { en: customerName ? `Message from ${customerName}` : "New message from customer" },
     contents: { en: messageText || "Tap to reply" },
+    ios_sound: "dastak.wav",
+    android_sound: "dastak",
     data: {
       screen: "chat",
       orderId,
@@ -117,6 +119,8 @@ export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<vo
     target_channel: "push",
     headings: { en: heading },
     contents: { en: body },
+    ios_sound: "dastak.wav",
+    android_sound: "dastak",
     data,
     android_channel_id: "978916b0-393b-4003-a090-405ccab2d321",
     ios_badge_type: "Increase",

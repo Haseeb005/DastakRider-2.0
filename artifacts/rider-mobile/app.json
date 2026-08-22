@@ -50,7 +50,10 @@
       [
         "onesignal-expo-plugin",
         {
-          "mode": "production"
+          "mode": "production",
+          "sounds": [
+            "./assets/sounds/dastak.wav"
+          ]
         }
       ],
       "expo-web-browser",
