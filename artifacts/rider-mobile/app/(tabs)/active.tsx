@@ -167,7 +167,17 @@ export default function ActiveScreen() {
   };
 
   const deliver = (order: RiderOrder) => {
-    setStatus(order, "Delivered");
+    Alert.alert(
+      "Confirm delivery",
+      "Are you sure you want to mark this order as delivered?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Mark as delivered",
+          onPress: () => setStatus(order, "Delivered"),
+        },
+      ],
+    );
   };
 
   const renderAction = (order: RiderOrder) => {

@@ -25,6 +25,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   Bike,
@@ -1214,6 +1224,7 @@ function ActiveDelivery({
 
   const statusMutation = useUpdateOrderStatus();
   const arrivedMutation = useMarkOrderArrived();
+  const [deliveryToConfirm, setDeliveryToConfirm] = useState<string | null>(null);
 
   const handleArrived = (orderId: string) => {
     arrivedMutation.mutate(
@@ -1266,6 +1277,14 @@ function ActiveDelivery({
     );
   };
 
+  const requestStatusUpdate = (orderId: string, status: string) => {
+    if (status === "Delivered") {
+      setDeliveryToConfirm(orderId);
+      return;
+    }
+    void handleStatus(orderId, status);
+  };
+
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
@@ -1309,7 +1328,7 @@ function ActiveDelivery({
               order={order}
               showStatus
               busy={statusMutation.isPending || arrivedMutation.isPending}
-              onStatusUpdate={(status) => handleStatus(order.id, status)}
+              onStatusUpdate={(status) => requestStatusUpdate(order.id, status)}
               onArrived={() => handleArrived(order.id)}
               onClick={() => setSelected(order)}
             />
@@ -1325,6 +1344,36 @@ function ActiveDelivery({
       {selected && (
         <RiderOrderDetailModal order={selected} onClose={() => setSelected(null)} />
       )}
+
+      <AlertDialog
+        open={deliveryToConfirm !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeliveryToConfirm(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm delivery</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to mark this order as delivered? This will
+              complete the delivery.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const orderId = deliveryToConfirm;
+                setDeliveryToConfirm(null);
+                if (orderId) void handleStatus(orderId, "Delivered");
+              }}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Mark as delivered
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );
