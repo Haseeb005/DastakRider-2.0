@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 
 // The looping ringtone played on native when a new order arrives.
-const ORDER_TONE = require("../assets/sounds/dastak.wav");
+const ORDER_TONE = require("../assets/sounds/dastak.mp3");
 
 // Configure the native audio session once so the tone rings even when the
 // phone is on silent (iOS) and routes through the speaker.

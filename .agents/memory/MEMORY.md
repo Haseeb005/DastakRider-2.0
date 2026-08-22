@@ -8,3 +8,4 @@
 - [Rider accept-order limits](rider-order-accept-limits.md) — paymentLimit/maxOrderLimit gate accept; grep pasted "legacy specs" before porting them, they may not match this repo.
 - [Delivered filter race condition](delivered-filter-race.md) — admin system reverts status within seconds; gate "Delivered" on pickUpTime+!timeWhenDelivered, not status field.
 - [Background-location consent](background-location-consent.md) — Android background location may only be requested after explicit action on the dedicated rider disclosure screen.
+- [Rider notification sounds](rider-notification-sounds.md) — OneSignal Expo plugin packages only WAV; derive the push WAV from the source audio and keep Android/iOS names aligned.
