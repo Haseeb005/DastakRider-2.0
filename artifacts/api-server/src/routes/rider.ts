@@ -1130,9 +1130,24 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
 //   _id          → id (string)
 // ---------------------------------------------------------------------------
 
-function mapChatMsg(m: any) {
+function legacyChatMessageId(m: any, index = 0): string {
+  const identity = [
+    "legacy",
+    m.type ?? m.fromRole ?? "customer",
+    m.createdAt ?? m.time ?? "",
+    m.txt ?? m.text ?? "",
+    index,
+  ].join("\u0000");
+  return `legacy:${crypto.createHash("sha256").update(identity).digest("hex")}`;
+}
+
+function mapChatMsg(m: any, index = 0) {
+  const messageId = m._id ?? m.id;
   return {
-    id: m._id ? String(m._id) : String(Math.random()),
+    // Older customer-app messages have no _id. Their fallback must remain
+    // stable across polls, otherwise the rider app treats the same message as
+    // newly arrived every time it refreshes and repeats the notification.
+    id: messageId ? String(messageId) : legacyChatMessageId(m, index),
     fromRole: m.type === "rider" ? "rider" : "customer",
     text: m.txt ?? m.text ?? "",
     time: m.time ?? "",
@@ -1149,7 +1164,9 @@ router.get("/orders/:orderId/chat", async (req, res) => {
   const { orderId } = req.params;
   try {
     const doc = await chatsCol().findOne({ orderId } as any);
-    const msgs = Array.isArray(doc?.chat) ? doc.chat.map(mapChatMsg) : [];
+    const msgs = Array.isArray(doc?.chat)
+      ? doc.chat.map((m: any, index: number) => mapChatMsg(m, index))
+      : [];
     res.json(msgs);
   } catch (err) {
     console.error("GET /api/orders/:orderId/chat error", err);

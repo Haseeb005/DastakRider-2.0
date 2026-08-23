@@ -9,7 +9,6 @@ import {
   useGetRiderMe,
 } from "@workspace/api-client-react";
 import type { SFSymbol } from "expo-symbols";
-import { scheduleNotificationAsync } from "@/lib/localPush";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
@@ -386,7 +385,7 @@ export default function TabLayout() {
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   useEffect(() => subscribeBadgeStore(rerender), []);
 
-  // Banner + push notification state lives here so it fires on any tab.
+  // Chat banner state lives here so it fires on any tab.
   const [banner, setBanner] = useState<BannerInfo | null>(null);
   const activeOrdersRef = useRef(activeQ.data ?? []);
   activeOrdersRef.current = activeQ.data ?? [];
@@ -402,19 +401,9 @@ export default function TabLayout() {
       orderNum: order?.orderNum ? String(order.orderNum) : undefined,
     });
 
-    // Local push — shows a system notification when the app is foregrounded
-    // on a different screen. (Background push requires server-side FCM/APNs.)
-    scheduleNotificationAsync({
-      content: {
-        title: order?.userName
-          ? `Message from ${order.userName}`
-          : "New message from customer",
-        body: "Tap to reply",
-        sound: true,
-        data: { orderId, screen: "chat" },
-      },
-      trigger: null,
-    }).catch(() => {});
+    // OneSignal delivers the single system notification. The in-app banner
+    // above is enough while the rider is already using the app; scheduling a
+    // second local notification here caused duplicate alerts for one message.
   }, []);
 
   const { messagesByOrderId } = useChatWatcher(activeOrderIds, onNewMessage);

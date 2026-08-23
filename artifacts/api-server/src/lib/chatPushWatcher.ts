@@ -20,6 +20,7 @@
 
 import { ObjectId } from "mongodb";
 import WebSocket from "ws";
+import crypto from "crypto";
 
 import { logger } from "./logger";
 import { chatsCol, ordersCol, usersCol } from "./mongo";
@@ -34,6 +35,19 @@ const lastPushedMsgId = new Map<string, string>();
 
 /** Timestamp of the last push sent for an orderId. */
 const lastPushAt = new Map<string, number>();
+
+function chatMessageKey(message: Record<string, any>, index: number): string {
+  const messageId = message._id ?? message.id;
+  if (messageId) return String(messageId);
+  const identity = [
+    "legacy",
+    message.type ?? message.fromRole ?? "customer",
+    message.createdAt ?? message.time ?? "",
+    message.txt ?? message.text ?? "",
+    index,
+  ].join("\u0000");
+  return `legacy:${crypto.createHash("sha256").update(identity).digest("hex")}`;
+}
 
 async function handleChatsChange(rawId: string): Promise<void> {
   try {
@@ -51,13 +65,17 @@ async function handleChatsChange(rawId: string): Promise<void> {
     if (!doc || !Array.isArray(doc.chat) || doc.chat.length === 0) return;
 
     // Find the most recent message from a customer (type "user").
-    const customerMsgs = (doc.chat as any[]).filter(
-      (m) => m.type === "user" || m.fromRole === "customer",
-    );
+    const customerMsgs = (doc.chat as any[])
+      .map((message, index) => ({ message, index }))
+      .filter(
+        ({ message }) =>
+          message.type === "user" || message.fromRole === "customer",
+      );
     if (customerMsgs.length === 0) return;
 
-    const lastMsg = customerMsgs[customerMsgs.length - 1];
-    const lastMsgId = String(lastMsg._id);
+    const { message: lastMsg, index: lastMsgIndex } =
+      customerMsgs[customerMsgs.length - 1];
+    const lastMsgId = chatMessageKey(lastMsg, lastMsgIndex);
     const chatKey = String(doc._id);
 
     // Skip if we already pushed for this exact message.
