@@ -24,6 +24,7 @@ import type {
   AvailabilityResponse,
   EarningsSummary,
   GetOrderHistoryParams,
+  GetRiderEarningsParams,
   HealthStatus,
   OkResponse,
   OrderStatusInput,
@@ -935,20 +936,27 @@ export const useUpdateOrderStatus = <TError = ErrorType<unknown>,
       return useMutation(getUpdateOrderStatusMutationOptions(options));
     }
 
-export const getGetRiderEarningsUrl = () => {
+export const getGetRiderEarningsUrl = (params?: GetRiderEarningsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/rider/earnings`
+  return stringifiedParams.length > 0 ? `/api/rider/earnings?${stringifiedParams}` : `/api/rider/earnings`
 }
 
 /**
  * @summary Get rider earnings summary
  */
-export const getRiderEarnings = async ( options?: RequestInit): Promise<EarningsSummary> => {
+export const getRiderEarnings = async (params?: GetRiderEarningsParams, options?: RequestInit): Promise<EarningsSummary> => {
 
-  return customFetch<EarningsSummary>(getGetRiderEarningsUrl(),
+  return customFetch<EarningsSummary>(getGetRiderEarningsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -961,23 +969,23 @@ export const getRiderEarnings = async ( options?: RequestInit): Promise<Earnings
 
 
 
-export const getGetRiderEarningsQueryKey = () => {
+export const getGetRiderEarningsQueryKey = (params?: GetRiderEarningsParams,) => {
     return [
-    `/api/rider/earnings`
+    `/api/rider/earnings`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetRiderEarningsQueryOptions = <TData = Awaited<ReturnType<typeof getRiderEarnings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderEarnings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetRiderEarningsQueryOptions = <TData = Awaited<ReturnType<typeof getRiderEarnings>>, TError = ErrorType<unknown>>(params?: GetRiderEarningsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderEarnings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetRiderEarningsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetRiderEarningsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRiderEarnings>>> = ({ signal }) => getRiderEarnings({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRiderEarnings>>> = ({ signal }) => getRiderEarnings(params, { signal, ...requestOptions });
 
 
 
@@ -995,11 +1003,11 @@ export type GetRiderEarningsQueryError = ErrorType<unknown>
  */
 
 export function useGetRiderEarnings<TData = Awaited<ReturnType<typeof getRiderEarnings>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderEarnings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetRiderEarningsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderEarnings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetRiderEarningsQueryOptions(options)
+  const queryOptions = getGetRiderEarningsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

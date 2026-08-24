@@ -230,7 +230,8 @@ export const GetActiveOrdersResponse = zod.array(GetActiveOrdersResponseItem)
  * @summary Get rider's completed deliveries
  */
 export const GetOrderHistoryQueryParams = zod.object({
-  "period": zod.enum(['today', 'week', 'month', 'all']).optional()
+  "period": zod.enum(['today', 'week', 'month', 'all']).optional(),
+  "date": zod.date().optional().describe('A specific calendar date in Pakistan time (YYYY-MM-DD). Takes precedence over period.')
 })
 
 export const GetOrderHistoryResponseItem = zod.object({
@@ -499,6 +500,10 @@ export const UpdateOrderStatusResponse = zod.object({
 /**
  * @summary Get rider earnings summary
  */
+export const GetRiderEarningsQueryParams = zod.object({
+  "date": zod.date().optional().describe('A specific calendar date in Pakistan time (YYYY-MM-DD).')
+})
+
 export const GetRiderEarningsResponse = zod.object({
   "totalEarnings": zod.number(),
   "totalDeliveries": zod.number(),
@@ -512,6 +517,10 @@ export const GetRiderEarningsResponse = zod.object({
   "monthEarnings": zod.number().optional(),
   "monthDeliveries": zod.number().optional(),
   "monthOrderAmount": zod.number().optional(),
+  "selectedDate": zod.string().nullish().describe('The requested calendar date in YYYY-MM-DD format, when a date filter was provided.'),
+  "selectedEarnings": zod.number().optional(),
+  "selectedDeliveries": zod.number().optional(),
+  "selectedOrderAmount": zod.number().optional(),
   "rating": zod.number(),
   "ratingCount": zod.number(),
   "pendingCollection": zod.number().optional(),

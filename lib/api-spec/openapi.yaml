@@ -163,6 +163,13 @@ paths:
           schema:
             type: string
             enum: [today, week, month, all]
+        - name: date
+          in: query
+          required: false
+          description: A specific calendar date in Pakistan time (YYYY-MM-DD). Takes precedence over period.
+          schema:
+            type: string
+            format: date
       responses:
         "200":
           description: OK
@@ -250,6 +257,14 @@ paths:
       operationId: getRiderEarnings
       tags: [earnings]
       summary: Get rider earnings summary
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: A specific calendar date in Pakistan time (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
       responses:
         "200":
           description: OK
@@ -541,6 +556,15 @@ components:
         monthDeliveries:
           type: number
         monthOrderAmount:
+          type: number
+        selectedDate:
+          type: ["string", "null"]
+          description: The requested calendar date in YYYY-MM-DD format, when a date filter was provided.
+        selectedEarnings:
+          type: number
+        selectedDeliveries:
+          type: number
+        selectedOrderAmount:
           type: number
         rating:
           type: number

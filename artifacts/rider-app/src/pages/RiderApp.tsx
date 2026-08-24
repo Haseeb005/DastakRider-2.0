@@ -63,6 +63,7 @@ import {
   Receipt,
   AlertTriangle,
   ChevronRight,
+  CalendarDays,
 } from "lucide-react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ChatNotificationBanner, type BannerInfo } from "@/components/ChatNotificationBanner";
@@ -140,6 +141,30 @@ function formatDateTime(dateStr?: string | null) {
     minute: "2-digit",
     hour12: true,
   });
+}
+
+function formatHistoryDate(dateValue: string): string {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  return date.toLocaleDateString("en-PK", {
+    timeZone: "Asia/Karachi",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function isHistoryDateValue(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    year >= 2000 &&
+    year <= 2100 &&
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
 }
 
 /** Formats a timestamp as "04:15 pm" (PKT = UTC+5, zero-padded, lowercase am/pm). */
@@ -1390,16 +1415,25 @@ const HISTORY_PERIODS: Array<{ key: "today" | "week" | "month" | "all"; label: s
 
 function DeliveryHistory() {
   const [period, setPeriod] = useState<"today" | "week" | "month" | "all">("today");
+  const [selectedDate, setSelectedDate] = useState("");
   const [selected, setSelected] = useState<RiderOrder | null>(null);
 
-  const { data: earnings } = useGetRiderEarnings();
-  const { data: history = [], isLoading } = useGetOrderHistory(
-    { period },
-    { query: { queryKey: getGetOrderHistoryQueryKey({ period }) } },
+  const hasSelectedDate = isHistoryDateValue(selectedDate);
+  const historyParams = hasSelectedDate ? { date: selectedDate } : { period };
+  const earningsParams = hasSelectedDate ? { date: selectedDate } : undefined;
+  const earningsQuery = useGetRiderEarnings(earningsParams);
+  const historyQuery = useGetOrderHistory(
+    historyParams,
+    { query: { queryKey: getGetOrderHistoryQueryKey(historyParams) } },
   );
+  const earnings = earningsQuery.data;
+  const history = historyQuery.data ?? [];
+  const isLoading = historyQuery.isLoading;
+  const isError = historyQuery.isError || (hasSelectedDate && earningsQuery.isError);
 
   const periodLabel =
-    period === "today" ? "Today"
+    selectedDate ? formatHistoryDate(selectedDate)
+      : period === "today" ? "Today"
       : period === "week" ? "This Week"
         : period === "month" ? "This Month"
           : "All";
@@ -1413,9 +1447,12 @@ function DeliveryHistory() {
         {HISTORY_PERIODS.map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => setPeriod(key)}
+            onClick={() => {
+              setSelectedDate("");
+              setPeriod(key);
+            }}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-              period === key ? "bg-white text-brand-600 shadow-sm" : "text-gray-500"
+              !selectedDate && period === key ? "bg-white text-brand-600 shadow-sm" : "text-gray-500"
             }`}
           >
             {label}
@@ -1423,8 +1460,36 @@ function DeliveryHistory() {
         ))}
       </div>
 
+      <div className="flex items-center gap-2">
+        <label className="flex flex-1 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+          <CalendarDays className="h-4 w-4 text-brand-600" />
+          <span className="font-medium">Select date</span>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              if (!nextValue || isHistoryDateValue(nextValue)) {
+                setSelectedDate(nextValue);
+              }
+            }}
+            className="ml-auto min-w-0 bg-transparent text-sm text-gray-700 outline-none"
+            aria-label="Filter deliveries by date"
+          />
+        </label>
+        {hasSelectedDate && (
+          <button
+            type="button"
+            onClick={() => setSelectedDate("")}
+            className="rounded-xl px-3 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
       {/* Today / Week / Month summary columns */}
-      {earnings && (
+      {earnings && !hasSelectedDate && (
         <div className="grid grid-cols-3 gap-2 text-center">
           <div>
             <p className="text-xs text-brand-500 font-medium mb-1">Today</p>
@@ -1458,6 +1523,38 @@ function DeliveryHistory() {
         </Card>
       )}
 
+      {hasSelectedDate && (
+        <Card className="border-brand-100 bg-brand-50/40 shadow-sm">
+          <CardContent className="p-4">
+            <p className="text-sm font-semibold text-gray-800">{formatHistoryDate(selectedDate)} summary</p>
+            {earningsQuery.isLoading ? (
+              <p className="mt-2 text-sm text-gray-500">Loading selected-date totals…</p>
+            ) : (
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-xs text-gray-500">Earnings</p>
+                  <p className="mt-1 text-base font-bold text-green-600">
+                    {formatMoney(earnings?.selectedEarnings)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Deliveries</p>
+                  <p className="mt-1 text-base font-bold text-gray-900">
+                    {earnings?.selectedDeliveries ?? 0}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Order amount</p>
+                  <p className="mt-1 text-base font-bold text-gray-900">
+                    {formatMoney(earnings?.selectedOrderAmount)}
+                  </p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {earnings && earnings.rating > 0 && (
         <Card className="border-0 shadow-md overflow-hidden">
           <div className="bg-gradient-to-br from-yellow-400 to-amber-500 p-4 text-white flex justify-between items-center">
@@ -1473,7 +1570,11 @@ function DeliveryHistory() {
 
       <h3 className="font-semibold text-gray-700 mt-2">{periodLabel} Deliveries</h3>
 
-      {isLoading ? (
+      {isError ? (
+        <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+          Could not load deliveries for this date. Please try again.
+        </div>
+      ) : isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />
@@ -1482,7 +1583,7 @@ function DeliveryHistory() {
       ) : history.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-32 text-center">
           <History className="w-12 h-12 text-gray-300 mb-2" />
-          <p className="text-gray-500">No deliveries in this period</p>
+          <p className="text-gray-500">No deliveries for this selection</p>
         </div>
       ) : (
         <div className="space-y-3">

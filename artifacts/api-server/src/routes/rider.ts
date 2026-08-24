@@ -154,6 +154,7 @@ async function safeRider(user: any) {
 // in the shared prod DB shares one bulk-written `updatedAt`, so filtering on it
 // puts everything in "today" and makes Today/Week/Month all equal the overall total.
 const PKT_MS = 5 * 60 * 60 * 1000;
+const PKT_DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Returns the start of the current cash-collection window as a UTC Date.
@@ -193,12 +194,44 @@ function pktPeriodStart(kind: "day" | "week" | "month"): Date {
   return new Date(Date.UTC(y, m, day) - PKT_MS);
 }
 
+/**
+ * Converts an ISO calendar date to PKT midnight as a real UTC instant.
+ * Date strings are validated strictly so an invalid value never silently shifts
+ * to a different calendar day.
+ */
+function pktDateStart(dateValue: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 2000 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    utcDate.getUTCFullYear() !== year ||
+    utcDate.getUTCMonth() !== month - 1 ||
+    utcDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return new Date(utcDate.getTime() - PKT_MS);
+}
+
 // Aggregate a rider's delivered-order earnings into total / today / week / month
 // buckets, plus COD-only cash collected. Pay per delivered order is the rider's
 // CURRENT tillNoonFare (passed in); the per-order snapshot (riderFare) is only a
 // fallback for riders with no tillNoonFare. Never the customer's deliveryCharges.
 // Shared by /rider/me and /rider/earnings.
-async function computeEarnings(riderId: string, tillNoonFare = 0) {
+async function computeEarnings(
+  riderId: string,
+  tillNoonFare = 0,
+  selectedDate?: { value: string; start: Date },
+) {
   const dayStart = pktPeriodStart("day");
   const weekStart = pktPeriodStart("week");
   const monthStart = pktPeriodStart("month");
@@ -320,17 +353,30 @@ async function computeEarnings(riderId: string, tillNoonFare = 0) {
     prepaidNonCodDeduction: { $sum: prepaidNonCodDeductExpr },
   };
 
+  const facets: Record<string, any[]> = {
+    total: [{ $group: group }],
+    today: [{ $match: { createdAt: { $gte: dayStart } } }, { $group: group }],
+    week: [{ $match: { createdAt: { $gte: weekStart } } }, { $group: group }],
+    month: [{ $match: { createdAt: { $gte: monthStart } } }, { $group: group }],
+  };
+  if (selectedDate) {
+    facets.selected = [
+      {
+        $match: {
+          createdAt: {
+            $gte: selectedDate.start,
+            $lt: new Date(selectedDate.start.getTime() + PKT_DAY_MS),
+          },
+        },
+      },
+      { $group: group },
+    ];
+  }
+
   const [agg] = await ordersCol()
     .aggregate([
       { $match: { riderId, status: DELIVERED_STATUS } },
-      {
-        $facet: {
-          total: [{ $group: group }],
-          today: [{ $match: { createdAt: { $gte: dayStart } } }, { $group: group }],
-          week: [{ $match: { createdAt: { $gte: weekStart } } }, { $group: group }],
-          month: [{ $match: { createdAt: { $gte: monthStart } } }, { $group: group }],
-        },
-      },
+      { $facet: facets },
     ])
     .toArray();
 
@@ -343,6 +389,7 @@ async function computeEarnings(riderId: string, tillNoonFare = 0) {
   const today = pick(agg?.today);
   const week = pick(agg?.week);
   const month = pick(agg?.month);
+  const selected = selectedDate ? pick(agg?.selected) : null;
 
   return {
     totalEarnings: total.earnings,
@@ -357,6 +404,14 @@ async function computeEarnings(riderId: string, tillNoonFare = 0) {
     monthEarnings: month.earnings,
     monthDeliveries: month.count,
     monthOrderAmount: month.orderAmount,
+    ...(selectedDate
+      ? {
+          selectedDate: selectedDate.value,
+          selectedEarnings: selected?.earnings ?? 0,
+          selectedDeliveries: selected?.count ?? 0,
+          selectedOrderAmount: selected?.orderAmount ?? 0,
+        }
+      : {}),
     // Total deduction to subtract from the rider's displayed pendingCollection for
     // prepaid non-COD orders (customer paid online; rider never held that cash).
     prepaidNonCodDeduction: Math.round(
@@ -541,10 +596,20 @@ router.get("/rider/orders/history", async (req: any, res: any) => {
     const riderId = requireRiderId(req, res);
     if (!riderId) return;
     const period = String(req.query.period || "all");
+    const selectedDate = String(req.query.date || "").trim();
     // Filter by createdAt in the DB query (not updatedAt — it is bulk-written and
     // identical across orders) so the row limit never drops in-period orders.
     const query: any = { riderId, status: DELIVERED_STATUS };
-    if (period === "today" || period === "week" || period === "month") {
+    if (selectedDate) {
+      const start = pktDateStart(selectedDate);
+      if (!start) {
+        return res.status(400).json({ message: "date must be a valid YYYY-MM-DD value" });
+      }
+      query.createdAt = {
+        $gte: start,
+        $lt: new Date(start.getTime() + PKT_DAY_MS),
+      };
+    } else if (period === "today" || period === "week" || period === "month") {
       query.createdAt = {
         $gte: pktPeriodStart(period === "today" ? "day" : period),
       };
@@ -881,7 +946,17 @@ router.get("/rider/earnings", async (req: any, res: any) => {
     const rider = await findRiderById(riderId);
     if (!rider) return res.status(404).json({ message: "Rider not found" });
 
-    const earn = await computeEarnings(riderId, Number(rider.tillNoonFare) || 0);
+    const requestedDate = String(req.query.date || "").trim();
+    const dateStart = requestedDate ? pktDateStart(requestedDate) : null;
+    if (requestedDate && !dateStart) {
+      return res.status(400).json({ message: "date must be a valid YYYY-MM-DD value" });
+    }
+
+    const earn = await computeEarnings(
+      riderId,
+      Number(rider.tillNoonFare) || 0,
+      dateStart ? { value: requestedDate, start: dateStart } : undefined,
+    );
     const { rating, ratingCount } = await riderRating(rider);
 
     res.json({

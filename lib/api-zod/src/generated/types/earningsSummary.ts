@@ -19,6 +19,14 @@ export interface EarningsSummary {
   monthEarnings?: number;
   monthDeliveries?: number;
   monthOrderAmount?: number;
+  /**
+     * The requested calendar date in YYYY-MM-DD format, when a date filter was provided.
+     * @nullable
+     */
+  selectedDate?: string | null;
+  selectedEarnings?: number;
+  selectedDeliveries?: number;
+  selectedOrderAmount?: number;
   rating: number;
   ratingCount: number;
   pendingCollection?: number;

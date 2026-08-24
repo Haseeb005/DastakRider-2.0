@@ -12,6 +12,7 @@ export * from './dealItem';
 export * from './earningsSummary';
 export * from './getOrderHistoryParams';
 export * from './getOrderHistoryPeriod';
+export * from './getRiderEarningsParams';
 export * from './healthStatus';
 export * from './okResponse';
 export * from './orderAction';

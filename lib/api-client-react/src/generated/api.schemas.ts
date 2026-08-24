@@ -162,6 +162,14 @@ export interface EarningsSummary {
   monthEarnings?: number;
   monthDeliveries?: number;
   monthOrderAmount?: number;
+  /**
+     * The requested calendar date in YYYY-MM-DD format, when a date filter was provided.
+     * @nullable
+     */
+  selectedDate?: string | null;
+  selectedEarnings?: number;
+  selectedDeliveries?: number;
+  selectedOrderAmount?: number;
   rating: number;
   ratingCount: number;
   pendingCollection?: number;
@@ -208,6 +216,10 @@ export interface OrderStatusInput {
 
 export type GetOrderHistoryParams = {
 period?: GetOrderHistoryPeriod;
+/**
+ * A specific calendar date in Pakistan time (YYYY-MM-DD). Takes precedence over period.
+ */
+date?: string;
 };
 
 export type GetOrderHistoryPeriod = typeof GetOrderHistoryPeriod[keyof typeof GetOrderHistoryPeriod];
@@ -219,4 +231,11 @@ export const GetOrderHistoryPeriod = {
   month: 'month',
   all: 'all',
 } as const;
+
+export type GetRiderEarningsParams = {
+/**
+ * A specific calendar date in Pakistan time (YYYY-MM-DD).
+ */
+date?: string;
+};
 

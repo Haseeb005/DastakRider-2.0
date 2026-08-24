@@ -9,4 +9,8 @@ import type { GetOrderHistoryPeriod } from './getOrderHistoryPeriod';
 
 export type GetOrderHistoryParams = {
 period?: GetOrderHistoryPeriod;
+/**
+ * A specific calendar date in Pakistan time (YYYY-MM-DD). Takes precedence over period.
+ */
+date?: Date;
 };
