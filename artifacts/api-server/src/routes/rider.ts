@@ -1232,6 +1232,7 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
             pickUpTime: { $exists: true },
             timeWhenDelivered: { $exists: false },
           };
+    let fastDeliveryGeofenceMessage: string | null = null;
     if (status === DELIVERED_STATUS) {
       const pendingDelivery = await ordersCol().findOne(filter);
       if (!pendingDelivery) {
@@ -1239,13 +1240,10 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
           message: "Invalid status transition, or order not assigned to you.",
         });
       }
-      const geofenceMessage = deliveryGeofenceMessage(
+      fastDeliveryGeofenceMessage = deliveryGeofenceMessage(
         pendingDelivery,
         riderId,
       );
-      if (geofenceMessage) {
-        return res.status(409).json({ message: geofenceMessage });
-      }
     }
     // Additive timestamps that mirror the original app (no shared counter writes).
     const extra: Record<string, any> =
@@ -1338,12 +1336,19 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
           { $set: { status: "idle" } }
         );
       }
-      try {
-        await awardFastDeliveryBonus(updated, riderId, now);
-      } catch (bonusError) {
-        // Delivery is already committed. Never report it as failed because its
-        // additive wallet award is temporarily unavailable.
-        req.log.error(bonusError, "Could not persist fast-delivery bonus");
+      if (!fastDeliveryGeofenceMessage) {
+        try {
+          await awardFastDeliveryBonus(updated, riderId, now);
+        } catch (bonusError) {
+          // Delivery is already committed. Never report it as failed because its
+          // additive wallet award is temporarily unavailable.
+          req.log.error(bonusError, "Could not persist fast-delivery bonus");
+        }
+      } else {
+        req.log.info(
+          { orderId: String(orderObjectId), reason: fastDeliveryGeofenceMessage },
+          "Fast-delivery bonus skipped because rider was not within the delivery geofence",
+        );
       }
     }
     res.json(normalizeOrder(updated, tnf));

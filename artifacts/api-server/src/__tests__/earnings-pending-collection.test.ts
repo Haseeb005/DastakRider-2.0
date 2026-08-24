@@ -653,7 +653,7 @@ describe("Fast delivery bonuses", () => {
     });
   });
 
-  it("rejects delivery when the rider is more than 20 meters from the customer", async () => {
+  it("completes delivery but skips the bonus when the rider is more than 20 meters away", async () => {
     const riderId = testRiderOid.toHexString();
     const farOrderId = fastDeliveryOrderOids[3];
     const now = new Date();
@@ -687,16 +687,11 @@ describe("Fast delivery bonuses", () => {
       },
       body: JSON.stringify({ status: "Delivered" }),
     });
-    assert.equal(delivered.status, 409);
-    const deliveryError = (await delivered.json()) as { message?: unknown };
-    assert.match(
-      String(deliveryError.message),
-      /within 20 meters/i,
-    );
+    assert.equal(delivered.status, 200);
     assert.equal(
       (await dbCol.orders().findOne({ _id: farOrderId }))?.status,
-      "Rider Picked Up",
-      "the order remains in transit when delivery geofence verification fails",
+      "Delivered",
+      "delivery must still complete when the rider is outside the bonus geofence",
     );
     assert.equal(
       await dbCol.riderWalletEntries().countDocuments({
