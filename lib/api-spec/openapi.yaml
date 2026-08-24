@@ -179,6 +179,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/RiderOrder"
+        "400":
+          description: Invalid calendar date
 
   /rider/orders/{orderId}/accept:
     post:
@@ -272,6 +274,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EarningsSummary"
+        "400":
+          description: Invalid calendar date
 
   /rider/location:
     post:

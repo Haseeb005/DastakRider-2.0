@@ -17,6 +17,7 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { MongoClient, ObjectId } from "mongodb";
+import type { Collection, Document } from "mongodb";
 import type { AddressInfo } from "node:net";
 import { connectMongo } from "../lib/mongo.js";
 import app from "../app.js";
@@ -27,13 +28,14 @@ if (!MONGODB_URI) throw new Error("MONGODB_URI_RIDER is required for tests");
 
 // ── shared state set up in before() ──────────────────────────────────────────
 let mongoClient: MongoClient;
-let dbCol: { users: ReturnType<MongoClient["db"]>["collection"]; orders: ReturnType<MongoClient["db"]>["collection"] };
+let dbCol: { users: () => Collection<Document>; orders: () => Collection<Document> };
 let serverUrl: string;
 let server: ReturnType<typeof app.listen>;
 let bearerToken: string;
 
 const testRiderOid = new ObjectId();
 const testOrderOids = [new ObjectId(), new ObjectId(), new ObjectId()];
+const boundaryOrderOids = [new ObjectId(), new ObjectId()];
 
 // ── lifecycle ─────────────────────────────────────────────────────────────────
 before(async () => {
@@ -94,7 +96,46 @@ before(async () => {
     updatedAt: now,
     pickUpTime: now.toISOString(),
   }));
-  await dbCol.orders().insertMany(orders);
+  // These fixtures straddle PKT midnight:
+  //   2099-08-23T18:59:59.999Z = 2099-08-23 23:59:59.999 PKT
+  //   2099-08-23T19:00:00.001Z = 2099-08-24 00:00:00.001 PKT
+  // The distant date keeps the moving "now" fixtures above out of these
+  // date-specific assertions.
+  const boundaryOrders = [
+    {
+      _id: boundaryOrderOids[0],
+      riderId,
+      status: "Delivered",
+      billingMode: "postpaid",
+      paymentType: "COD",
+      orderTotal: 500,
+      products: [],
+      riderFare: 100,
+      city: "TestCity",
+      zone: "TestZone",
+      createdAt: new Date("2099-08-23T18:59:59.999Z"),
+      updatedAt: new Date("2099-08-23T18:59:59.999Z"),
+      pickUpTime: "23:00:00",
+      timeWhenDelivered: "23:59:59",
+    },
+    {
+      _id: boundaryOrderOids[1],
+      riderId,
+      status: "Delivered",
+      billingMode: "postpaid",
+      paymentType: "COD",
+      orderTotal: 700,
+      products: [],
+      riderFare: 100,
+      city: "TestCity",
+      zone: "TestZone",
+      createdAt: new Date("2099-08-23T19:00:00.001Z"),
+      updatedAt: new Date("2099-08-23T19:00:00.001Z"),
+      pickUpTime: "00:00:00",
+      timeWhenDelivered: "00:00:01",
+    },
+  ];
+  await dbCol.orders().insertMany([...orders, ...boundaryOrders]);
 
   // 5. Start Express on an OS-assigned port.
   await new Promise<void>((resolve) => {
@@ -121,7 +162,7 @@ before(async () => {
 after(async () => {
   // Remove test data so the shared prod DB is left clean.
   await dbCol.users().deleteOne({ _id: testRiderOid });
-  await dbCol.orders().deleteMany({ _id: { $in: testOrderOids } });
+  await dbCol.orders().deleteMany({ _id: { $in: [...testOrderOids, ...boundaryOrderOids] } });
   await mongoClient.close();
   await new Promise<void>((resolve, reject) =>
     server.close((err) => (err ? reject(err) : resolve()))
@@ -130,12 +171,28 @@ after(async () => {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-async function fetchEarnings(): Promise<Record<string, unknown>> {
-  const res = await fetch(`${serverUrl}/api/rider/earnings`, {
+async function fetchEarnings(date?: string): Promise<Record<string, unknown>> {
+  const query = date ? `?date=${encodeURIComponent(date)}` : "";
+  const res = await fetch(`${serverUrl}/api/rider/earnings${query}`, {
     headers: { Authorization: `Bearer ${bearerToken}` },
   });
   assert.equal(res.status, 200, `Expected 200 from /api/rider/earnings, got ${res.status}`);
   return res.json() as Promise<Record<string, unknown>>;
+}
+
+async function fetchHistory(date: string): Promise<Array<Record<string, unknown>>> {
+  const res = await fetch(
+    `${serverUrl}/api/rider/orders/history?date=${encodeURIComponent(date)}`,
+    {
+      headers: { Authorization: `Bearer ${bearerToken}` },
+    }
+  );
+  assert.equal(
+    res.status,
+    200,
+    `Expected 200 from /api/rider/orders/history, got ${res.status}`
+  );
+  return res.json() as Promise<Array<Record<string, unknown>>>;
 }
 
 async function readDbPendingCollection(): Promise<number> {
@@ -162,16 +219,16 @@ describe("GET /api/rider/earnings — pendingCollection accuracy", () => {
   it("computed order stats do not reduce pendingCollection", async () => {
     const body = await fetchEarnings();
 
-    // Three seeded orders × tillNoonFare(100) = 300 PKR in earnings.
+    // Five seeded orders × tillNoonFare(100) = 500 PKR in earnings.
     assert.equal(
       body.totalDeliveries,
-      3,
-      "totalDeliveries should reflect the 3 seeded delivered orders"
+      5,
+      "totalDeliveries should reflect the 5 seeded delivered orders"
     );
     assert.equal(
       body.totalEarnings,
-      300,
-      "totalEarnings should be 3 × tillNoonFare(100) = 300"
+      500,
+      "totalEarnings should be 5 × tillNoonFare(100) = 500"
     );
 
     // pendingCollection must not have been reduced by the order-stats computation.
@@ -210,5 +267,80 @@ describe("GET /api/rider/earnings — pendingCollection accuracy", () => {
       (body.pendingCollection as number) >= dbValueAfterSettlement,
       "Response pendingCollection must never be lower than the DB value"
     );
+  });
+});
+
+describe("PKT calendar date filtering", () => {
+  it("keeps either side of PKT midnight in its own history date", async () => {
+    const precedingDay = await fetchHistory("2099-08-23");
+    const followingDay = await fetchHistory("2099-08-24");
+
+    assert.deepEqual(
+      precedingDay.map((order) => order.id),
+      [boundaryOrderOids[0].toHexString()],
+      "the order immediately before PKT midnight belongs only to the preceding date"
+    );
+    assert.deepEqual(
+      followingDay.map((order) => order.id),
+      [boundaryOrderOids[1].toHexString()],
+      "the order immediately after PKT midnight belongs only to the following date"
+    );
+  });
+
+  it("reports only the requested PKT date in earnings totals", async () => {
+    const precedingDay = await fetchEarnings("2099-08-23");
+    const followingDay = await fetchEarnings("2099-08-24");
+
+    assert.deepEqual(
+      {
+        selectedDate: precedingDay.selectedDate,
+        deliveries: precedingDay.selectedDeliveries,
+        orderAmount: precedingDay.selectedOrderAmount,
+        earnings: precedingDay.selectedEarnings,
+      },
+      {
+        selectedDate: "2099-08-23",
+        deliveries: 1,
+        orderAmount: 500,
+        earnings: 100,
+      }
+    );
+    assert.deepEqual(
+      {
+        selectedDate: followingDay.selectedDate,
+        deliveries: followingDay.selectedDeliveries,
+        orderAmount: followingDay.selectedOrderAmount,
+        earnings: followingDay.selectedEarnings,
+      },
+      {
+        selectedDate: "2099-08-24",
+        deliveries: 1,
+        orderAmount: 700,
+        earnings: 100,
+      }
+    );
+  });
+
+  it("rejects invalid calendar dates on history and earnings", async () => {
+    const headers = { Authorization: `Bearer ${bearerToken}` };
+    const invalidDate = "2099-02-29";
+
+    const historyRes = await fetch(
+      `${serverUrl}/api/rider/orders/history?date=${invalidDate}`,
+      { headers }
+    );
+    assert.equal(historyRes.status, 400);
+    assert.deepEqual(await historyRes.json(), {
+      message: "date must be a valid YYYY-MM-DD value",
+    });
+
+    const earningsRes = await fetch(
+      `${serverUrl}/api/rider/earnings?date=${invalidDate}`,
+      { headers }
+    );
+    assert.equal(earningsRes.status, 400);
+    assert.deepEqual(await earningsRes.json(), {
+      message: "date must be a valid YYYY-MM-DD value",
+    });
   });
 });
