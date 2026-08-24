@@ -481,6 +481,9 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
   }
 
   try {
+    const currentBeforeCount = await challenges.findOne({ _id: challenge._id });
+    if (!currentBeforeCount) throw new Error("Rider challenge no longer exists");
+
     const deliveredCount = await ordersCol().countDocuments({
       riderId: challenge.riderId,
       status: DELIVERED_STATUS,
@@ -491,11 +494,18 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
     });
     const ownershipFilter = { _id: challenge._id, "settlementLock.token": lockToken };
 
-    // $max preserves monotonic progress. Counting inside the per-challenge lock
-    // makes the terminal completed/expired transition serializable.
+    // Active and still-settleable challenges mirror the current delivered-order
+    // count, so deleting a shared order also removes its progress. Completed
+    // challenges remain monotonic because their reward has already been settled.
+    // Counting inside the per-challenge lock makes the terminal completed/expired
+    // transition serializable.
+    const progressUpdate =
+      currentBeforeCount.status === "completed"
+        ? { $max: { progress: deliveredCount }, $set: { updatedAt: now } }
+        : { $set: { progress: deliveredCount, updatedAt: now } };
     await challenges.updateOne(
       ownershipFilter,
-      { $max: { progress: deliveredCount }, $set: { updatedAt: now } },
+      progressUpdate,
     );
     let current = await challenges.findOne({ _id: challenge._id });
     if (!current) throw new Error("Rider challenge no longer exists");

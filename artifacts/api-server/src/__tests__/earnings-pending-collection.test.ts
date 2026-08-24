@@ -460,6 +460,64 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
       "simultaneous Wallet reads must produce one weekly bonus entry",
     );
   });
+
+  it("removes active challenge progress when the delivered order is deleted", async () => {
+    const deletionRiderOid = new ObjectId();
+    const riderId = deletionRiderOid.toHexString();
+    const deletionOrderOid = new ObjectId();
+    const phone = `03001112233__challenge_deletion_${riderId}`;
+    const now = new Date();
+    try {
+      await dbCol.users().insertOne({
+        _id: deletionRiderOid,
+        type: "rider",
+        name: "Test Rider (challenge deletion)",
+        phone,
+        password: "challenge-deletion-password",
+        city: "TestCity",
+        vehicleType: "bike",
+        deleted: false,
+        tillNoonFare: 100,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await dbCol.orders().insertOne({
+        _id: deletionOrderOid,
+        riderId,
+        status: "Delivered",
+        riderFare: 100,
+        createdAt: now,
+      });
+
+      const loginRes = await fetch(`${serverUrl}/api/rider/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, password: "challenge-deletion-password" }),
+      });
+      assert.equal(loginRes.status, 200);
+      const loginBody = (await loginRes.json()) as Record<string, unknown>;
+      const headers = { Authorization: `Bearer ${String(loginBody.token)}` };
+      const walletForDeletionRider = async () => {
+        const response = await fetch(`${serverUrl}/api/rider/wallet`, { headers });
+        assert.equal(response.status, 200);
+        return response.json() as Promise<Record<string, unknown>>;
+      };
+
+      const counted = await walletForDeletionRider();
+      assert.equal((counted.todayChallenge as Record<string, unknown>).progress, 1);
+      assert.equal((counted.weeklyChallenge as Record<string, unknown>).progress, 1);
+
+      await dbCol.orders().deleteOne({ _id: deletionOrderOid });
+      const refreshed = await walletForDeletionRider();
+      assert.equal((refreshed.todayChallenge as Record<string, unknown>).progress, 0);
+      assert.equal((refreshed.weeklyChallenge as Record<string, unknown>).progress, 0);
+    } finally {
+      await dbCol.orders().deleteOne({ _id: deletionOrderOid });
+      await dbCol.riderChallenges().deleteMany({ riderId });
+      await dbCol.riderWalletEntries().deleteMany({ riderId });
+      await dbCol.users().deleteOne({ _id: deletionRiderOid });
+    }
+  });
 });
 
 describe("GET /api/rider/wallet — missed period settlement", () => {
