@@ -61,6 +61,13 @@ const TABS: {
     sfSelected: "creditcard.fill",
   },
   {
+    name: "wallet",
+    title: "Wallet",
+    feather: "wallet",
+    sf: "wallet.bifold",
+    sfSelected: "wallet.bifold.fill",
+  },
+  {
     name: "heatmap",
     title: "Heatmap",
     feather: "map",

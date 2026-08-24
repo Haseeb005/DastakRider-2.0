@@ -176,6 +176,66 @@ export interface EarningsSummary {
   unpaidCollection?: number;
 }
 
+export type RiderChallengeKind = typeof RiderChallengeKind[keyof typeof RiderChallengeKind];
+
+
+export const RiderChallengeKind = {
+  daily: 'daily',
+  weekly: 'weekly',
+} as const;
+
+export type RiderChallengeStatus = typeof RiderChallengeStatus[keyof typeof RiderChallengeStatus];
+
+
+export const RiderChallengeStatus = {
+  active: 'active',
+  completed: 'completed',
+  expired: 'expired',
+} as const;
+
+export interface RiderChallenge {
+  id: string;
+  kind: RiderChallengeKind;
+  tier: string;
+  target: number;
+  progress: number;
+  reward: number;
+  status: RiderChallengeStatus;
+  periodStart: string;
+  periodEnd: string;
+}
+
+export type WalletTransactionType = typeof WalletTransactionType[keyof typeof WalletTransactionType];
+
+
+export const WalletTransactionType = {
+  delivery: 'delivery',
+  challenge_bonus: 'challenge_bonus',
+} as const;
+
+export interface WalletTransaction {
+  id: string;
+  type: WalletTransactionType;
+  amount: number;
+  title: string;
+  createdAt: string;
+  orderId?: string;
+  challengeId?: string;
+}
+
+export interface RiderWallet {
+  weekStart: string;
+  weekEnd: string;
+  deliveryEarnings: number;
+  challengeBonuses: number;
+  totalEarnings: number;
+  deliveries: number;
+  transactions: WalletTransaction[];
+  todayChallenge: RiderChallenge;
+  weeklyChallenge: RiderChallenge;
+  recentChallenges: RiderChallenge[];
+}
+
 export interface RiderLocationInput {
   orderId: string;
   lat: number;

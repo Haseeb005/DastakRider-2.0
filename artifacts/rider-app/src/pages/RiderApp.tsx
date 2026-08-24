@@ -17,6 +17,8 @@ import {
   useMarkOrderArrived,
   useGetRiderEarnings,
   getGetRiderEarningsQueryKey,
+  useGetRiderWallet,
+  getGetRiderWalletQueryKey,
   usePushRiderLocation,
   type Rider,
   type RiderOrder,
@@ -70,6 +72,7 @@ import { ChatNotificationBanner, type BannerInfo } from "@/components/ChatNotifi
 import { saveRiderChatToken, useOrderChat } from "@/hooks/useOrderChat";
 import { useChatWatcher } from "@/hooks/useChatWatcher";
 import { useRiderLocation } from "@/hooks/useRiderLocation";
+import { WalletOverview } from "@/components/WalletOverview";
 // Leaflet imports CSS at module level — lazy-load to avoid SSR issues
 const RiderLiveMap = lazy(() =>
   import("@/components/RiderLiveMap").then((m) => ({ default: m.RiderLiveMap })),
@@ -77,7 +80,7 @@ const RiderLiveMap = lazy(() =>
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type RiderView = "available" | "active" | "history" | "profile";
+type RiderView = "available" | "active" | "history" | "wallet" | "profile";
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 // Real Dastak order status flow:
@@ -1624,6 +1627,41 @@ function DeliveryHistory() {
   );
 }
 
+// ── Wallet Tab ─────────────────────────────────────────────────────────────────
+
+function RiderWallet() {
+  const walletQuery = useGetRiderWallet({
+    query: { queryKey: getGetRiderWalletQueryKey(), refetchInterval: 30_000 },
+  });
+  const wallet = walletQuery.data;
+  const displayWeekEnd = wallet
+    ? new Date(new Date(wallet.weekEnd).getTime() - 1).toISOString()
+    : undefined;
+
+  return (
+    <WalletOverview
+      loading={walletQuery.isLoading}
+      error={
+        walletQuery.isError
+          ? walletQuery.error instanceof Error
+            ? walletQuery.error.message
+            : true
+          : false
+      }
+      deliveryEarnings={wallet?.deliveryEarnings}
+      challengeBonuses={wallet?.challengeBonuses}
+      totalEarnings={wallet?.totalEarnings}
+      deliveries={wallet?.deliveries}
+      weekStart={wallet?.weekStart}
+      weekEnd={displayWeekEnd}
+      dailyChallenge={wallet?.todayChallenge}
+      weeklyChallenge={wallet?.weeklyChallenge}
+      transactions={wallet?.transactions}
+      onRetry={() => walletQuery.refetch()}
+    />
+  );
+}
+
 // ── Profile Tab ───────────────────────────────────────────────────────────────
 
 function RiderProfile({ rider }: { rider: Rider }) {
@@ -1876,6 +1914,7 @@ export default function RiderApp() {
     { key: "available", label: "Orders", icon: Package },
     { key: "active", label: "Active", icon: Bike, badge: activeOrders.length },
     { key: "history", label: "Earnings", icon: TrendingUp },
+    { key: "wallet", label: "Wallet", icon: Wallet },
     { key: "profile", label: "Profile", icon: User },
   ];
 
@@ -1913,6 +1952,7 @@ export default function RiderApp() {
         {view === "available" && <AvailableOrders rider={rider} />}
         {view === "active" && <ActiveDelivery locationStatus={locationStatus} chatOrder={chatOrder} setChatOrder={setChatOrder} />}
         {view === "history" && <DeliveryHistory />}
+        {view === "wallet" && <RiderWallet />}
         {view === "profile" && <RiderProfile rider={rider} />}
       </main>
 

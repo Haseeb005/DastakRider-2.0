@@ -2,7 +2,14 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { ObjectId } from "mongodb";
-import { usersCol, ordersCol, reviewsCol, chatsCol } from "../lib/mongo";
+import {
+  usersCol,
+  ordersCol,
+  reviewsCol,
+  chatsCol,
+  riderChallengesCol,
+  riderWalletEntriesCol,
+} from "../lib/mongo";
 import { getHeatmapSnapshot } from "../lib/heatmapService";
 
 const router = Router();
@@ -177,8 +184,8 @@ function pkt8AMCutoff(): Date {
     : new Date(today8AM.getTime() - 24 * 60 * 60 * 1000); // step back one day
 }
 
-function pktPeriodStart(kind: "day" | "week" | "month"): Date {
-  const shifted = new Date(Date.now() + PKT_MS); // read PKT wall clock via UTC getters
+function pktPeriodStartAt(kind: "day" | "week" | "month", reference = new Date()): Date {
+  const shifted = new Date(reference.getTime() + PKT_MS); // read PKT wall clock via UTC getters
   const y = shifted.getUTCFullYear();
   const m = shifted.getUTCMonth();
   const d = shifted.getUTCDate();
@@ -192,6 +199,19 @@ function pktPeriodStart(kind: "day" | "week" | "month"): Date {
   if (kind === "month") day = 1;
   // PKT midnight of that calendar date == that UTC midnight minus 5h.
   return new Date(Date.UTC(y, m, day) - PKT_MS);
+}
+
+function pktPeriodStart(kind: "day" | "week" | "month"): Date {
+  return pktPeriodStartAt(kind);
+}
+
+function pktDateKey(value: Date): string {
+  const shifted = new Date(value.getTime() + PKT_MS);
+  return [
+    shifted.getUTCFullYear(),
+    String(shifted.getUTCMonth() + 1).padStart(2, "0"),
+    String(shifted.getUTCDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 /**
@@ -220,6 +240,334 @@ function pktDateStart(dateValue: string): Date | null {
   }
 
   return new Date(utcDate.getTime() - PKT_MS);
+}
+
+type ChallengeKind = "daily" | "weekly";
+
+type ChallengeTier = {
+  tier: string;
+  target: number;
+  reward: number;
+};
+
+const CHALLENGE_TIERS: Record<ChallengeKind, ChallengeTier[]> = {
+  daily: [
+    { tier: "Bronze", target: 10, reward: 200 },
+    { tier: "Silver", target: 20, reward: 500 },
+    { tier: "Gold", target: 25, reward: 800 },
+  ],
+  weekly: [
+    { tier: "60 deliveries", target: 60, reward: 500 },
+    { tier: "85 deliveries", target: 85, reward: 1000 },
+    { tier: "120 deliveries", target: 120, reward: 2000 },
+    { tier: "150 deliveries", target: 150, reward: 3000 },
+  ],
+};
+
+// Order records normally settle immediately. A bounded window catches delayed
+// shared-system writes around a daily/weekly boundary without repeatedly
+// recounting every unsuccessful historical challenge on each Wallet refresh.
+const CHALLENGE_SETTLEMENT_GRACE_MS = PKT_DAY_MS;
+
+let walletIndexesPromise: Promise<void> | null = null;
+
+function ensureWalletIndexes(): Promise<void> {
+  if (!walletIndexesPromise) {
+    walletIndexesPromise = Promise.all([
+      riderChallengesCol().createIndex({ riderId: 1, kind: 1, periodKey: 1 }, { unique: true }),
+      riderChallengesCol().createIndex({ riderId: 1, periodEnd: -1 }),
+      riderChallengesCol().createIndex({
+        riderId: 1,
+        kind: 1,
+        status: 1,
+        settlementGraceUntil: 1,
+      }),
+      riderWalletEntriesCol().createIndex({ challengeKey: 1 }, { unique: true }),
+      riderWalletEntriesCol().createIndex({ riderId: 1, weekKey: 1, createdAt: -1 }),
+    ]).then(() => undefined);
+  }
+  return walletIndexesPromise;
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+}
+
+function challengePeriod(kind: ChallengeKind, now = new Date()) {
+  const start = pktPeriodStartAt(kind === "daily" ? "day" : "week", now);
+  const duration = kind === "daily" ? PKT_DAY_MS : 7 * PKT_DAY_MS;
+  const end = new Date(start.getTime() + duration);
+  const weekStart = pktPeriodStartAt("week", start);
+  return {
+    start,
+    end,
+    periodKey: pktDateKey(start),
+    weekKey: pktDateKey(weekStart),
+    duration,
+  };
+}
+
+async function historicalDeliveryBaseline(
+  riderId: string,
+  kind: ChallengeKind,
+  currentStart: Date,
+): Promise<number> {
+  const periodCount = kind === "daily" ? 14 : 4;
+  const duration = kind === "daily" ? PKT_DAY_MS : 7 * PKT_DAY_MS;
+  const historyStart = new Date(currentStart.getTime() - periodCount * duration);
+  const docs = await ordersCol()
+    .find(
+      {
+        riderId,
+        status: DELIVERED_STATUS,
+        createdAt: { $gte: historyStart, $lt: currentStart },
+      },
+      { projection: { createdAt: 1 } },
+    )
+    .toArray();
+
+  const counts = Array.from({ length: periodCount }, () => 0);
+  docs.forEach((order: any) => {
+    const createdAt = new Date(order.createdAt).getTime();
+    const index = Math.floor((createdAt - historyStart.getTime()) / duration);
+    if (index >= 0 && index < counts.length) counts[index] += 1;
+  });
+
+  // Ignore inactive periods so a rider who was off-duty is not assigned an
+  // artificially low target. New riders naturally fall back to the first tier.
+  return median(counts.filter((count) => count > 0));
+}
+
+function tierForBaseline(kind: ChallengeKind, baseline: number): ChallengeTier {
+  const tiers = CHALLENGE_TIERS[kind];
+  if (baseline <= 0) return tiers[0];
+  const stretchTarget = Math.ceil(baseline * 1.1);
+  return tiers.reduce((best, tier) =>
+    Math.abs(tier.target - stretchTarget) < Math.abs(best.target - stretchTarget)
+      ? tier
+      : best,
+  );
+}
+
+function challengeTitle(challenge: any): string {
+  const label = challenge.kind === "daily" ? "Today's Challenge" : "Weekly Challenge";
+  return `${label} · ${challenge.tier}`;
+}
+
+function walletChallengeResponse(challenge: any) {
+  return {
+    id: String(challenge._id),
+    kind: challenge.kind,
+    tier: challenge.tier,
+    target: Number(challenge.target) || 0,
+    progress: Number(challenge.progress) || 0,
+    reward: Number(challenge.reward) || 0,
+    status: challenge.status,
+    periodStart: new Date(challenge.periodStart).toISOString(),
+    periodEnd: new Date(challenge.periodEnd).toISOString(),
+  };
+}
+
+async function ensureChallenge(
+  riderId: string,
+  kind: ChallengeKind,
+  now = new Date(),
+): Promise<any> {
+  await ensureWalletIndexes();
+  const period = challengePeriod(kind, now);
+  const challenges = riderChallengesCol();
+
+  // A rider may not open Wallet right at midnight. Settle every active, ended
+  // challenge before it can be expired so valid deliveries made in its window
+  // always receive their one-time reward.
+  const endedUnsettledChallenges = await challenges
+    .find({
+      riderId,
+      kind,
+      periodEnd: { $lte: now },
+      $or: [
+        { status: "active" },
+        { status: "expired", settlementGraceUntil: { $gt: now } },
+      ],
+    })
+    .toArray();
+  await Promise.all(
+    endedUnsettledChallenges.map((endedChallenge) =>
+      refreshChallengeProgress(endedChallenge, now),
+    ),
+  );
+
+  const existing = await challenges.findOne({
+    riderId,
+    kind,
+    periodKey: period.periodKey,
+  });
+  if (existing) return existing;
+
+  const baseline = await historicalDeliveryBaseline(riderId, kind, period.start);
+  const tier = tierForBaseline(kind, baseline);
+  const challenge = {
+    riderId,
+    kind,
+    periodKey: period.periodKey,
+    weekKey: period.weekKey,
+    periodStart: period.start,
+    periodEnd: period.end,
+    settlementGraceUntil: new Date(
+      period.end.getTime() + CHALLENGE_SETTLEMENT_GRACE_MS,
+    ),
+    tier: tier.tier,
+    target: tier.target,
+    reward: tier.reward,
+    progress: 0,
+    baselineDeliveries: baseline,
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  try {
+    await challenges.updateOne(
+      { riderId, kind, periodKey: period.periodKey },
+      { $setOnInsert: challenge },
+      { upsert: true },
+    );
+  } catch (error: any) {
+    // A simultaneous refresh may win the unique index race. Read its locked
+    // challenge instead of generating a new one with a different target.
+    if (error?.code !== 11000) throw error;
+  }
+
+  const locked = await challenges.findOne({ riderId, kind, periodKey: period.periodKey });
+  if (!locked) throw new Error("Could not create rider challenge");
+  return locked;
+}
+
+async function refreshChallengeProgress(challenge: any, now = new Date()): Promise<any> {
+  const challenges = riderChallengesCol();
+  const lockToken = new ObjectId().toHexString();
+  const lockUntil = new Date(Date.now() + 15_000);
+  const lock = await challenges.updateOne(
+    {
+      _id: challenge._id,
+      $or: [
+        { "settlementLock.until": { $exists: false } },
+        { "settlementLock.until": { $lte: new Date() } },
+      ],
+    },
+    {
+      $set: {
+        settlementLock: { token: lockToken, until: lockUntil },
+      },
+    },
+  );
+
+  // A simultaneous refresh is already reconciling this exact period. Return
+  // its current state rather than racing it; the short lease recovers safely
+  // if that request is interrupted.
+  if (lock.modifiedCount !== 1) {
+    const current = await challenges.findOne({ _id: challenge._id });
+    if (!current) throw new Error("Rider challenge no longer exists");
+    return current;
+  }
+
+  try {
+    const deliveredCount = await ordersCol().countDocuments({
+      riderId: challenge.riderId,
+      status: DELIVERED_STATUS,
+      createdAt: {
+        $gte: new Date(challenge.periodStart),
+        $lt: new Date(challenge.periodEnd),
+      },
+    });
+    const ownershipFilter = { _id: challenge._id, "settlementLock.token": lockToken };
+
+    // $max preserves monotonic progress. Counting inside the per-challenge lock
+    // makes the terminal completed/expired transition serializable.
+    await challenges.updateOne(
+      ownershipFilter,
+      { $max: { progress: deliveredCount }, $set: { updatedAt: now } },
+    );
+    let current = await challenges.findOne({ _id: challenge._id });
+    if (!current) throw new Error("Rider challenge no longer exists");
+
+    // Delayed order writes may become visible after the first period-end read.
+    // An expired challenge is therefore still allowed to settle to completed,
+    // but never regresses from completed or receives a duplicate entry.
+    if (
+      current.status !== "completed" &&
+      Number(current.progress) >= Number(current.target)
+    ) {
+      await challenges.updateOne(
+        {
+          ...ownershipFilter,
+          status: { $in: ["active", "expired"] },
+          progress: { $gte: Number(current.target) },
+        },
+        { $set: { status: "completed", completedAt: now, updatedAt: now } },
+      );
+    } else if (current.status === "active" && new Date(current.periodEnd) <= now) {
+      await challenges.updateOne(
+        {
+          ...ownershipFilter,
+          status: "active",
+          progress: { $lt: Number(current.target) },
+        },
+        {
+          $set: {
+            status: "expired",
+            updatedAt: now,
+            settlementGraceUntil:
+              current.settlementGraceUntil ||
+              new Date(
+                new Date(current.periodEnd).getTime() +
+                  CHALLENGE_SETTLEMENT_GRACE_MS,
+              ),
+          },
+        },
+      );
+    }
+
+    current = await challenges.findOne({ _id: challenge._id });
+    if (!current) throw new Error("Rider challenge no longer exists");
+
+    if (current.status === "completed") {
+      const challengeKey = `${current.riderId}:${current.kind}:${current.periodKey}`;
+      await riderWalletEntriesCol().updateOne(
+        { challengeKey },
+        {
+          $setOnInsert: {
+            riderId: current.riderId,
+            challengeKey,
+            challengeId: String(current._id),
+            weekKey: current.weekKey,
+            type: "challenge_bonus",
+            amount: Number(current.reward) || 0,
+            title: challengeTitle(current),
+            createdAt: current.completedAt || now,
+          },
+        },
+        { upsert: true },
+      );
+    }
+
+    return current;
+  } finally {
+    await challenges.updateOne(
+      { _id: challenge._id, "settlementLock.token": lockToken },
+      { $unset: { settlementLock: "" } },
+    );
+  }
+}
+
+function riderEarningForOrder(order: any, tillNoonFare: number): number {
+  const fare = tillNoonFare > 0 ? tillNoonFare : Number(order.riderFare) || 0;
+  return Math.round(fare + (Number(order.tip) || 0));
 }
 
 // Aggregate a rider's delivered-order earnings into total / today / week / month
@@ -935,6 +1283,101 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
+  }
+});
+
+// Weekly wallet — live delivery earnings plus persisted automatic challenge bonuses.
+router.get("/rider/wallet", async (req: any, res: any) => {
+  try {
+    const riderId = requireRiderId(req, res);
+    if (!riderId) return;
+    const rider = await findRiderById(riderId);
+    if (!rider) {
+      res.status(404).json({ message: "Rider not found" });
+      return;
+    }
+
+    const now = new Date();
+    const weekStart = pktPeriodStart("week");
+    const weekEnd = new Date(weekStart.getTime() + 7 * PKT_DAY_MS);
+    const weekKey = pktDateKey(weekStart);
+    const tillNoonFare = Number(rider.tillNoonFare) || 0;
+
+    const [dailyChallenge, weeklyChallenge] = await Promise.all([
+      ensureChallenge(riderId, "daily", now),
+      ensureChallenge(riderId, "weekly", now),
+    ]);
+    const [syncedDaily, syncedWeekly] = await Promise.all([
+      refreshChallengeProgress(dailyChallenge, now),
+      refreshChallengeProgress(weeklyChallenge, now),
+    ]);
+
+    const [orders, bonusEntries, recentChallengeDocs] = await Promise.all([
+      ordersCol()
+        .find(
+          {
+            riderId,
+            status: DELIVERED_STATUS,
+            createdAt: { $gte: weekStart, $lt: weekEnd },
+          },
+          { projection: { _id: 1, orderNum: 1, createdAt: 1, riderFare: 1, tip: 1 } },
+        )
+        .sort({ createdAt: -1 })
+        .toArray(),
+      riderWalletEntriesCol()
+        .find({ riderId, weekKey, type: "challenge_bonus" })
+        .sort({ createdAt: -1 })
+        .toArray(),
+      riderChallengesCol()
+        .find({ riderId })
+        .sort({ periodEnd: -1 })
+        .limit(6)
+        .toArray(),
+    ]);
+
+    const deliveryEarnings = Math.round(
+      orders.reduce(
+        (sum: number, order: any) => sum + riderEarningForOrder(order, tillNoonFare),
+        0,
+      ),
+    );
+    const challengeBonuses = Math.round(
+      bonusEntries.reduce((sum: number, entry: any) => sum + (Number(entry.amount) || 0), 0),
+    );
+    const transactions = [
+      ...orders.map((order: any) => ({
+        id: `delivery:${String(order._id)}`,
+        type: "delivery",
+        amount: riderEarningForOrder(order, tillNoonFare),
+        title: order.orderNum ? `Delivery #${order.orderNum}` : "Delivery earning",
+        createdAt: new Date(order.createdAt).toISOString(),
+        orderId: String(order._id),
+      })),
+      ...bonusEntries.map((entry: any) => ({
+        id: String(entry._id),
+        type: "challenge_bonus",
+        amount: Number(entry.amount) || 0,
+        title: entry.title || "Challenge bonus",
+        createdAt: new Date(entry.createdAt).toISOString(),
+        challengeId: String(entry.challengeId || ""),
+      })),
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json({
+      weekStart: weekStart.toISOString(),
+      weekEnd: weekEnd.toISOString(),
+      deliveryEarnings,
+      challengeBonuses,
+      totalEarnings: deliveryEarnings + challengeBonuses,
+      deliveries: orders.length,
+      transactions,
+      todayChallenge: walletChallengeResponse(syncedDaily),
+      weeklyChallenge: walletChallengeResponse(syncedWeekly),
+      recentChallenges: recentChallengeDocs.map(walletChallengeResponse),
+    });
+  } catch (e: any) {
+    req.log.error(e, "Could not load rider wallet");
+    res.status(500).json({ message: "Could not load rider wallet" });
   }
 });
 

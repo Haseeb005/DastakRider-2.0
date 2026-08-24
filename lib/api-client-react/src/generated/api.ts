@@ -33,7 +33,8 @@ import type {
   RiderLocationInput,
   RiderLoginInput,
   RiderOrder,
-  RiderRegisterInput
+  RiderRegisterInput,
+  RiderWallet
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -679,7 +680,7 @@ export const getGetOrderHistoryQueryKey = (params?: GetOrderHistoryParams,) => {
     }
 
 
-export const getGetOrderHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getOrderHistory>>, TError = ErrorType<unknown>>(params?: GetOrderHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrderHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetOrderHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getOrderHistory>>, TError = ErrorType<void>>(params?: GetOrderHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrderHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -698,14 +699,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetOrderHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getOrderHistory>>>
-export type GetOrderHistoryQueryError = ErrorType<unknown>
+export type GetOrderHistoryQueryError = ErrorType<void>
 
 
 /**
  * @summary Get rider's completed deliveries
  */
 
-export function useGetOrderHistory<TData = Awaited<ReturnType<typeof getOrderHistory>>, TError = ErrorType<unknown>>(
+export function useGetOrderHistory<TData = Awaited<ReturnType<typeof getOrderHistory>>, TError = ErrorType<void>>(
  params?: GetOrderHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrderHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -976,7 +977,7 @@ export const getGetRiderEarningsQueryKey = (params?: GetRiderEarningsParams,) =>
     }
 
 
-export const getGetRiderEarningsQueryOptions = <TData = Awaited<ReturnType<typeof getRiderEarnings>>, TError = ErrorType<unknown>>(params?: GetRiderEarningsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderEarnings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetRiderEarningsQueryOptions = <TData = Awaited<ReturnType<typeof getRiderEarnings>>, TError = ErrorType<void>>(params?: GetRiderEarningsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderEarnings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -995,19 +996,96 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetRiderEarningsQueryResult = NonNullable<Awaited<ReturnType<typeof getRiderEarnings>>>
-export type GetRiderEarningsQueryError = ErrorType<unknown>
+export type GetRiderEarningsQueryError = ErrorType<void>
 
 
 /**
  * @summary Get rider earnings summary
  */
 
-export function useGetRiderEarnings<TData = Awaited<ReturnType<typeof getRiderEarnings>>, TError = ErrorType<unknown>>(
+export function useGetRiderEarnings<TData = Awaited<ReturnType<typeof getRiderEarnings>>, TError = ErrorType<void>>(
  params?: GetRiderEarningsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderEarnings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetRiderEarningsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetRiderWalletUrl = () => {
+
+
+
+
+  return `/api/rider/wallet`
+}
+
+/**
+ * @summary Get weekly rider wallet and automatic challenges
+ */
+export const getRiderWallet = async ( options?: RequestInit): Promise<RiderWallet> => {
+
+  return customFetch<RiderWallet>(getGetRiderWalletUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRiderWalletQueryKey = () => {
+    return [
+    `/api/rider/wallet`
+    ] as const;
+    }
+
+
+export const getGetRiderWalletQueryOptions = <TData = Awaited<ReturnType<typeof getRiderWallet>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderWallet>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRiderWalletQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRiderWallet>>> = ({ signal }) => getRiderWallet({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRiderWallet>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRiderWalletQueryResult = NonNullable<Awaited<ReturnType<typeof getRiderWallet>>>
+export type GetRiderWalletQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get weekly rider wallet and automatic challenges
+ */
+
+export function useGetRiderWallet<TData = Awaited<ReturnType<typeof getRiderWallet>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderWallet>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRiderWalletQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

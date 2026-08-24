@@ -529,6 +529,61 @@ export const GetRiderEarningsResponse = zod.object({
 
 
 /**
+ * @summary Get weekly rider wallet and automatic challenges
+ */
+export const GetRiderWalletResponse = zod.object({
+  "weekStart": zod.coerce.date(),
+  "weekEnd": zod.coerce.date(),
+  "deliveryEarnings": zod.number(),
+  "challengeBonuses": zod.number(),
+  "totalEarnings": zod.number(),
+  "deliveries": zod.number(),
+  "transactions": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['delivery', 'challenge_bonus']),
+  "amount": zod.number(),
+  "title": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "orderId": zod.string().optional(),
+  "challengeId": zod.string().optional()
+})),
+  "todayChallenge": zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['daily', 'weekly']),
+  "tier": zod.string(),
+  "target": zod.number(),
+  "progress": zod.number(),
+  "reward": zod.number(),
+  "status": zod.enum(['active', 'completed', 'expired']),
+  "periodStart": zod.coerce.date(),
+  "periodEnd": zod.coerce.date()
+}),
+  "weeklyChallenge": zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['daily', 'weekly']),
+  "tier": zod.string(),
+  "target": zod.number(),
+  "progress": zod.number(),
+  "reward": zod.number(),
+  "status": zod.enum(['active', 'completed', 'expired']),
+  "periodStart": zod.coerce.date(),
+  "periodEnd": zod.coerce.date()
+}),
+  "recentChallenges": zod.array(zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['daily', 'weekly']),
+  "tier": zod.string(),
+  "target": zod.number(),
+  "progress": zod.number(),
+  "reward": zod.number(),
+  "status": zod.enum(['active', 'completed', 'expired']),
+  "periodStart": zod.coerce.date(),
+  "periodEnd": zod.coerce.date()
+}))
+})
+
+
+/**
  * @summary Push the rider's current GPS location for an active order
  */
 export const PushRiderLocationBody = zod.object({

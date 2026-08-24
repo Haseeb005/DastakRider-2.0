@@ -16,6 +16,8 @@ tags:
     description: Order management
   - name: earnings
     description: Rider earnings
+  - name: wallet
+    description: Rider wallet and delivery challenges
 paths:
   /healthz:
     get:
@@ -276,6 +278,19 @@ paths:
                 $ref: "#/components/schemas/EarningsSummary"
         "400":
           description: Invalid calendar date
+
+  /rider/wallet:
+    get:
+      operationId: getRiderWallet
+      tags: [wallet]
+      summary: Get weekly rider wallet and automatic challenges
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiderWallet"
 
   /rider/location:
     post:
@@ -587,6 +602,109 @@ components:
         - weekDeliveries
         - rating
         - ratingCount
+
+    RiderChallenge:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [daily, weekly]
+        tier:
+          type: string
+        target:
+          type: number
+        progress:
+          type: number
+        reward:
+          type: number
+        status:
+          type: string
+          enum: [active, completed, expired]
+        periodStart:
+          type: string
+          format: date-time
+        periodEnd:
+          type: string
+          format: date-time
+      required:
+        - id
+        - kind
+        - tier
+        - target
+        - progress
+        - reward
+        - status
+        - periodStart
+        - periodEnd
+
+    WalletTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [delivery, challenge_bonus]
+        amount:
+          type: number
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        orderId:
+          type: string
+        challengeId:
+          type: string
+      required:
+        - id
+        - type
+        - amount
+        - title
+        - createdAt
+
+    RiderWallet:
+      type: object
+      properties:
+        weekStart:
+          type: string
+          format: date-time
+        weekEnd:
+          type: string
+          format: date-time
+        deliveryEarnings:
+          type: number
+        challengeBonuses:
+          type: number
+        totalEarnings:
+          type: number
+        deliveries:
+          type: number
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletTransaction"
+        todayChallenge:
+          $ref: "#/components/schemas/RiderChallenge"
+        weeklyChallenge:
+          $ref: "#/components/schemas/RiderChallenge"
+        recentChallenges:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiderChallenge"
+      required:
+        - weekStart
+        - weekEnd
+        - deliveryEarnings
+        - challengeBonuses
+        - totalEarnings
+        - deliveries
+        - transactions
+        - todayChallenge
+        - weeklyChallenge
+        - recentChallenges
 
     RiderLocationInput:
       type: object
