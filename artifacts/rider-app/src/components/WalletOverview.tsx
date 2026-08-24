@@ -17,6 +17,7 @@ import {
 export type ChallengeStatus = 'active' | 'completed' | 'expired';
 
 export interface Challenge {
+  id?: string;
   kind: 'daily' | 'weekly' | string;
   tier: string;
   target: number;
@@ -47,6 +48,7 @@ export interface WalletOverviewProps {
   weekEnd?: string | Date;
   dailyChallenge?: Challenge | null;
   weeklyChallenge?: Challenge | null;
+  recentChallenges?: Challenge[];
   transactions?: Transaction[];
   onRetry?: () => void;
 }
@@ -63,6 +65,21 @@ const formatTime = (date?: string | Date) => {
   return new Intl.DateTimeFormat('en-PK', { timeZone: 'Asia/Karachi', hour: 'numeric', minute: '2-digit' }).format(d);
 };
 
+const formatChallengePeriod = (challenge: Challenge) => {
+  const dateOptions: Intl.DateTimeFormatOptions = {
+    timeZone: 'Asia/Karachi',
+    month: 'short',
+    day: 'numeric',
+  };
+  const formatter = new Intl.DateTimeFormat('en-PK', dateOptions);
+  const start = new Date(challenge.periodStart);
+  const end = new Date(new Date(challenge.periodEnd).getTime() - 1);
+  const startLabel = formatter.format(start);
+  const endLabel = formatter.format(end);
+
+  return startLabel === endLabel ? startLabel : `${startLabel} – ${endLabel}`;
+};
+
 const WalletSkeleton = () => (
   <div className="flex flex-col gap-8 pb-24 max-w-md mx-auto w-full animate-pulse px-4 pt-6">
     <div className="h-56 bg-muted/60 rounded-3xl w-full"></div>
@@ -73,6 +90,12 @@ const WalletSkeleton = () => (
       <div className="h-44 bg-muted/40 rounded-2xl w-full"></div>
     </div>
     
+    <div className="space-y-4">
+      <div className="h-6 w-44 bg-muted/60 rounded-md"></div>
+      <div className="h-36 bg-muted/40 rounded-2xl w-full"></div>
+      <div className="h-36 bg-muted/40 rounded-2xl w-full"></div>
+    </div>
+
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div className="h-6 w-40 bg-muted/60 rounded-md"></div>
@@ -172,6 +195,65 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
   );
 };
 
+const RecentChallengeCard = ({ challenge }: { challenge: Challenge }) => {
+  const isCompleted = challenge.status === 'completed';
+  const progressPercent = challenge.target > 0
+    ? Math.min(100, Math.max(0, (challenge.progress / challenge.target) * 100))
+    : 0;
+  const statusLabel = isCompleted ? 'Completed' : 'Expired';
+  const statusClass = isCompleted
+    ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'
+    : 'bg-muted text-muted-foreground';
+
+  return (
+    <div className="bg-card text-card-foreground rounded-2xl p-4 border shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className={`p-2.5 rounded-xl shrink-0 ${isCompleted ? 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}>
+            {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="font-semibold text-sm">
+                {challenge.kind === 'daily' ? 'Daily challenge' : 'Weekly challenge'}
+              </h4>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide ${statusClass}`}>
+                {statusLabel}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {formatChallengePeriod(challenge)} · {challenge.tier} tier
+            </p>
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <p className={`font-bold text-sm ${isCompleted ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+            {isCompleted ? `+Rs. ${challenge.reward.toLocaleString()}` : `Rs. ${challenge.reward.toLocaleString()}`}
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            {isCompleted ? 'Reward earned' : 'Reward not earned'}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-semibold text-foreground">
+            {challenge.progress} / {challenge.target} deliveries
+          </span>
+          <span className="text-muted-foreground">{Math.round(progressPercent)}%</span>
+        </div>
+        <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full ${isCompleted ? 'bg-green-500' : 'bg-muted-foreground'}`}
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const TransactionItem = ({ tx }: { tx: Transaction }) => {
   const isBonus = tx.type === 'challenge_bonus';
   return (
@@ -216,6 +298,7 @@ export function WalletOverview({
   weekEnd,
   dailyChallenge,
   weeklyChallenge,
+  recentChallenges = [],
   transactions = [],
   onRetry
 }: WalletOverviewProps) {
@@ -227,6 +310,8 @@ export function WalletOverview({
   if (error) {
     return <WalletError error={error} onRetry={onRetry} />;
   }
+
+  const recentChallengeHistory = recentChallenges.filter((challenge) => challenge.status !== 'active');
 
   return (
     <div className="flex flex-col gap-8 pb-24 max-w-md mx-auto w-full">
@@ -290,6 +375,30 @@ export function WalletOverview({
               <Target className="w-10 h-10 text-muted-foreground/40 mb-3" />
               <p className="text-sm font-medium text-foreground">No active challenges</p>
               <p className="text-xs text-muted-foreground mt-1 text-balance">Check back later for new earning opportunities.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Recent Challenge History */}
+      <section className="px-4 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <History className="w-5 h-5 text-primary" />
+            Recent challenge results
+          </h3>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          {recentChallengeHistory.map((challenge) => (
+            <RecentChallengeCard key={challenge.id || `${challenge.kind}-${challenge.periodStart}`} challenge={challenge} />
+          ))}
+
+          {recentChallengeHistory.length === 0 && (
+            <div className="text-center p-7 bg-card rounded-2xl border border-dashed flex flex-col items-center">
+              <History className="w-9 h-9 text-muted-foreground/40 mb-3" />
+              <p className="text-sm font-medium text-foreground">No recent challenge results</p>
+              <p className="text-xs text-muted-foreground mt-1 text-balance">Completed and expired challenges will appear here.</p>
             </div>
           )}
         </div>

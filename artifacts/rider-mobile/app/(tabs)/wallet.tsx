@@ -29,6 +29,15 @@ function formatDate(value: string, options: Intl.DateTimeFormatOptions) {
   });
 }
 
+function formatChallengePeriod(challenge: RiderChallenge) {
+  const start = formatDate(challenge.periodStart, { month: "short", day: "numeric" });
+  const end = formatDate(
+    new Date(new Date(challenge.periodEnd).getTime() - 1).toISOString(),
+    { month: "short", day: "numeric" },
+  );
+  return start === end ? start : `${start} – ${end}`;
+}
+
 function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
   const c = useColors();
   const completed = challenge.status === "completed";
@@ -108,6 +117,79 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
             {remaining} more to go
           </Text>
         ) : null}
+      </View>
+    </View>
+  );
+}
+
+function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
+  const c = useColors();
+  const completed = challenge.status === "completed";
+  const progress = challenge.target > 0
+    ? Math.min(100, Math.round((challenge.progress / challenge.target) * 100))
+    : 0;
+  const tone = completed ? "#15803d" : c.mutedForeground;
+  const status = completed ? "Completed" : "Expired";
+
+  return (
+    <View
+      style={{
+        backgroundColor: c.card,
+        borderRadius: 20,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: c.border,
+        gap: 14,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 14,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: completed ? "#dcfce7" : c.muted,
+            }}
+          >
+            <Icon name={completed ? "check-circle" : "clock"} size={20} color={tone} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 7 }}>
+              <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 14 }}>
+                {challenge.kind === "daily" ? "Daily challenge" : "Weekly challenge"}
+              </Text>
+              <View style={{ backgroundColor: completed ? "#dcfce7" : c.muted, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 }}>
+                <Text style={{ color: tone, fontFamily: "Inter_700Bold", fontSize: 10 }}>{status}</Text>
+              </View>
+            </View>
+            <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 4 }}>
+              {formatChallengePeriod(challenge)} · {challenge.tier} tier
+            </Text>
+          </View>
+        </View>
+        <View style={{ alignItems: "flex-end" }}>
+          <Text style={{ color: tone, fontFamily: "Inter_700Bold", fontSize: 13 }}>
+            {completed ? `+${rupees(challenge.reward)}` : rupees(challenge.reward)}
+          </Text>
+          <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 2 }}>
+            {completed ? "Reward earned" : "Reward not earned"}
+          </Text>
+        </View>
+      </View>
+
+      <View>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 7 }}>
+          <Text style={{ fontFamily: "Inter_700Bold", fontSize: 13, color: c.foreground }}>
+            {challenge.progress} / {challenge.target} deliveries
+          </Text>
+          <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: c.mutedForeground }}>{progress}%</Text>
+        </View>
+        <View style={{ height: 8, borderRadius: 999, overflow: "hidden", backgroundColor: c.muted }}>
+          <View style={{ width: `${progress}%`, height: "100%", borderRadius: 999, backgroundColor: tone }} />
+        </View>
       </View>
     </View>
   );
@@ -225,6 +307,23 @@ export default function WalletScreen() {
             <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 18 }}>Active challenges</Text>
             <WalletChallengeCard challenge={data.todayChallenge} />
             <WalletChallengeCard challenge={data.weeklyChallenge} />
+          </View>
+
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 18 }}>Recent challenge results</Text>
+            {data.recentChallenges.filter((challenge) => challenge.status !== "active").length === 0 ? (
+              <View style={{ backgroundColor: c.card, padding: 24, borderRadius: 20, borderWidth: 1, borderStyle: "dashed", borderColor: c.border, alignItems: "center", gap: 8 }}>
+                <Icon name="clock" size={28} color={c.mutedForeground} />
+                <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>No recent challenge results</Text>
+                <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12, textAlign: "center" }}>
+                  Completed and expired challenges will appear here.
+                </Text>
+              </View>
+            ) : (
+              data.recentChallenges
+                .filter((challenge) => challenge.status !== "active")
+                .map((challenge) => <RecentChallengeCard key={challenge.id} challenge={challenge} />)
+            )}
           </View>
 
           <View style={{ backgroundColor: c.card, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: c.border }}>

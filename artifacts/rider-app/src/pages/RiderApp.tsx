@@ -1656,6 +1656,7 @@ function RiderWallet() {
       weekEnd={displayWeekEnd}
       dailyChallenge={wallet?.todayChallenge}
       weeklyChallenge={wallet?.weeklyChallenge}
+      recentChallenges={wallet?.recentChallenges}
       transactions={wallet?.transactions}
       onRetry={() => walletQuery.refetch()}
     />
