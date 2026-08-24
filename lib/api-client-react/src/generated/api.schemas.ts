@@ -211,6 +211,7 @@ export type WalletTransactionType = typeof WalletTransactionType[keyof typeof Wa
 export const WalletTransactionType = {
   delivery: 'delivery',
   challenge_bonus: 'challenge_bonus',
+  fast_delivery_bonus: 'fast_delivery_bonus',
 } as const;
 
 export interface WalletTransaction {
@@ -228,6 +229,7 @@ export interface RiderWallet {
   weekEnd: string;
   deliveryEarnings: number;
   challengeBonuses: number;
+  fastDeliveryBonuses: number;
   totalEarnings: number;
   deliveries: number;
   transactions: WalletTransaction[];

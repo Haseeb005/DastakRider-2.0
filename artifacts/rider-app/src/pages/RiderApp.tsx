@@ -1650,6 +1650,7 @@ function RiderWallet() {
       }
       deliveryEarnings={wallet?.deliveryEarnings}
       challengeBonuses={wallet?.challengeBonuses}
+      fastDeliveryBonuses={wallet?.fastDeliveryBonuses}
       totalEarnings={wallet?.totalEarnings}
       deliveries={wallet?.deliveries}
       weekStart={wallet?.weekStart}

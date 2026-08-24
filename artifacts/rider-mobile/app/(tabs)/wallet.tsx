@@ -197,7 +197,7 @@ function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
 
 function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
   const c = useColors();
-  const bonus = transaction.type === "challenge_bonus";
+  const bonus = transaction.type !== "delivery";
 
   return (
     <View
@@ -297,8 +297,13 @@ export default function WalletScreen() {
                 <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 16, marginTop: 4 }}>{rupees(data.deliveryEarnings)}</Text>
               </View>
               <View style={{ flex: 1, padding: 12, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.12)" }}>
-                <Text style={{ color: "rgba(255,255,255,0.72)", fontFamily: "Inter_600SemiBold", fontSize: 11 }}>Challenge bonuses</Text>
-                <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 16, marginTop: 4 }}>{rupees(data.challengeBonuses)}</Text>
+                <Text style={{ color: "rgba(255,255,255,0.72)", fontFamily: "Inter_600SemiBold", fontSize: 11 }}>Bonuses</Text>
+                <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 16, marginTop: 4 }}>
+                  {rupees(data.challengeBonuses + data.fastDeliveryBonuses)}
+                </Text>
+                <Text style={{ color: "rgba(255,255,255,0.66)", fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 3 }}>
+                  Challenges {rupees(data.challengeBonuses)} · Fast {rupees(data.fastDeliveryBonuses)}
+                </Text>
               </View>
             </View>
           </View>

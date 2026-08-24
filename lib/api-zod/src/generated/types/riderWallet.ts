@@ -13,6 +13,7 @@ export interface RiderWallet {
   weekEnd: Date;
   deliveryEarnings: number;
   challengeBonuses: number;
+  fastDeliveryBonuses: number;
   totalEarnings: number;
   deliveries: number;
   transactions: WalletTransaction[];

@@ -268,6 +268,9 @@ const CHALLENGE_TIERS: Record<ChallengeKind, ChallengeTier[]> = {
 // shared-system writes around a daily/weekly boundary without repeatedly
 // recounting every unsuccessful historical challenge on each Wallet refresh.
 const CHALLENGE_SETTLEMENT_GRACE_MS = PKT_DAY_MS;
+const FAST_DELIVERY_WINDOW_MS = 20 * 60 * 1000;
+const FAST_DELIVERY_BONUS = 50;
+const DELIVERY_GEOFENCE_RADIUS_METERS = 20;
 
 let walletIndexesPromise: Promise<void> | null = null;
 
@@ -283,6 +286,7 @@ function ensureWalletIndexes(): Promise<void> {
         settlementGraceUntil: 1,
       }),
       riderWalletEntriesCol().createIndex({ challengeKey: 1 }, { unique: true }),
+      riderWalletEntriesCol().createIndex({ entryKey: 1 }, { unique: true, sparse: true }),
       riderWalletEntriesCol().createIndex({ riderId: 1, weekKey: 1, createdAt: -1 }),
     ]).then(() => undefined);
   }
@@ -568,6 +572,43 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
 function riderEarningForOrder(order: any, tillNoonFare: number): number {
   const fare = tillNoonFare > 0 ? tillNoonFare : Number(order.riderFare) || 0;
   return Math.round(fare + (Number(order.tip) || 0));
+}
+
+async function awardFastDeliveryBonus(
+  order: any,
+  riderId: string,
+  deliveredAt: Date,
+): Promise<boolean> {
+  const acceptedAt = new Date(order.acceptedTime);
+  if (Number.isNaN(acceptedAt.getTime()) || Number.isNaN(deliveredAt.getTime())) return false;
+  const durationMs = deliveredAt.getTime() - acceptedAt.getTime();
+  if (durationMs < 0 || durationMs > FAST_DELIVERY_WINDOW_MS) return false;
+
+  await ensureWalletIndexes();
+  const orderId = String(order._id);
+  const entryKey = `fast_delivery:${riderId}:${orderId}`;
+  const weekKey = pktDateKey(pktPeriodStartAt("week", deliveredAt));
+  await riderWalletEntriesCol().updateOne(
+    { entryKey },
+    {
+      $setOnInsert: {
+        entryKey,
+        // challengeKey already has a legacy unique index. Reuse the same
+        // per-order key here so fast bonuses never collide on a missing value.
+        challengeKey: entryKey,
+        riderId,
+        orderId,
+        weekKey,
+        type: "fast_delivery_bonus",
+        amount: FAST_DELIVERY_BONUS,
+        title: "Fast delivery bonus",
+        createdAt: deliveredAt,
+        deliveryDurationMinutes: Math.ceil(durationMs / 60_000),
+      },
+    },
+    { upsert: true },
+  );
+  return true;
 }
 
 // Aggregate a rider's delivered-order earnings into total / today / week / month
@@ -1191,11 +1232,30 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
             pickUpTime: { $exists: true },
             timeWhenDelivered: { $exists: false },
           };
+    if (status === DELIVERED_STATUS) {
+      const pendingDelivery = await ordersCol().findOne(filter);
+      if (!pendingDelivery) {
+        return res.status(409).json({
+          message: "Invalid status transition, or order not assigned to you.",
+        });
+      }
+      const geofenceMessage = deliveryGeofenceMessage(
+        pendingDelivery,
+        riderId,
+      );
+      if (geofenceMessage) {
+        return res.status(409).json({ message: geofenceMessage });
+      }
+    }
     // Additive timestamps that mirror the original app (no shared counter writes).
     const extra: Record<string, any> =
       status === "Rider Picked Up"
         ? { pickUpTime: pktTimeString(now) }
-        : { timeWhenDelivered: pktTimeString(now), paidToRider: false };
+        : {
+            timeWhenDelivered: pktTimeString(now),
+            riderDeliveredAt: now,
+            paidToRider: false,
+          };
     const updated = await ordersCol().findOneAndUpdate(
       filter,
       { $set: { status, updatedAt: now, ...extra } },
@@ -1278,6 +1338,13 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
           { $set: { status: "idle" } }
         );
       }
+      try {
+        await awardFastDeliveryBonus(updated, riderId, now);
+      } catch (bonusError) {
+        // Delivery is already committed. Never report it as failed because its
+        // additive wallet award is temporarily unavailable.
+        req.log.error(bonusError, "Could not persist fast-delivery bonus");
+      }
     }
     res.json(normalizeOrder(updated, tnf));
   } catch (e: any) {
@@ -1312,20 +1379,33 @@ router.get("/rider/wallet", async (req: any, res: any) => {
       refreshChallengeProgress(weeklyChallenge, now),
     ]);
 
-    const [orders, bonusEntries, recentChallengeDocs] = await Promise.all([
-      ordersCol()
-        .find(
-          {
-            riderId,
-            status: DELIVERED_STATUS,
-            createdAt: { $gte: weekStart, $lt: weekEnd },
+    const orders = await ordersCol()
+      .find(
+        {
+          riderId,
+          status: DELIVERED_STATUS,
+          createdAt: { $gte: weekStart, $lt: weekEnd },
+        },
+        {
+          projection: {
+            _id: 1,
+            orderNum: 1,
+            createdAt: 1,
+            riderFare: 1,
+            tip: 1,
           },
-          { projection: { _id: 1, orderNum: 1, createdAt: 1, riderFare: 1, tip: 1 } },
-        )
-        .sort({ createdAt: -1 })
-        .toArray(),
+        },
+      )
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    const [bonusEntries, recentChallengeDocs] = await Promise.all([
       riderWalletEntriesCol()
-        .find({ riderId, weekKey, type: "challenge_bonus" })
+        .find({
+          riderId,
+          weekKey,
+          type: { $in: ["challenge_bonus", "fast_delivery_bonus"] },
+        })
         .sort({ createdAt: -1 })
         .toArray(),
       riderChallengesCol()
@@ -1342,7 +1422,14 @@ router.get("/rider/wallet", async (req: any, res: any) => {
       ),
     );
     const challengeBonuses = Math.round(
-      bonusEntries.reduce((sum: number, entry: any) => sum + (Number(entry.amount) || 0), 0),
+      bonusEntries
+        .filter((entry: any) => entry.type === "challenge_bonus")
+        .reduce((sum: number, entry: any) => sum + (Number(entry.amount) || 0), 0),
+    );
+    const fastDeliveryBonuses = Math.round(
+      bonusEntries
+        .filter((entry: any) => entry.type === "fast_delivery_bonus")
+        .reduce((sum: number, entry: any) => sum + (Number(entry.amount) || 0), 0),
     );
     const transactions = [
       ...orders.map((order: any) => ({
@@ -1355,11 +1442,12 @@ router.get("/rider/wallet", async (req: any, res: any) => {
       })),
       ...bonusEntries.map((entry: any) => ({
         id: String(entry._id),
-        type: "challenge_bonus",
+        type: entry.type,
         amount: Number(entry.amount) || 0,
         title: entry.title || "Challenge bonus",
         createdAt: new Date(entry.createdAt).toISOString(),
         challengeId: String(entry.challengeId || ""),
+        orderId: entry.orderId ? String(entry.orderId) : undefined,
       })),
     ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -1368,7 +1456,8 @@ router.get("/rider/wallet", async (req: any, res: any) => {
       weekEnd: weekEnd.toISOString(),
       deliveryEarnings,
       challengeBonuses,
-      totalEarnings: deliveryEarnings + challengeBonuses,
+      fastDeliveryBonuses,
+      totalEarnings: deliveryEarnings + challengeBonuses + fastDeliveryBonuses,
       deliveries: orders.length,
       transactions,
       todayChallenge: walletChallengeResponse(syncedDaily),
@@ -1417,12 +1506,58 @@ router.get("/rider/earnings", async (req: any, res: any) => {
 
 // ── GPS location tracking ──────────────────────────────────────────────────────
 // In-memory only (no DB). The customer's order-tracking page reads the public
-// endpoint below; locations expire after 60 seconds.
+// endpoint below; locations expire after 90 seconds.
 const riderLocations = new Map<
   string,
   { lat: number; lng: number; riderId: string; ts: number }
 >();
 const LOCATION_TTL_MS = 90_000;
+
+function distanceInMeters(
+  firstLat: number,
+  firstLng: number,
+  secondLat: number,
+  secondLng: number,
+): number {
+  const earthRadiusMeters = 6_371_000;
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+  const latitudeDelta = toRadians(secondLat - firstLat);
+  const longitudeDelta = toRadians(secondLng - firstLng);
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(toRadians(firstLat)) *
+      Math.cos(toRadians(secondLat)) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(haversine));
+}
+
+function deliveryGeofenceMessage(order: any, riderId: string): string | null {
+  const customerLat = toNumOrNull(order.latitude);
+  const customerLng = toNumOrNull(order.longitude);
+  if (customerLat === null || customerLng === null) {
+    return "Customer delivery coordinates are unavailable. Delivery cannot be confirmed.";
+  }
+
+  const location = riderLocations.get(String(order._id));
+  if (
+    !location ||
+    location.riderId !== riderId ||
+    Date.now() - location.ts > LOCATION_TTL_MS
+  ) {
+    return "A recent GPS location is required before confirming delivery.";
+  }
+
+  const distance = distanceInMeters(
+    location.lat,
+    location.lng,
+    customerLat,
+    customerLng,
+  );
+  if (distance > DELIVERY_GEOFENCE_RADIUS_METERS) {
+    return `Move within ${DELIVERY_GEOFENCE_RADIUS_METERS} meters of the customer before confirming delivery.`;
+  }
+  return null;
+}
 
 // Rider pushes GPS coordinates for an active order they own and are delivering.
 router.post("/rider/location", async (req: any, res: any) => {

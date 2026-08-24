@@ -646,7 +646,7 @@ components:
           type: string
         type:
           type: string
-          enum: [delivery, challenge_bonus]
+          enum: [delivery, challenge_bonus, fast_delivery_bonus]
         amount:
           type: number
         title:
@@ -678,6 +678,8 @@ components:
           type: number
         challengeBonuses:
           type: number
+        fastDeliveryBonuses:
+          type: number
         totalEarnings:
           type: number
         deliveries:
@@ -699,6 +701,7 @@ components:
         - weekEnd
         - deliveryEarnings
         - challengeBonuses
+        - fastDeliveryBonuses
         - totalEarnings
         - deliveries
         - transactions

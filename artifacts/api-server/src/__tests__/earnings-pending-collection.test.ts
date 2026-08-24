@@ -42,6 +42,12 @@ const testRiderOid = new ObjectId();
 const testOrderOids = [new ObjectId(), new ObjectId(), new ObjectId()];
 const boundaryOrderOids = [new ObjectId(), new ObjectId()];
 const walletOrderOids = Array.from({ length: 7 }, () => new ObjectId());
+const fastDeliveryOrderOids = [
+  new ObjectId(),
+  new ObjectId(),
+  new ObjectId(),
+  new ObjectId(),
+];
 
 // ── lifecycle ─────────────────────────────────────────────────────────────────
 before(async () => {
@@ -174,7 +180,14 @@ after(async () => {
   // Remove test data so the shared prod DB is left clean.
   await dbCol.users().deleteOne({ _id: testRiderOid });
   await dbCol.orders().deleteMany({
-    _id: { $in: [...testOrderOids, ...boundaryOrderOids, ...walletOrderOids] },
+    _id: {
+      $in: [
+        ...testOrderOids,
+        ...boundaryOrderOids,
+        ...walletOrderOids,
+        ...fastDeliveryOrderOids,
+      ],
+    },
   });
   await dbCol.riderChallenges().deleteMany({ riderId: testRiderOid.toHexString() });
   await dbCol.riderWalletEntries().deleteMany({ riderId: testRiderOid.toHexString() });
@@ -216,6 +229,18 @@ async function fetchWallet(): Promise<Record<string, unknown>> {
   });
   assert.equal(res.status, 200, `Expected 200 from /api/rider/wallet, got ${res.status}`);
   return res.json() as Promise<Record<string, unknown>>;
+}
+
+async function pushRiderLocation(orderId: ObjectId, lat: number, lng: number) {
+  const res = await fetch(`${serverUrl}/api/rider/location`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${bearerToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ orderId: orderId.toHexString(), lat, lng }),
+  });
+  assert.equal(res.status, 200, "Expected rider location update to succeed");
 }
 
 async function readDbPendingCollection(): Promise<number> {
@@ -530,5 +555,197 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
     await dbCol.orders().deleteMany({ _id: { $in: [dailyOrderId, weeklyOrderId] } });
     await dbCol.riderChallenges().deleteMany({ _id: { $in: [dailyChallengeId, weeklyChallengeId] } });
     await dbCol.riderWalletEntries().deleteMany({ challengeKey: { $in: [dailyKey, weeklyKey] } });
+  });
+});
+
+describe("Fast delivery bonuses", () => {
+  it("credits Rs. 50 exactly once when an accepted order is delivered within 20 minutes", async () => {
+    const riderId = testRiderOid.toHexString();
+    const [fastOrderId, lateOrderId] = fastDeliveryOrderOids;
+    const now = new Date();
+    const baseOrder = {
+      riderId,
+      billingMode: "prepaid",
+      paymentType: "Online",
+      orderTotal: 500,
+      products: [],
+      riderFare: 100,
+      city: "TestCity",
+      zone: "TestZone",
+      latitude: 31.5204,
+      longitude: 74.3587,
+      riderArrived: true,
+      pickUpTime: "12:00:00",
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await dbCol.orders().insertMany([
+      {
+        ...baseOrder,
+        _id: fastOrderId,
+        orderNum: "FAST-DELIVERY-TEST",
+        status: "Rider Picked Up",
+        acceptedTime: new Date(now.getTime() - 19 * 60_000),
+      },
+      {
+        ...baseOrder,
+        _id: lateOrderId,
+        orderNum: "LATE-DELIVERY-TEST",
+        status: "Rider Picked Up",
+        acceptedTime: new Date(now.getTime() - 25 * 60_000),
+      },
+    ]);
+
+    for (const orderId of [fastOrderId, lateOrderId]) {
+      await pushRiderLocation(orderId, 31.5204, 74.3587);
+      const delivered = await fetch(`${serverUrl}/api/rider/orders/${orderId}/status`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${bearerToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "Delivered" }),
+      });
+      assert.equal(delivered.status, 200);
+    }
+
+    const fastOrder = await dbCol.orders().findOne({ _id: fastOrderId });
+    assert.ok(fastOrder?.riderDeliveredAt, "delivery stores a server timestamp for bonus eligibility");
+
+    const wallet = await fetchWallet();
+    assert.equal(wallet.fastDeliveryBonuses, 50);
+    assert.equal(wallet.totalEarnings, Number(wallet.deliveryEarnings) + Number(wallet.challengeBonuses) + 50);
+    assert.ok(
+      (wallet.transactions as Array<Record<string, unknown>>).some(
+        (entry) =>
+          entry.type === "fast_delivery_bonus" &&
+          entry.amount === 50 &&
+          entry.orderId === fastOrderId.toHexString(),
+      ),
+      "Wallet includes a fast-delivery bonus transaction for the eligible order",
+    );
+
+    await fetchWallet();
+    assert.equal(
+      await dbCol.riderWalletEntries().countDocuments({
+        entryKey: `fast_delivery:${riderId}:${fastOrderId.toHexString()}`,
+      }),
+      1,
+      "repeated Wallet reads must not duplicate a fast-delivery bonus",
+    );
+    assert.equal(
+      await dbCol.riderWalletEntries().countDocuments({
+        entryKey: `fast_delivery:${riderId}:${lateOrderId.toHexString()}`,
+      }),
+      0,
+      "orders completed after 20 minutes must not receive the bonus",
+    );
+
+    await dbCol.orders().deleteMany({ _id: { $in: [fastOrderId, lateOrderId] } });
+    await dbCol.riderWalletEntries().deleteMany({
+      entryKey: {
+        $in: [
+          `fast_delivery:${riderId}:${fastOrderId.toHexString()}`,
+          `fast_delivery:${riderId}:${lateOrderId.toHexString()}`,
+        ],
+      },
+    });
+  });
+
+  it("rejects delivery when the rider is more than 20 meters from the customer", async () => {
+    const riderId = testRiderOid.toHexString();
+    const farOrderId = fastDeliveryOrderOids[3];
+    const now = new Date();
+    await dbCol.orders().insertOne({
+      _id: farOrderId,
+      riderId,
+      orderNum: "FAR-DELIVERY-TEST",
+      status: "Rider Picked Up",
+      billingMode: "prepaid",
+      paymentType: "Online",
+      orderTotal: 500,
+      products: [],
+      riderFare: 100,
+      city: "TestCity",
+      zone: "TestZone",
+      latitude: 31.5204,
+      longitude: 74.3587,
+      acceptedTime: new Date(now.getTime() - 10 * 60_000),
+      riderArrived: true,
+      pickUpTime: "12:00:00",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await pushRiderLocation(farOrderId, 31.5214, 74.3587);
+
+    const delivered = await fetch(`${serverUrl}/api/rider/orders/${farOrderId}/status`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${bearerToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ status: "Delivered" }),
+    });
+    assert.equal(delivered.status, 409);
+    const deliveryError = (await delivered.json()) as { message?: unknown };
+    assert.match(
+      String(deliveryError.message),
+      /within 20 meters/i,
+    );
+    assert.equal(
+      (await dbCol.orders().findOne({ _id: farOrderId }))?.status,
+      "Rider Picked Up",
+      "the order remains in transit when delivery geofence verification fails",
+    );
+    assert.equal(
+      await dbCol.riderWalletEntries().countDocuments({
+        entryKey: `fast_delivery:${riderId}:${farOrderId.toHexString()}`,
+      }),
+      0,
+      "a blocked delivery must not receive a fast-delivery bonus",
+    );
+
+    await dbCol.orders().deleteOne({ _id: farOrderId });
+  });
+
+  it("does not backfill a bonus for an order that was already delivered", async () => {
+    const riderId = testRiderOid.toHexString();
+    const recoveryOrderId = fastDeliveryOrderOids[2];
+    const now = new Date();
+
+    await dbCol.orders().insertOne({
+      _id: recoveryOrderId,
+      riderId,
+      status: "Delivered",
+      billingMode: "prepaid",
+      paymentType: "Online",
+      orderTotal: 500,
+      products: [],
+      riderFare: 100,
+      city: "TestCity",
+      zone: "TestZone",
+      createdAt: new Date(now.getTime() - 10 * 60_000),
+      acceptedTime: new Date(now.getTime() - 10 * 60_000),
+      riderDeliveredAt: now,
+      updatedAt: now,
+    });
+
+    const wallet = await fetchWallet();
+    assert.equal(wallet.fastDeliveryBonuses, 0);
+    assert.equal(
+      (wallet.transactions as Array<Record<string, unknown>>).some(
+        (entry) =>
+          entry.type === "fast_delivery_bonus" &&
+          entry.orderId === recoveryOrderId.toHexString(),
+      ),
+      false,
+      "Wallet must not backfill a bonus for an already-delivered order",
+    );
+
+    await dbCol.orders().deleteOne({ _id: recoveryOrderId });
+    await dbCol.riderWalletEntries().deleteOne({
+      entryKey: `fast_delivery:${riderId}:${recoveryOrderId.toHexString()}`,
+    });
   });
 });

@@ -30,7 +30,7 @@ export interface Challenge {
 
 export interface Transaction {
   id?: string;
-  type: 'delivery' | 'challenge_bonus';
+  type: 'delivery' | 'challenge_bonus' | 'fast_delivery_bonus';
   amount: number;
   title: string;
   createdAt: string | Date;
@@ -42,6 +42,7 @@ export interface WalletOverviewProps {
   error?: string | boolean;
   deliveryEarnings?: number;
   challengeBonuses?: number;
+  fastDeliveryBonuses?: number;
   totalEarnings?: number;
   deliveries?: number;
   weekStart?: string | Date;
@@ -255,7 +256,7 @@ const RecentChallengeCard = ({ challenge }: { challenge: Challenge }) => {
 };
 
 const TransactionItem = ({ tx }: { tx: Transaction }) => {
-  const isBonus = tx.type === 'challenge_bonus';
+  const isBonus = tx.type !== 'delivery';
   return (
     <div className="flex items-center justify-between p-4 bg-card rounded-2xl border shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-center gap-3.5">
@@ -292,6 +293,7 @@ export function WalletOverview({
   error,
   deliveryEarnings = 0,
   challengeBonuses = 0,
+  fastDeliveryBonuses = 0,
   totalEarnings = 0,
   deliveries = 0,
   weekStart,
@@ -312,6 +314,7 @@ export function WalletOverview({
   }
 
   const recentChallengeHistory = recentChallenges.filter((challenge) => challenge.status !== 'active');
+  const totalBonuses = challengeBonuses + fastDeliveryBonuses;
 
   return (
     <div className="flex flex-col gap-8 pb-24 max-w-md mx-auto w-full">
@@ -349,8 +352,10 @@ export function WalletOverview({
                 <div className="flex items-center gap-1.5 text-primary-foreground/80 text-xs font-medium mb-1.5">
                   <Gift className="w-3.5 h-3.5" /> Bonuses
                 </div>
-                <p className="text-xl font-bold">Rs. {challengeBonuses.toLocaleString()}</p>
-                <p className="text-xs text-primary-foreground/60 mt-0.5">Challenges</p>
+                <p className="text-xl font-bold">Rs. {totalBonuses.toLocaleString()}</p>
+                <p className="text-xs text-primary-foreground/60 mt-0.5">
+                  Challenges Rs. {challengeBonuses.toLocaleString()} · Fast Rs. {fastDeliveryBonuses.toLocaleString()}
+                </p>
               </div>
             </div>
           </div>

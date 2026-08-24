@@ -536,11 +536,12 @@ export const GetRiderWalletResponse = zod.object({
   "weekEnd": zod.coerce.date(),
   "deliveryEarnings": zod.number(),
   "challengeBonuses": zod.number(),
+  "fastDeliveryBonuses": zod.number(),
   "totalEarnings": zod.number(),
   "deliveries": zod.number(),
   "transactions": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['delivery', 'challenge_bonus']),
+  "type": zod.enum(['delivery', 'challenge_bonus', 'fast_delivery_bonus']),
   "amount": zod.number(),
   "title": zod.string(),
   "createdAt": zod.coerce.date(),

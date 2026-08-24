@@ -16,6 +16,10 @@ The rider app shares its Mongo with the live customer + admin apps, so every wri
 **Why:** broken-access-control flaw flagged in code review — public read endpoint amplifies the spoof.
 **How to apply:** any "publish my live location for X" endpoint needs an ownership+state guard, not just auth.
 
+**Delivery completion geofence:** a rider may mark an order Delivered only with a fresh GPS point for that same assigned order within 20 meters of the order's customer latitude/longitude. Reject missing delivery coordinates, missing or stale location, and out-of-radius points before the atomic status update.
+**Why:** a rider could otherwise complete a delivery, and receive any completion-dependent reward, before reaching the customer.
+**How to apply:** use the server-held, authenticated in-transit location keyed to the order and rider; calculate straight-line distance server-side. This is a normal-client arrival guard, not cryptographic proof: raw client GPS can be spoofed. Do not describe it as fraud-proof unless a platform attestation or another trusted-location mechanism validates the location evidence.
+
 **PKT period math:** Pakistan is UTC+5 with no DST, so period boundaries (today/week/month) are computed as fixed UTC instants by shifting +5h; week starts Sunday (`getUTCDay()`). Safe to hardcode the offset.
 
 **GPS tracking hook lives app-wide, not in a tab.** `useLocationTracking(activeOrders)` is called in the top-level `RiderApp`, so location keeps publishing while an order is `Rider Picked Up` regardless of which tab is open (tab-scoped placement stops tracking on navigation → public location goes stale after the 60s TTL).
