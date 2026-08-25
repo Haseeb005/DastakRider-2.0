@@ -255,9 +255,7 @@ const CHALLENGE_MILESTONES: Record<ChallengeKind, ChallengeMilestone[]> = {
     { target: 15, reward: 200 },
     { target: 20, reward: 500 },
     { target: 25, reward: 800 },
-    { target: 30, reward: 800 },
-    { target: 35, reward: 800 },
-    { target: 40, reward: 800 },
+    { target: 30, reward: 1000 },
   ],
   weekly: [
     { target: 50, reward: 500 },
@@ -265,6 +263,16 @@ const CHALLENGE_MILESTONES: Record<ChallengeKind, ChallengeMilestone[]> = {
     { target: 100, reward: 2000 },
   ],
 };
+
+const RETIRED_DAILY_MILESTONES: ChallengeMilestone[] = [
+  { target: 10, reward: 200 },
+  { target: 15, reward: 200 },
+  { target: 20, reward: 500 },
+  { target: 25, reward: 800 },
+  { target: 30, reward: 800 },
+  { target: 35, reward: 800 },
+  { target: 40, reward: 800 },
+];
 
 // Order records normally settle immediately. A bounded window catches delayed
 // shared-system writes around a daily/weekly boundary without repeatedly
@@ -322,6 +330,34 @@ function hasMilestoneDefinition(challenge: any): boolean {
         Number.isFinite(Number(milestone?.target)) &&
         Number(milestone.target) > 0 &&
         Number.isFinite(Number(milestone?.reward)),
+    )
+  );
+}
+
+function hasCurrentMilestoneSchedule(challenge: any): boolean {
+  if (!hasMilestoneDefinition(challenge)) return false;
+  const expected = CHALLENGE_MILESTONES[challenge.kind as ChallengeKind];
+  if (!expected) return false;
+  const actual = milestonesForChallenge(challenge);
+  return (
+    actual.length === expected.length &&
+    actual.every(
+      (milestone, index) =>
+        milestone.target === expected[index].target &&
+        milestone.reward === expected[index].reward,
+    )
+  );
+}
+
+function hasRetiredDailyMilestoneSchedule(challenge: any): boolean {
+  if (!hasMilestoneDefinition(challenge) || challenge.kind !== "daily") return false;
+  const actual = milestonesForChallenge(challenge);
+  return (
+    actual.length === RETIRED_DAILY_MILESTONES.length &&
+    actual.every(
+      (milestone, index) =>
+        milestone.target === RETIRED_DAILY_MILESTONES[index].target &&
+        milestone.reward === RETIRED_DAILY_MILESTONES[index].reward,
     )
   );
 }
@@ -421,15 +457,23 @@ async function ensureChallenge(
   if (existing) {
     // Upgrade only a currently active legacy challenge. Historical and completed
     // records retain their original reward contract and wallet history.
-    if (existing.status === "active" && !hasMilestoneDefinition(existing)) {
+    if (
+      existing.status === "active" &&
+      (!hasMilestoneDefinition(existing) || hasRetiredDailyMilestoneSchedule(existing))
+    ) {
       const milestones = milestoneTemplate(kind);
       const finalMilestone = milestones.at(-1)!;
+      const earnedMilestoneTargets = Array.isArray(existing.earnedMilestoneTargets)
+        ? existing.earnedMilestoneTargets
+            .map((target: unknown) => Number(target))
+            .filter((target: number) => milestones.some((milestone) => milestone.target === target))
+        : [];
       await challenges.updateOne(
         { _id: existing._id, status: "active" },
         {
           $set: {
             milestones,
-            earnedMilestoneTargets: [],
+            earnedMilestoneTargets: [...new Set(earnedMilestoneTargets)],
             tier: challengeTierLabel(kind),
             target: finalMilestone.target,
             reward: finalMilestone.reward,

@@ -398,7 +398,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     const before = await fetchWallet();
     const firstDaily = before.todayChallenge as Record<string, unknown>;
     const firstWeekly = before.weeklyChallenge as Record<string, unknown>;
-    assert.equal(firstDaily.target, 40, "the final daily target is the seventh goal");
+    assert.equal(firstDaily.target, 30, "the final daily target is the fifth goal");
     assert.deepEqual(
       (firstDaily.milestones as Array<Record<string, unknown>>).map(({ target, reward }) => ({
         target,
@@ -409,9 +409,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
         { target: 15, reward: 200 },
         { target: 20, reward: 500 },
         { target: 25, reward: 800 },
-        { target: 30, reward: 800 },
-        { target: 35, reward: 800 },
-        { target: 40, reward: 800 },
+        { target: 30, reward: 1000 },
       ],
     );
     assert.deepEqual(
@@ -454,7 +452,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     assert.equal(earned.challengeBonuses, 200);
     assert.deepEqual(
       (dailyAtTen.milestones as Array<Record<string, unknown>>).map((milestone) => milestone.earned),
-      [true, false, false, false, false, false, false],
+      [true, false, false, false, false],
     );
 
     const refreshed = await fetchWallet();
