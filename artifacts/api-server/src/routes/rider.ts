@@ -244,23 +244,25 @@ function pktDateStart(dateValue: string): Date | null {
 
 type ChallengeKind = "daily" | "weekly";
 
-type ChallengeTier = {
-  tier: string;
+type ChallengeMilestone = {
   target: number;
   reward: number;
 };
 
-const CHALLENGE_TIERS: Record<ChallengeKind, ChallengeTier[]> = {
+const CHALLENGE_MILESTONES: Record<ChallengeKind, ChallengeMilestone[]> = {
   daily: [
-    { tier: "Bronze", target: 10, reward: 200 },
-    { tier: "Silver", target: 20, reward: 500 },
-    { tier: "Gold", target: 25, reward: 800 },
+    { target: 10, reward: 200 },
+    { target: 15, reward: 200 },
+    { target: 20, reward: 500 },
+    { target: 25, reward: 800 },
+    { target: 30, reward: 800 },
+    { target: 35, reward: 800 },
+    { target: 40, reward: 800 },
   ],
   weekly: [
-    { tier: "60 deliveries", target: 60, reward: 500 },
-    { tier: "85 deliveries", target: 85, reward: 1000 },
-    { tier: "120 deliveries", target: 120, reward: 2000 },
-    { tier: "150 deliveries", target: 150, reward: 3000 },
+    { target: 50, reward: 500 },
+    { target: 75, reward: 1000 },
+    { target: 100, reward: 2000 },
   ],
 };
 
@@ -293,15 +295,6 @@ function ensureWalletIndexes(): Promise<void> {
   return walletIndexesPromise;
 }
 
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[middle - 1] + sorted[middle]) / 2
-    : sorted[middle];
-}
-
 function challengePeriod(kind: ChallengeKind, now = new Date()) {
   const start = pktPeriodStartAt(kind === "daily" ? "day" : "week", now);
   const duration = kind === "daily" ? PKT_DAY_MS : 7 * PKT_DAY_MS;
@@ -316,61 +309,75 @@ function challengePeriod(kind: ChallengeKind, now = new Date()) {
   };
 }
 
-async function historicalDeliveryBaseline(
-  riderId: string,
-  kind: ChallengeKind,
-  currentStart: Date,
-): Promise<number> {
-  const periodCount = kind === "daily" ? 14 : 4;
-  const duration = kind === "daily" ? PKT_DAY_MS : 7 * PKT_DAY_MS;
-  const historyStart = new Date(currentStart.getTime() - periodCount * duration);
-  const docs = await ordersCol()
-    .find(
-      {
-        riderId,
-        status: DELIVERED_STATUS,
-        createdAt: { $gte: historyStart, $lt: currentStart },
-      },
-      { projection: { createdAt: 1 } },
-    )
-    .toArray();
-
-  const counts = Array.from({ length: periodCount }, () => 0);
-  docs.forEach((order: any) => {
-    const createdAt = new Date(order.createdAt).getTime();
-    const index = Math.floor((createdAt - historyStart.getTime()) / duration);
-    if (index >= 0 && index < counts.length) counts[index] += 1;
-  });
-
-  // Ignore inactive periods so a rider who was off-duty is not assigned an
-  // artificially low target. New riders naturally fall back to the first tier.
-  return median(counts.filter((count) => count > 0));
+function milestoneTemplate(kind: ChallengeKind): ChallengeMilestone[] {
+  return CHALLENGE_MILESTONES[kind].map((milestone) => ({ ...milestone }));
 }
 
-function tierForBaseline(kind: ChallengeKind, baseline: number): ChallengeTier {
-  const tiers = CHALLENGE_TIERS[kind];
-  if (baseline <= 0) return tiers[0];
-  const stretchTarget = Math.ceil(baseline * 1.1);
-  return tiers.reduce((best, tier) =>
-    Math.abs(tier.target - stretchTarget) < Math.abs(best.target - stretchTarget)
-      ? tier
-      : best,
+function hasMilestoneDefinition(challenge: any): boolean {
+  return (
+    Array.isArray(challenge?.milestones) &&
+    challenge.milestones.length > 0 &&
+    challenge.milestones.every(
+      (milestone: any) =>
+        Number.isFinite(Number(milestone?.target)) &&
+        Number(milestone.target) > 0 &&
+        Number.isFinite(Number(milestone?.reward)),
+    )
   );
 }
 
-function challengeTitle(challenge: any): string {
+function milestonesForChallenge(challenge: any): ChallengeMilestone[] {
+  if (hasMilestoneDefinition(challenge)) {
+    return challenge.milestones
+      .map((milestone: any) => ({
+        target: Number(milestone.target),
+        reward: Number(milestone.reward),
+      }))
+      .sort((a: ChallengeMilestone, b: ChallengeMilestone) => a.target - b.target);
+  }
+
+  // Completed and historical records created before the milestone rollout keep
+  // their original one-time reward rather than being retroactively reconfigured.
+  return [{ target: Number(challenge?.target) || 0, reward: Number(challenge?.reward) || 0 }]
+    .filter((milestone) => milestone.target > 0);
+}
+
+function challengeTierLabel(kind: ChallengeKind): string {
+  return kind === "daily" ? "Daily delivery goals" : "Weekly fuel bonus";
+}
+
+function milestoneTitle(challenge: any, goalNumber: number, milestone: ChallengeMilestone): string {
+  const label = challenge.kind === "daily" ? "Daily challenge" : "Weekly challenge";
+  return `${label} · Goal #${goalNumber} (${milestone.target} deliveries)`;
+}
+
+function legacyChallengeTitle(challenge: any): string {
   const label = challenge.kind === "daily" ? "Today's Challenge" : "Weekly Challenge";
-  return `${label} · ${challenge.tier}`;
+  return `${label} · ${challenge.tier || challengeTierLabel(challenge.kind)}`;
 }
 
 function walletChallengeResponse(challenge: any) {
+  const milestones = milestonesForChallenge(challenge);
+  const settledTargets = new Set(
+    Array.isArray(challenge.earnedMilestoneTargets)
+      ? challenge.earnedMilestoneTargets.map((target: unknown) => Number(target))
+      : [],
+  );
+  const isLegacyCompleted = !hasMilestoneDefinition(challenge) && challenge.status === "completed";
+  const finalMilestone = milestones.at(-1) ?? { target: 0, reward: 0 };
+
   return {
     id: String(challenge._id),
     kind: challenge.kind,
-    tier: challenge.tier,
-    target: Number(challenge.target) || 0,
+    tier: challenge.tier || challengeTierLabel(challenge.kind),
+    target: finalMilestone.target,
     progress: Number(challenge.progress) || 0,
-    reward: Number(challenge.reward) || 0,
+    reward: finalMilestone.reward,
+    milestones: milestones.map((milestone) => ({
+      target: milestone.target,
+      reward: milestone.reward,
+      earned: isLegacyCompleted || settledTargets.has(milestone.target),
+    })),
     status: challenge.status,
     periodStart: new Date(challenge.periodStart).toISOString(),
     periodEnd: new Date(challenge.periodEnd).toISOString(),
@@ -411,10 +418,32 @@ async function ensureChallenge(
     kind,
     periodKey: period.periodKey,
   });
-  if (existing) return existing;
+  if (existing) {
+    // Upgrade only a currently active legacy challenge. Historical and completed
+    // records retain their original reward contract and wallet history.
+    if (existing.status === "active" && !hasMilestoneDefinition(existing)) {
+      const milestones = milestoneTemplate(kind);
+      const finalMilestone = milestones.at(-1)!;
+      await challenges.updateOne(
+        { _id: existing._id, status: "active" },
+        {
+          $set: {
+            milestones,
+            earnedMilestoneTargets: [],
+            tier: challengeTierLabel(kind),
+            target: finalMilestone.target,
+            reward: finalMilestone.reward,
+            updatedAt: now,
+          },
+        },
+      );
+      return challenges.findOne({ _id: existing._id });
+    }
+    return existing;
+  }
 
-  const baseline = await historicalDeliveryBaseline(riderId, kind, period.start);
-  const tier = tierForBaseline(kind, baseline);
+  const milestones = milestoneTemplate(kind);
+  const finalMilestone = milestones.at(-1)!;
   const challenge = {
     riderId,
     kind,
@@ -425,11 +454,12 @@ async function ensureChallenge(
     settlementGraceUntil: new Date(
       period.end.getTime() + CHALLENGE_SETTLEMENT_GRACE_MS,
     ),
-    tier: tier.tier,
-    target: tier.target,
-    reward: tier.reward,
+    tier: challengeTierLabel(kind),
+    target: finalMilestone.target,
+    reward: finalMilestone.reward,
+    milestones,
+    earnedMilestoneTargets: [],
     progress: 0,
-    baselineDeliveries: baseline,
     status: "active",
     createdAt: now,
     updatedAt: now,
@@ -483,6 +513,9 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
   try {
     const currentBeforeCount = await challenges.findOne({ _id: challenge._id });
     if (!currentBeforeCount) throw new Error("Rider challenge no longer exists");
+    const milestones = milestonesForChallenge(currentBeforeCount);
+    const finalMilestone = milestones.at(-1);
+    if (!finalMilestone) throw new Error("Rider challenge has no valid milestone");
 
     const deliveredCount = await ordersCol().countDocuments({
       riderId: challenge.riderId,
@@ -515,13 +548,13 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
     // but never regresses from completed or receives a duplicate entry.
     if (
       current.status !== "completed" &&
-      Number(current.progress) >= Number(current.target)
+      Number(current.progress) >= finalMilestone.target
     ) {
       await challenges.updateOne(
         {
           ...ownershipFilter,
           status: { $in: ["active", "expired"] },
-          progress: { $gte: Number(current.target) },
+          progress: { $gte: finalMilestone.target },
         },
         { $set: { status: "completed", completedAt: now, updatedAt: now } },
       );
@@ -530,7 +563,7 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
         {
           ...ownershipFilter,
           status: "active",
-          progress: { $lt: Number(current.target) },
+          progress: { $lt: finalMilestone.target },
         },
         {
           $set: {
@@ -550,7 +583,58 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
     current = await challenges.findOne({ _id: challenge._id });
     if (!current) throw new Error("Rider challenge no longer exists");
 
-    if (current.status === "completed") {
+    if (hasMilestoneDefinition(current)) {
+      const currentMilestones = milestonesForChallenge(current);
+      const reachedMilestones = currentMilestones.filter(
+        (milestone) => Number(current.progress) >= milestone.target,
+      );
+
+      // The per-challenge lock serializes normal refreshes. The unique
+      // challengeKey below is a second, durable guard against retries or a
+      // recovered lock creating the same milestone bonus twice.
+      await Promise.all(
+        reachedMilestones.map((milestone, index) => {
+          const goalNumber = currentMilestones.findIndex(
+            (candidate) => candidate.target === milestone.target,
+          ) + 1;
+          const challengeKey = `${current.riderId}:${current.kind}:${current.periodKey}:milestone:${milestone.target}`;
+          return riderWalletEntriesCol().updateOne(
+            { challengeKey },
+            {
+              $setOnInsert: {
+                riderId: current.riderId,
+                challengeKey,
+                challengeId: String(current._id),
+                weekKey: current.weekKey,
+                milestoneTarget: milestone.target,
+                type: "challenge_bonus",
+                amount: milestone.reward,
+                title: milestoneTitle(current, goalNumber || index + 1, milestone),
+                createdAt: now,
+              },
+            },
+            { upsert: true },
+          );
+        }),
+      );
+
+      if (reachedMilestones.length > 0) {
+        await challenges.updateOne(
+          ownershipFilter,
+          {
+            $addToSet: {
+              earnedMilestoneTargets: {
+                $each: reachedMilestones.map((milestone) => milestone.target),
+              },
+            },
+            $set: { updatedAt: now },
+          },
+        );
+      }
+    } else if (current.status === "completed") {
+      // Legacy records created before the milestone rollout retain the
+      // historical one-bonus key and amount. This avoids duplicate payouts
+      // while keeping prior Wallet history readable.
       const challengeKey = `${current.riderId}:${current.kind}:${current.periodKey}`;
       await riderWalletEntriesCol().updateOne(
         { challengeKey },
@@ -562,7 +646,7 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
             weekKey: current.weekKey,
             type: "challenge_bonus",
             amount: Number(current.reward) || 0,
-            title: challengeTitle(current),
+            title: legacyChallengeTitle(current),
             createdAt: current.completedAt || now,
           },
         },
@@ -570,7 +654,7 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
       );
     }
 
-    return current;
+    return (await challenges.findOne({ _id: challenge._id })) ?? current;
   } finally {
     await challenges.updateOne(
       { _id: challenge._id, "settlementLock.token": lockToken },

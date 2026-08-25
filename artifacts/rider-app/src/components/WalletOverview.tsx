@@ -23,6 +23,11 @@ export interface Challenge {
   target: number;
   progress: number;
   reward: number;
+  milestones?: Array<{
+    target: number;
+    reward: number;
+    earned: boolean;
+  }>;
   status: ChallengeStatus;
   periodStart: string | Date;
   periodEnd: string | Date;
@@ -135,8 +140,14 @@ const WalletError = ({ error, onRetry }: { error: any, onRetry?: () => void }) =
 const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge, title: string, icon: any }) => {
   const isCompleted = challenge.status === 'completed';
   const isExpired = challenge.status === 'expired';
-  
-  const progressPercent = Math.min(100, Math.max(0, (challenge.progress / challenge.target) * 100));
+  const milestones = challenge.milestones?.length
+    ? challenge.milestones
+    : [{
+        target: challenge.target,
+        reward: challenge.reward,
+        earned: challenge.status === 'completed',
+      }];
+  const nextMilestone = milestones.find((milestone) => !milestone.earned);
 
   return (
     <div className="bg-card text-card-foreground rounded-2xl p-5 border shadow-sm flex flex-col gap-4 relative overflow-hidden transition-all hover:shadow-md">
@@ -160,37 +171,72 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
                 </span>
               )}
             </div>
-            <h3 className="font-semibold text-base leading-tight">Complete {challenge.target} deliveries</h3>
+             <h3 className="font-semibold text-base leading-tight">Milestone rewards</h3>
           </div>
         </div>
       </div>
       
-      <div className="space-y-2 mt-1">
-        <div className="flex justify-between text-sm font-medium">
-          <span className="text-muted-foreground">{challenge.progress} / {challenge.target} trips</span>
-          <span className={isCompleted ? "text-green-600 font-bold" : "text-foreground font-bold"}>
-            +Rs. {challenge.reward.toLocaleString()}
-          </span>
-        </div>
-        <div className="h-2.5 w-full bg-secondary rounded-full overflow-hidden">
-          <div 
-            className={`h-full rounded-full transition-all duration-1000 ease-out ${
-              isCompleted ? 'bg-green-500' : isExpired ? 'bg-muted-foreground' : 'bg-primary'
-            }`}
-            style={{ width: `${progressPercent}%` }}
-          />
+       <div className="rounded-xl bg-primary/5 border border-primary/10 px-3.5 py-3">
+         <div className="flex items-center justify-between gap-3 text-sm">
+           <span className="font-semibold text-foreground">
+             {challenge.progress} deliveries completed
+           </span>
+           {nextMilestone ? (
+             <span className="text-primary font-medium text-right">
+               Next goal: {nextMilestone.target} deliveries
+             </span>
+           ) : (
+             <span className="text-green-600 dark:text-green-400 font-medium">All goals earned</span>
+           )}
         </div>
       </div>
+
+       <div className="space-y-2">
+         {milestones.map((milestone, index) => {
+           const isNext = milestone === nextMilestone;
+
+           return (
+             <div
+               key={`${milestone.target}-${milestone.reward}-${index}`}
+               className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-3 ${
+                 milestone.earned
+                   ? 'border-green-500/20 bg-green-500/5'
+                   : isNext
+                     ? 'border-primary/25 bg-primary/5'
+                     : 'border-border bg-muted/30'
+               }`}
+             >
+               <div className="flex items-center gap-2.5 min-w-0">
+                 <div className={`shrink-0 p-1.5 rounded-full ${
+                   milestone.earned
+                     ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+                     : isNext
+                       ? 'bg-primary/10 text-primary'
+                       : 'bg-muted text-muted-foreground'
+                 }`}>
+                   {milestone.earned ? <CheckCircle2 className="w-4 h-4" /> : <Target className="w-4 h-4" />}
+                 </div>
+                 <div>
+                   <p className="text-sm font-semibold text-foreground">{milestone.target} deliveries</p>
+                   <p className={`text-[11px] font-medium ${
+                     milestone.earned ? 'text-green-600 dark:text-green-400' : isNext ? 'text-primary' : 'text-muted-foreground'
+                   }`}>
+                     {milestone.earned ? 'Earned' : isNext ? 'Next goal · Upcoming' : 'Upcoming'}
+                   </p>
+                 </div>
+               </div>
+               <span className="shrink-0 text-sm font-bold text-foreground">+Rs. {milestone.reward.toLocaleString()}</span>
+             </div>
+           );
+         })}
+       </div>
       
       <div className="flex items-center justify-between text-xs text-muted-foreground pt-3 border-t mt-2">
         <div className="flex items-center gap-1.5">
           <Clock className="w-3.5 h-3.5" />
           <span>{isExpired ? 'Ended' : 'Ends'} {formatDate(challenge.periodEnd)}</span>
         </div>
-        {!isCompleted && !isExpired && (
-          <span className="text-primary font-medium">{challenge.target - challenge.progress} more to go!</span>
-        )}
-        {isCompleted && <span className="text-green-600 font-medium">Reward earned!</span>}
+         {isCompleted && <span className="text-green-600 dark:text-green-400 font-medium">All goals earned!</span>}
       </div>
     </div>
   );
@@ -198,6 +244,11 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
 
 const RecentChallengeCard = ({ challenge }: { challenge: Challenge }) => {
   const isCompleted = challenge.status === 'completed';
+  const earnedReward = challenge.milestones?.length
+    ? challenge.milestones
+        .filter((milestone) => milestone.earned)
+        .reduce((total, milestone) => total + milestone.reward, 0)
+    : challenge.reward;
   const progressPercent = challenge.target > 0
     ? Math.min(100, Math.max(0, (challenge.progress / challenge.target) * 100))
     : 0;
@@ -229,7 +280,7 @@ const RecentChallengeCard = ({ challenge }: { challenge: Challenge }) => {
         </div>
         <div className="text-right shrink-0">
           <p className={`font-bold text-sm ${isCompleted ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
-            {isCompleted ? `+Rs. ${challenge.reward.toLocaleString()}` : `Rs. ${challenge.reward.toLocaleString()}`}
+            {isCompleted ? `+Rs. ${earnedReward.toLocaleString()}` : `Rs. ${challenge.reward.toLocaleString()}`}
           </p>
           <p className="text-[10px] text-muted-foreground mt-0.5">
             {isCompleted ? 'Reward earned' : 'Reward not earned'}

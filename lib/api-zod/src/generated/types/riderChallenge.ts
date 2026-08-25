@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RiderChallengeKind } from './riderChallengeKind';
+import type { RiderChallengeMilestone } from './riderChallengeMilestone';
 import type { RiderChallengeStatus } from './riderChallengeStatus';
 
 export interface RiderChallenge {
@@ -14,7 +15,9 @@ export interface RiderChallenge {
   tier: string;
   target: number;
   progress: number;
+  /** Reward amount for the final milestone. */
   reward: number;
+  milestones: RiderChallengeMilestone[];
   status: RiderChallengeStatus;
   periodStart: Date;
   periodEnd: Date;

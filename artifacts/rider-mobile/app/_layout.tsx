@@ -221,7 +221,7 @@ function RootLayout() {
   // Version check — runs once on launch before any screen is shown.
   useEffect(() => {
     const platform = Platform.OS === "ios" ? "ios" : "android";
-    fetch(`${API_BASE}/ridersCheckVersion`, {
+    fetch(`${API_BASE}/api/ridersCheckVersion`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ version: APP_VERSION, platform }),

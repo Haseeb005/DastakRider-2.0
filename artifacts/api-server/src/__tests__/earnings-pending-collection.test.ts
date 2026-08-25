@@ -41,7 +41,7 @@ let bearerToken: string;
 const testRiderOid = new ObjectId();
 const testOrderOids = [new ObjectId(), new ObjectId(), new ObjectId()];
 const boundaryOrderOids = [new ObjectId(), new ObjectId()];
-const walletOrderOids = Array.from({ length: 7 }, () => new ObjectId());
+const walletOrderOids = Array.from({ length: 17 }, () => new ObjectId());
 const fastDeliveryOrderOids = [
   new ObjectId(),
   new ObjectId(),
@@ -394,16 +394,43 @@ describe("PKT calendar date filtering", () => {
 });
 
 describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
-  it("locks a starter target and credits a completed challenge exactly once", async () => {
+  it("pays each reached daily milestone exactly once", async () => {
     const before = await fetchWallet();
     const firstDaily = before.todayChallenge as Record<string, unknown>;
-    assert.equal(firstDaily.target, 10, "riders without prior-day activity receive the Bronze target");
+    const firstWeekly = before.weeklyChallenge as Record<string, unknown>;
+    assert.equal(firstDaily.target, 40, "the final daily target is the seventh goal");
+    assert.deepEqual(
+      (firstDaily.milestones as Array<Record<string, unknown>>).map(({ target, reward }) => ({
+        target,
+        reward,
+      })),
+      [
+        { target: 10, reward: 200 },
+        { target: 15, reward: 200 },
+        { target: 20, reward: 500 },
+        { target: 25, reward: 800 },
+        { target: 30, reward: 800 },
+        { target: 35, reward: 800 },
+        { target: 40, reward: 800 },
+      ],
+    );
+    assert.deepEqual(
+      (firstWeekly.milestones as Array<Record<string, unknown>>).map(({ target, reward }) => ({
+        target,
+        reward,
+      })),
+      [
+        { target: 50, reward: 500 },
+        { target: 75, reward: 1000 },
+        { target: 100, reward: 2000 },
+      ],
+    );
     assert.equal(firstDaily.status, "active");
 
     const riderId = testRiderOid.toHexString();
     const now = new Date();
     await dbCol.orders().insertMany(
-      walletOrderOids.map((oid, index) => ({
+      walletOrderOids.slice(0, 7).map((oid, index) => ({
         _id: oid,
         riderId,
         status: "Delivered",
@@ -421,21 +448,77 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     );
 
     const earned = await fetchWallet();
-    const completedDaily = earned.todayChallenge as Record<string, unknown>;
-    assert.equal(completedDaily.status, "completed");
-    assert.equal(completedDaily.progress, 10);
+    const dailyAtTen = earned.todayChallenge as Record<string, unknown>;
+    assert.equal(dailyAtTen.status, "active");
+    assert.equal(dailyAtTen.progress, 10);
     assert.equal(earned.challengeBonuses, 200);
+    assert.deepEqual(
+      (dailyAtTen.milestones as Array<Record<string, unknown>>).map((milestone) => milestone.earned),
+      [true, false, false, false, false, false, false],
+    );
 
     const refreshed = await fetchWallet();
     assert.equal(refreshed.challengeBonuses, 200, "a refresh must not duplicate the bonus");
+    const daily = await dbCol.riderChallenges().findOne({ riderId, kind: "daily" });
+    assert.ok(daily, "the generated daily challenge should exist");
     assert.equal(
       await dbCol.riderWalletEntries().countDocuments({
-        riderId,
-        type: "challenge_bonus",
-        amount: 200,
+        challengeKey: `${riderId}:daily:${String(daily!.periodKey)}:milestone:10`,
       }),
       1,
-      "one completed daily challenge creates exactly one wallet bonus entry",
+      "the 10-delivery daily goal creates one wallet bonus entry",
+    );
+
+    await dbCol.orders().insertMany(
+      walletOrderOids.slice(7, 9).map((oid, index) => ({
+        _id: oid,
+        riderId,
+        status: "Delivered",
+        riderFare: 100,
+        createdAt: new Date(now.getTime() - (index + 30) * 60_000),
+      })),
+    );
+    const dailyAtTwelve = await fetchWallet();
+    assert.equal((dailyAtTwelve.todayChallenge as Record<string, unknown>).progress, 12);
+    assert.equal(dailyAtTwelve.challengeBonuses, 200, "12 deliveries earns only Goal #1");
+
+    await dbCol.orders().insertMany(
+      walletOrderOids.slice(9, 12).map((oid, index) => ({
+        _id: oid,
+        riderId,
+        status: "Delivered",
+        riderFare: 100,
+        createdAt: new Date(now.getTime() - (index + 40) * 60_000),
+      })),
+    );
+    const dailyAtFifteen = await fetchWallet();
+    assert.equal((dailyAtFifteen.todayChallenge as Record<string, unknown>).progress, 15);
+    assert.equal(dailyAtFifteen.challengeBonuses, 400, "Goal #2 pays its own Rs. 200 reward");
+
+    await dbCol.orders().insertMany(
+      walletOrderOids.slice(12, 17).map((oid, index) => ({
+        _id: oid,
+        riderId,
+        status: "Delivered",
+        riderFare: 100,
+        createdAt: new Date(now.getTime() - (index + 50) * 60_000),
+      })),
+    );
+    const dailyAtTwenty = await fetchWallet();
+    assert.equal((dailyAtTwenty.todayChallenge as Record<string, unknown>).progress, 20);
+    assert.equal(dailyAtTwenty.challengeBonuses, 900, "Goal #3 adds its Rs. 500 reward");
+
+    await dbCol.orders().deleteOne({ _id: walletOrderOids[16] });
+    const afterDeletion = await fetchWallet();
+    const dailyAfterDeletion = afterDeletion.todayChallenge as Record<string, unknown>;
+    assert.equal(dailyAfterDeletion.progress, 19, "active progress mirrors a removed delivered order");
+    assert.equal(afterDeletion.challengeBonuses, 900, "an earned milestone is never clawed back");
+    assert.deepEqual(
+      (dailyAfterDeletion.milestones as Array<Record<string, unknown>>)
+        .slice(0, 3)
+        .map((milestone) => milestone.earned),
+      [true, true, true],
+      "previously earned goals stay settled after progress decreases",
     );
 
     const weekly = await dbCol.riderChallenges().findOne({
@@ -446,7 +529,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     assert.ok(weekly, "the generated weekly challenge should remain active");
     await dbCol.riderChallenges().updateOne(
       { _id: weekly!._id },
-      { $set: { target: 10, reward: 500 } },
+      { $set: { milestones: [{ target: 10, reward: 500 }], target: 10, reward: 500 } },
     );
 
     await Promise.all([fetchWallet(), fetchWallet()]);
@@ -454,7 +537,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     assert.equal(settledWeekly?.status, "completed");
     assert.equal(
       await dbCol.riderWalletEntries().countDocuments({
-        challengeKey: `${riderId}:weekly:${String(weekly!.periodKey)}`,
+        challengeKey: `${riderId}:weekly:${String(weekly!.periodKey)}:milestone:10`,
       }),
       1,
       "simultaneous Wallet reads must produce one weekly bonus entry",

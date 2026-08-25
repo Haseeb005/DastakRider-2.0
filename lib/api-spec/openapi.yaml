@@ -603,6 +603,20 @@ components:
         - rating
         - ratingCount
 
+    RiderChallengeMilestone:
+      type: object
+      properties:
+        target:
+          type: number
+        reward:
+          type: number
+        earned:
+          type: boolean
+      required:
+        - target
+        - reward
+        - earned
+
     RiderChallenge:
       type: object
       properties:
@@ -619,6 +633,11 @@ components:
           type: number
         reward:
           type: number
+          description: Reward amount for the final milestone.
+        milestones:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiderChallengeMilestone"
         status:
           type: string
           enum: [active, completed, expired]
@@ -635,6 +654,7 @@ components:
         - target
         - progress
         - reward
+        - milestones
         - status
         - periodStart
         - periodEnd

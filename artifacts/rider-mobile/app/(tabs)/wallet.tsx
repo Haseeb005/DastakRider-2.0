@@ -2,6 +2,7 @@ import {
   getGetRiderWalletQueryKey,
   useGetRiderWallet,
   type RiderChallenge,
+  type RiderChallengeMilestone,
   type WalletTransaction,
 } from "@workspace/api-client-react";
 import React from "react";
@@ -38,13 +39,36 @@ function formatChallengePeriod(challenge: RiderChallenge) {
   return start === end ? start : `${start} – ${end}`;
 }
 
+function getChallengeMilestones(challenge: RiderChallenge): RiderChallengeMilestone[] {
+  // Older API responses did not include milestones. Keep those challenges useful
+  // while clients and the API roll out independently.
+  const milestones = (challenge as RiderChallenge & {
+    milestones?: RiderChallengeMilestone[];
+  }).milestones;
+
+  if (milestones?.length) {
+    return milestones;
+  }
+
+  return [{
+    target: challenge.target,
+    reward: challenge.reward,
+    earned: challenge.status === "completed" || challenge.progress >= challenge.target,
+  }];
+}
+
 function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
   const c = useColors();
-  const completed = challenge.status === "completed";
+  const milestones = getChallengeMilestones(challenge);
+  const allMilestonesEarned = milestones.every((milestone) => milestone.earned);
+  const completed = challenge.status === "completed" || allMilestonesEarned;
   const expired = challenge.status === "expired";
-  const progress = Math.min(100, Math.round((challenge.progress / challenge.target) * 100));
-  const remaining = Math.max(challenge.target - challenge.progress, 0);
-  const tone = completed ? "#15803d" : expired ? c.mutedForeground : c.primary;
+  const progress = challenge.target > 0
+    ? Math.min(100, Math.round((challenge.progress / challenge.target) * 100))
+    : 0;
+  const nextMilestone = milestones.find((milestone) => !milestone.earned);
+  const remaining = nextMilestone ? Math.max(nextMilestone.target - challenge.progress, 0) : 0;
+  const tone = completed ? c.successForeground : expired ? c.mutedForeground : c.primary;
   const label = challenge.kind === "daily" ? "Today's challenge" : "Weekly challenge";
   const endLabel = challenge.kind === "daily"
     ? "Ends today"
@@ -57,7 +81,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
         borderRadius: 20,
         padding: 16,
         borderWidth: 1,
-        borderColor: completed ? "#bbf7d0" : c.border,
+        borderColor: completed ? c.successBg : c.border,
         gap: 14,
       }}
     >
@@ -70,7 +94,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
               borderRadius: 14,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: completed ? "#dcfce7" : `${c.primary}18`,
+              backgroundColor: completed ? c.successBg : c.accent,
             }}
           >
             <Icon name={challenge.kind === "daily" ? "zap" : "target"} size={20} color={tone} />
@@ -80,20 +104,20 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
               {label}
             </Text>
             <Text style={{ marginTop: 2, fontFamily: "Inter_500Medium", fontSize: 12, color: c.mutedForeground }}>
-              {challenge.tier} tier · Complete {challenge.target} deliveries
+              {challenge.tier} tier · {milestones.length} reward {milestones.length === 1 ? "goal" : "goals"}
             </Text>
           </View>
         </View>
         <View
           style={{
-            backgroundColor: completed ? "#dcfce7" : expired ? c.muted : `${c.primary}14`,
+            backgroundColor: completed ? c.successBg : expired ? c.muted : c.accent,
             paddingHorizontal: 9,
             paddingVertical: 5,
             borderRadius: 999,
           }}
         >
           <Text style={{ color: tone, fontFamily: "Inter_700Bold", fontSize: 11 }}>
-            {completed ? "Reward earned" : expired ? "Expired" : `+${rupees(challenge.reward)}`}
+            {completed ? "All rewards earned" : expired ? "Expired" : `${milestones.filter((milestone) => milestone.earned).length} earned`}
           </Text>
         </View>
       </View>
@@ -101,7 +125,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
       <View>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 7 }}>
           <Text style={{ fontFamily: "Inter_700Bold", fontSize: 13, color: c.foreground }}>
-            {challenge.progress} / {challenge.target} deliveries
+            Current progress: {challenge.progress} deliveries
           </Text>
           <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: tone }}>{progress}%</Text>
         </View>
@@ -110,13 +134,55 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
         </View>
       </View>
 
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12 }}>{endLabel}</Text>
-        {!completed && !expired ? (
-          <Text style={{ color: c.primary, fontFamily: "Inter_700Bold", fontSize: 12 }}>
-            {remaining} more to go
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12, flex: 1 }}>{endLabel}</Text>
+        {nextMilestone ? (
+          <Text style={{ color: expired ? c.mutedForeground : c.primary, fontFamily: "Inter_700Bold", fontSize: 12 }}>
+            Next: {nextMilestone.target} deliveries
           </Text>
-        ) : null}
+        ) : (
+          <Text style={{ color: c.successForeground, fontFamily: "Inter_700Bold", fontSize: 12 }}>All goals reached</Text>
+        )}
+      </View>
+
+      <View style={{ gap: 8 }}>
+        <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 13 }}>Reward goals</Text>
+        {milestones.map((milestone, index) => {
+          const earned = milestone.earned;
+          return (
+            <View
+              key={`${milestone.target}-${milestone.reward}-${index}`}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                padding: 11,
+                borderRadius: 12,
+                backgroundColor: earned ? c.successBg : c.muted,
+              }}
+            >
+              <Icon name={earned ? "check-circle" : "target"} size={18} color={earned ? c.successForeground : c.mutedForeground} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
+                  {milestone.target} deliveries
+                </Text>
+                <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 2 }}>
+                  Goal {index + 1} · {earned ? "Earned" : "Upcoming"}
+                </Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={{ color: earned ? c.successForeground : c.foreground, fontFamily: "Inter_700Bold", fontSize: 13 }}>
+                  +{rupees(milestone.reward)}
+                </Text>
+                {!earned && milestone === nextMilestone ? (
+                  <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 10, marginTop: 2 }}>
+                    {remaining} to go
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -125,6 +191,9 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
 function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
   const c = useColors();
   const completed = challenge.status === "completed";
+  const earnedReward = getChallengeMilestones(challenge)
+    .filter((milestone) => milestone.earned)
+    .reduce((total, milestone) => total + milestone.reward, 0);
   const progress = challenge.target > 0
     ? Math.min(100, Math.round((challenge.progress / challenge.target) * 100))
     : 0;
@@ -172,7 +241,7 @@ function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={{ color: tone, fontFamily: "Inter_700Bold", fontSize: 13 }}>
-            {completed ? `+${rupees(challenge.reward)}` : rupees(challenge.reward)}
+            {completed ? `+${rupees(earnedReward)}` : rupees(challenge.reward)}
           </Text>
           <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 2 }}>
             {completed ? "Reward earned" : "Reward not earned"}

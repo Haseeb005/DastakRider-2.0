@@ -176,6 +176,12 @@ export interface EarningsSummary {
   unpaidCollection?: number;
 }
 
+export interface RiderChallengeMilestone {
+  target: number;
+  reward: number;
+  earned: boolean;
+}
+
 export type RiderChallengeKind = typeof RiderChallengeKind[keyof typeof RiderChallengeKind];
 
 
@@ -199,7 +205,9 @@ export interface RiderChallenge {
   tier: string;
   target: number;
   progress: number;
+  /** Reward amount for the final milestone. */
   reward: number;
+  milestones: RiderChallengeMilestone[];
   status: RiderChallengeStatus;
   periodStart: string;
   periodEnd: string;

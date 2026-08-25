@@ -554,7 +554,12 @@ export const GetRiderWalletResponse = zod.object({
   "tier": zod.string(),
   "target": zod.number(),
   "progress": zod.number(),
+  "reward": zod.number().describe('Reward amount for the final milestone.'),
+  "milestones": zod.array(zod.object({
+  "target": zod.number(),
   "reward": zod.number(),
+  "earned": zod.boolean()
+})),
   "status": zod.enum(['active', 'completed', 'expired']),
   "periodStart": zod.coerce.date(),
   "periodEnd": zod.coerce.date()
@@ -565,7 +570,12 @@ export const GetRiderWalletResponse = zod.object({
   "tier": zod.string(),
   "target": zod.number(),
   "progress": zod.number(),
+  "reward": zod.number().describe('Reward amount for the final milestone.'),
+  "milestones": zod.array(zod.object({
+  "target": zod.number(),
   "reward": zod.number(),
+  "earned": zod.boolean()
+})),
   "status": zod.enum(['active', 'completed', 'expired']),
   "periodStart": zod.coerce.date(),
   "periodEnd": zod.coerce.date()
@@ -576,7 +586,12 @@ export const GetRiderWalletResponse = zod.object({
   "tier": zod.string(),
   "target": zod.number(),
   "progress": zod.number(),
+  "reward": zod.number().describe('Reward amount for the final milestone.'),
+  "milestones": zod.array(zod.object({
+  "target": zod.number(),
   "reward": zod.number(),
+  "earned": zod.boolean()
+})),
   "status": zod.enum(['active', 'completed', 'expired']),
   "periodStart": zod.coerce.date(),
   "periodEnd": zod.coerce.date()
