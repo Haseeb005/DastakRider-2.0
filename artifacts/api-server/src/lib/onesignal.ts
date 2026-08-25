@@ -1,18 +1,37 @@
 /**
  * OneSignal push notification helper — server side.
  *
- * Sends a push to a specific rider using OneSignal's REST API v1,
- * targeting by external_id (= the rider's MongoDB _id string).
+ * Sends rider pushes through OneSignal's official Node SDK, targeting the
+ * saved subscription ID when available and the rider external_id as fallback.
  *
  * Env vars required:
- *   ONESIGNAL_APP_ID_RIDER       — OneSignal application ID
- *   ONESIGNAL_REST_API_KEY_RIDER — REST API key (from OneSignal dashboard)
+ *   ONE_SIGNAL_RIDER_APP_ID or ONESIGNAL_APP_ID_RIDER
+ *   ONE_SIGNAL_RIDER_REST_API_KEY or ONESIGNAL_REST_API_KEY_RIDER
  */
+
+import {
+  createConfiguration,
+  DefaultApi,
+  Notification,
+} from "@onesignal/node-onesignal";
 
 import { logger } from "./logger";
 
-const APP_ID = process.env.ONESIGNAL_APP_ID_RIDER ?? "";
-const REST_KEY = process.env.ONESIGNAL_REST_API_KEY_RIDER ?? "";
+const APP_ID =
+  process.env.ONE_SIGNAL_RIDER_APP_ID ??
+  process.env.ONESIGNAL_APP_ID_RIDER ??
+  "";
+const REST_KEY =
+  process.env.ONE_SIGNAL_RIDER_REST_API_KEY ??
+  process.env.ONESIGNAL_REST_API_KEY_RIDER ??
+  "";
+const riderClient =
+  APP_ID && REST_KEY
+    ? new DefaultApi(createConfiguration({ restApiKey: REST_KEY }))
+    : null;
+const RIDER_ANDROID_CHANNEL_ID = "978916b0-393b-4003-a090-405ccab2d321";
+const RIDER_LARGE_ICON =
+  "https://res.cloudinary.com/hmwday8rj/image/upload/v1596543000/ios_icon_rrtypi.png";
 
 export interface ChatPushPayload {
   /** Rider's MongoDB _id (string) — fallback if playerId is absent. */
@@ -36,24 +55,62 @@ export interface NewOrderPushPayload {
   area?: string;
 }
 
-/** Fire-and-forget POST to the OneSignal REST API. */
-async function postNotification(body: Record<string, unknown>): Promise<void> {
-  if (!APP_ID || !REST_KEY) return;
+interface RiderNotificationPayload {
+  message: string;
+  heading?: string;
+  subscriptionIds?: string[];
+  riderIds?: string[];
+  data?: Record<string, unknown>;
+}
+
+/** Send one rider notification through the official OneSignal Node SDK. */
+async function notifyRiders(payload: RiderNotificationPayload): Promise<void> {
+  const subscriptionIds = payload.subscriptionIds ?? [];
+  const riderIds = payload.riderIds ?? [];
+  if (!riderClient || !APP_ID || !REST_KEY) {
+    logger.warn("notifyRiders: OneSignal env vars not set — skipping");
+    return;
+  }
+  if (subscriptionIds.length === 0 && riderIds.length === 0) return;
+
+  const notification = new Notification();
+  notification.app_id = APP_ID;
+  if (subscriptionIds.length > 0) {
+    notification.include_subscription_ids = subscriptionIds;
+  }
+  if (riderIds.length > 0) {
+    notification.include_aliases = { external_id: riderIds };
+  }
+  notification.target_channel = "push";
+  notification.data = payload.data ?? {};
+  notification.ios_sound = "dastak.wav";
+  notification.android_sound = "dastak";
+  notification.android_channel_id = RIDER_ANDROID_CHANNEL_ID;
+  notification.small_icon = "ic_stat_onesignal_default";
+  notification.large_icon = RIDER_LARGE_ICON;
+  notification.headings = { en: payload.heading ?? "Dastak Rider" };
+  notification.contents = { en: payload.message };
+
   try {
-    const res = await fetch("https://onesignal.com/api/v1/notifications", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${REST_KEY}`,
+    const result = await riderClient.createNotification(notification);
+    logger.info(
+      {
+        notificationId: result.id,
+        subscriptionCount: subscriptionIds.length,
+        riderCount: riderIds.length,
       },
-      body: JSON.stringify({ app_id: APP_ID, ...body }),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      logger.error({ status: res.status, body: text }, "OneSignal API error");
-    }
-  } catch (err) {
-    logger.error({ err }, "OneSignal: network error");
+      "OneSignal: rider notification accepted",
+    );
+  } catch (error: any) {
+    const errors = error?.body?.errors;
+    logger.error(
+      {
+        errors: Array.isArray(errors) ? errors.join(", ") : error?.message,
+        subscriptionCount: subscriptionIds.length,
+        riderCount: riderIds.length,
+      },
+      "OneSignal: rider notification failed",
+    );
   }
 }
 
@@ -62,31 +119,18 @@ async function postNotification(body: Record<string, unknown>): Promise<void> {
  * Silently no-ops when the env vars are not configured.
  */
 export async function sendChatPush(payload: ChatPushPayload): Promise<void> {
-  if (!APP_ID || !REST_KEY) {
-    logger.warn("sendChatPush: ONESIGNAL env vars not set — skipping");
-    return;
-  }
   const { riderId, playerId, orderId, customerName, orderNum, messageText } = payload;
-  // Prefer the subscription ID stored in DB over the external_id alias.
-  const target = playerId
-    ? { include_subscription_ids: [playerId] }
-    : { include_aliases: { external_id: [riderId] }, target_channel: "push" };
-  await postNotification({
-    ...target,
-    target_channel: "push",
-    headings: { en: customerName ? `Message from ${customerName}` : "New message from customer" },
-    contents: { en: messageText || "Tap to reply" },
-    ios_sound: "dastak.wav",
-    android_sound: "dastak",
+  await notifyRiders({
+    message: messageText || "Tap to reply",
+    heading: customerName ? `Message from ${customerName}` : "New message from customer",
+    subscriptionIds: playerId ? [playerId] : undefined,
+    riderIds: playerId ? undefined : [riderId],
     data: {
       screen: "chat",
       orderId,
       ...(customerName ? { customerName } : {}),
       ...(orderNum ? { orderNum } : {}),
     },
-    android_channel_id: "978916b0-393b-4003-a090-405ccab2d321",
-    ios_badge_type: "Increase",
-    ios_badge_count: 1,
   });
 }
 
@@ -95,12 +139,7 @@ export async function sendChatPush(payload: ChatPushPayload): Promise<void> {
  * OneSignal accepts up to 2 000 external_ids per request.
  */
 export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<void> {
-  if (!APP_ID || !REST_KEY) {
-    logger.warn("sendNewOrderPush: ONESIGNAL env vars not set — skipping");
-    return;
-  }
   const { playerIds, riderIds = [], orderId, orderNum, area } = payload;
-  if (playerIds.length === 0 && riderIds.length === 0) return;
 
   const heading = "New Order Available";
   const body = [
@@ -115,27 +154,11 @@ export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<vo
     orderId,
     ...(orderNum ? { orderNum } : {}),
   };
-  const common = {
-    target_channel: "push",
-    headings: { en: heading },
-    contents: { en: body },
-    ios_sound: "dastak.wav",
-    android_sound: "dastak",
+  await notifyRiders({
+    message: body,
+    heading,
+    subscriptionIds: playerIds,
+    riderIds,
     data,
-    android_channel_id: "978916b0-393b-4003-a090-405ccab2d321",
-    ios_badge_type: "Increase",
-    ios_badge_count: 1,
-  };
-
-  // Send via subscription IDs (preferred — direct device targeting).
-  if (playerIds.length > 0) {
-    await postNotification({ include_subscription_ids: playerIds, ...common });
-  }
-  // Send via external_id alias for riders that haven't saved a playerId yet.
-  if (riderIds.length > 0) {
-    await postNotification({
-      include_aliases: { external_id: riderIds },
-      ...common,
-    });
-  }
+  });
 }
