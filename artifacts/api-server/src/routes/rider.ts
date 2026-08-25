@@ -1951,8 +1951,8 @@ router.post("/rider/player-id", async (req, res) => {
 // ---------------------------------------------------------------------------
 // Version check
 // ---------------------------------------------------------------------------
-const IOS_VERSIONS     = ["2.0", "3.0", "4.3.0", "4.6.0"];
-const ANDROID_VERSIONS = ["4.3.0", "4.5.0", "4.6.0"];
+const IOS_VERSIONS     = ["2.0", "3.0", "4.3.0", "4.6.0", "4.6.1"];
+const ANDROID_VERSIONS = ["4.3.0", "4.5.0", "4.6.0", "4.6.1"];
 
 router.post("/ridersCheckVersion", (req, res) => {
   try {
