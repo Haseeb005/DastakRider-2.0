@@ -113,7 +113,13 @@ export default function AvailableScreen() {
   const qc = useQueryClient();
   const [selected, setSelected] = useState<RiderOrder | null>(null);
 
-  const meQ = useGetRiderMe();
+  const meQ = useGetRiderMe({
+    query: {
+      queryKey: getGetRiderMeQueryKey(),
+      retry: 1,
+    },
+    request: { timeoutMs: 10_000 },
+  });
   const isOnline = !!meQ.data?.isOnline;
 
   const ordersQ = useGetAvailableOrders({
@@ -135,16 +141,29 @@ export default function AvailableScreen() {
     }, []),
   );
 
-  const availabilityM = useUpdateRiderAvailability();
+  const availabilityM = useUpdateRiderAvailability({
+    request: { timeoutMs: 10_000 },
+    mutation: { retry: 1, retryDelay: 500 },
+  });
   const acceptM = useAcceptOrder();
 
   const toggleOnline = () => {
     Haptics.selectionAsync().catch(() => {});
+    const nextIsOnline = !isOnline;
     availabilityM.mutate(
-      { data: { isOnline: !isOnline } },
+      { data: { isOnline: nextIsOnline } },
       {
         onSuccess: () =>
           qc.invalidateQueries({ queryKey: getGetRiderMeQueryKey() }),
+        onError: async (error: any) => {
+          const refreshed = await meQ.refetch();
+          if (refreshed.data?.isOnline === nextIsOnline) return;
+          Alert.alert(
+            "Could not update availability",
+            error?.message ||
+              "Please check your internet connection and try again.",
+          );
+        },
       },
     );
   };
@@ -183,6 +202,33 @@ export default function AvailableScreen() {
   };
 
   if (meQ.isLoading) return <Loading />;
+
+  if (meQ.isError || !meQ.data) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: c.background,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingHorizontal: 24,
+        }}
+      >
+        <EmptyState
+          icon="refresh-cw"
+          title="Could not load your account"
+          subtitle="Check your internet connection, then try again."
+        />
+        <Button
+          label="Try again"
+          icon="refresh-cw"
+          loading={meQ.isFetching}
+          onPress={() => meQ.refetch()}
+          style={{ alignSelf: "stretch" }}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>

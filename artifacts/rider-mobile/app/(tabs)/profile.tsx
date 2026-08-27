@@ -151,7 +151,12 @@ export default function ProfileScreen() {
   const { signOut, token } = useAuth();
 
   const meQ = useGetRiderMe({
-    query: { queryKey: getGetRiderMeQueryKey(), enabled: !!token },
+    query: {
+      queryKey: getGetRiderMeQueryKey(),
+      enabled: !!token,
+      retry: 1,
+    },
+    request: { timeoutMs: 10_000 },
   });
   const reviewsQ = useGetRiderReviews({
     query: {
@@ -173,16 +178,29 @@ export default function ProfileScreen() {
   const rider = meQ.data;
   const isOnline = !!rider?.isOnline;
 
-  const availabilityM = useUpdateRiderAvailability();
+  const availabilityM = useUpdateRiderAvailability({
+    request: { timeoutMs: 10_000 },
+    mutation: { retry: 1, retryDelay: 500 },
+  });
   const logoutM = useLogoutRider();
 
   const toggleOnline = () => {
     Haptics.selectionAsync().catch(() => {});
+    const nextIsOnline = !isOnline;
     availabilityM.mutate(
-      { data: { isOnline: !isOnline } },
+      { data: { isOnline: nextIsOnline } },
       {
         onSuccess: () =>
           qc.invalidateQueries({ queryKey: getGetRiderMeQueryKey() }),
+        onError: async (error: any) => {
+          const refreshed = await meQ.refetch();
+          if (refreshed.data?.isOnline === nextIsOnline) return;
+          Alert.alert(
+            "Could not update availability",
+            error?.message ||
+              "Please check your internet connection and try again.",
+          );
+        },
       },
     );
   };
@@ -210,7 +228,56 @@ export default function ProfileScreen() {
     ]);
   };
 
-  if (meQ.isLoading || !rider) return <Loading />;
+  if (meQ.isLoading) return <Loading />;
+
+  if (meQ.isError || !rider) {
+    return (
+      <View style={{ flex: 1, backgroundColor: c.background }}>
+        <ScreenHeader title="Profile" />
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: 24,
+          }}
+        >
+          <Icon name="refresh-cw" size={36} color={c.mutedForeground} />
+          <Text
+            style={{
+              marginTop: 16,
+              fontFamily: "Inter_700Bold",
+              fontSize: 18,
+              color: c.foreground,
+              textAlign: "center",
+            }}
+          >
+            Could not load your profile
+          </Text>
+          <Text
+            style={{
+              marginTop: 8,
+              marginBottom: 20,
+              fontFamily: "Inter_400Regular",
+              fontSize: 14,
+              lineHeight: 20,
+              color: c.mutedForeground,
+              textAlign: "center",
+            }}
+          >
+            Check your internet connection, then try again.
+          </Text>
+          <Button
+            label="Try again"
+            icon="refresh-cw"
+            loading={meQ.isFetching}
+            onPress={() => meQ.refetch()}
+            style={{ alignSelf: "stretch" }}
+          />
+        </View>
+      </View>
+    );
+  }
 
   const initials = (rider.name || "R")
     .split(" ")

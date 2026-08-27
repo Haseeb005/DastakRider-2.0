@@ -1,5 +1,6 @@
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
+  timeoutMs?: number;
 };
 
 export type ErrorType<T = unknown> = ApiError<T>;
@@ -10,6 +11,7 @@ export type AuthTokenGetter = () => Promise<string | null> | string | null;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 
 // ---------------------------------------------------------------------------
 // Module-level configuration
@@ -233,6 +235,21 @@ export class ResponseParseError extends Error {
   }
 }
 
+export class RequestTimeoutError extends Error {
+  readonly name = "RequestTimeoutError";
+  readonly method: string;
+  readonly url: string;
+  readonly timeoutMs: number;
+
+  constructor(requestInfo: { method: string; url: string }, timeoutMs: number) {
+    super("The server took too long to respond. Please check your connection and try again.");
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.method = requestInfo.method;
+    this.url = requestInfo.url;
+    this.timeoutMs = timeoutMs;
+  }
+}
+
 async function parseJsonBody(
   response: Response,
   requestInfo: { method: string; url: string },
@@ -327,7 +344,12 @@ export async function customFetch<T = unknown>(
   options: CustomFetchOptions = {},
 ): Promise<T> {
   input = applyBaseUrl(input);
-  const { responseType = "auto", headers: headersInit, ...init } = options;
+  const {
+    responseType = "auto",
+    timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+    headers: headersInit,
+    ...init
+  } = options;
 
   const method = resolveMethod(input, init.method);
 
@@ -359,8 +381,42 @@ export async function customFetch<T = unknown>(
   }
 
   const requestInfo = { method, url: resolveUrl(input) };
+  const requestController = new AbortController();
+  const upstreamSignal = init.signal;
+  let timedOut = false;
 
-  const response = await fetch(input, { ...init, method, headers });
+  const abortFromUpstream = () => requestController.abort();
+  if (upstreamSignal?.aborted) {
+    requestController.abort();
+  } else {
+    upstreamSignal?.addEventListener("abort", abortFromUpstream, { once: true });
+  }
+
+  const timeout =
+    timeoutMs > 0
+      ? setTimeout(() => {
+          timedOut = true;
+          requestController.abort();
+        }, timeoutMs)
+      : null;
+
+  let response: Response;
+  try {
+    response = await fetch(input, {
+      ...init,
+      method,
+      headers,
+      signal: requestController.signal,
+    });
+  } catch (error) {
+    if (timedOut) {
+      throw new RequestTimeoutError(requestInfo, timeoutMs);
+    }
+    throw error;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+    upstreamSignal?.removeEventListener("abort", abortFromUpstream);
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
