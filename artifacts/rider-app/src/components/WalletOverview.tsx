@@ -140,6 +140,8 @@ const WalletError = ({ error, onRetry }: { error: any, onRetry?: () => void }) =
 const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge, title: string, icon: any }) => {
   const isCompleted = challenge.status === 'completed';
   const isExpired = challenge.status === 'expired';
+  const targetReachedAwaitingSettlement =
+    !isCompleted && !isExpired && challenge.progress >= challenge.target;
   const milestones = challenge.milestones?.length
     ? challenge.milestones
     : [{
@@ -181,7 +183,11 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
            <span className="font-semibold text-foreground">
               {challenge.progress} / {challenge.target} deliveries
            </span>
-           {nextMilestone ? (
+            {targetReachedAwaitingSettlement ? (
+              <span className="text-primary font-medium text-right">
+                Target reached
+              </span>
+            ) : nextMilestone ? (
              <span className="text-primary font-medium text-right">
                 {Math.max(nextMilestone.target - challenge.progress, 0)} rides to go
              </span>
@@ -221,7 +227,13 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
                    <p className={`text-[11px] font-medium ${
                      milestone.earned ? 'text-green-600 dark:text-green-400' : isNext ? 'text-primary' : 'text-muted-foreground'
                    }`}>
-                     {milestone.earned ? 'Reward earned' : isNext ? 'Current challenge' : 'Upcoming'}
+                      {milestone.earned
+                        ? 'Highest reward paid'
+                        : targetReachedAwaitingSettlement && isNext
+                          ? 'Target reached'
+                          : isNext
+                            ? 'Current challenge'
+                            : 'Upcoming'}
                    </p>
                  </div>
                </div>
@@ -236,7 +248,13 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
           <Clock className="w-3.5 h-3.5" />
           <span>{isExpired ? 'Ended' : 'Ends'} {formatDate(challenge.periodEnd)}</span>
         </div>
-         {isCompleted && <span className="text-green-600 dark:text-green-400 font-medium">Challenge completed!</span>}
+          {isCompleted ? (
+            <span className="text-green-600 dark:text-green-400 font-medium">Highest reward paid</span>
+          ) : !isExpired ? (
+            <span className="text-primary font-medium text-right">
+              Highest reward pays after {challenge.kind === 'daily' ? 'day' : 'week'} end
+            </span>
+          ) : null}
       </div>
     </div>
   );

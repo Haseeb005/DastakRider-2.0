@@ -63,6 +63,8 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
   const allMilestonesEarned = milestones.every((milestone) => milestone.earned);
   const completed = challenge.status === "completed" || allMilestonesEarned;
   const expired = challenge.status === "expired";
+  const targetReachedAwaitingSettlement =
+    !completed && !expired && challenge.progress >= challenge.target;
   const progress = challenge.target > 0
     ? Math.min(100, Math.round((challenge.progress / challenge.target) * 100))
     : 0;
@@ -136,7 +138,11 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
 
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12, flex: 1 }}>{endLabel}</Text>
-        {nextMilestone ? (
+        {targetReachedAwaitingSettlement ? (
+          <Text style={{ color: c.primary, fontFamily: "Inter_700Bold", fontSize: 12 }}>
+            Target reached
+          </Text>
+        ) : nextMilestone ? (
           <Text style={{ color: expired ? c.mutedForeground : c.primary, fontFamily: "Inter_700Bold", fontSize: 12 }}>
             {remaining} rides to go
           </Text>
@@ -146,7 +152,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
       </View>
 
       <View style={{ gap: 8 }}>
-        <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 13 }}>Challenge reward</Text>
+        <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 13 }}>Highest challenge reward</Text>
         {milestones.map((milestone, index) => {
           const earned = milestone.earned;
           return (
@@ -167,7 +173,11 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
                   {milestone.target} deliveries
                 </Text>
                 <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 2 }}>
-                  {earned ? "Reward earned" : "Current challenge"}
+                  {earned
+                    ? "Highest reward paid"
+                    : targetReachedAwaitingSettlement
+                      ? "Target reached"
+                      : "Current challenge"}
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
@@ -184,6 +194,12 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
           );
         })}
       </View>
+
+      {!completed && !expired ? (
+        <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 11, lineHeight: 16 }}>
+          Only your highest completed challenge is paid after the {challenge.kind === "daily" ? "day" : "week"} ends.
+        </Text>
+      ) : null}
     </View>
   );
 }

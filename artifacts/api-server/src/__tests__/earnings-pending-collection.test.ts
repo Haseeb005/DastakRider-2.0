@@ -394,7 +394,7 @@ describe("PKT calendar date filtering", () => {
 });
 
 describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
-  it("starts each daily bonus from zero after the previous challenge completes", async () => {
+  it("advances sequential challenges without paying before the period ends", async () => {
     const before = await fetchWallet();
     const firstDaily = before.todayChallenge as Record<string, unknown>;
     const firstWeekly = before.weeklyChallenge as Record<string, unknown>;
@@ -442,19 +442,10 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     assert.equal(dailyAfterTen.target, 15);
     assert.equal(dailyAfterTen.progress, 0, "the 15-ride challenge starts from zero");
     assert.equal(dailyAfterTen.tier, "Challenge 2 of 5");
-    assert.equal(earned.challengeBonuses, 200);
-    assert.ok(
-      (earned.recentChallenges as Array<Record<string, unknown>>).some(
-        (challenge) =>
-          challenge.kind === "daily" &&
-          challenge.target === 10 &&
-          challenge.status === "completed",
-      ),
-      "the completed 10-ride challenge remains in history",
-    );
+    assert.equal(earned.challengeBonuses, 0, "reaching a target does not pay before day end");
 
     const refreshed = await fetchWallet();
-    assert.equal(refreshed.challengeBonuses, 200, "a refresh must not duplicate the bonus");
+    assert.equal(refreshed.challengeBonuses, 0);
     const completedDaily = await dbCol.riderChallenges().findOne({
       riderId,
       kind: "daily",
@@ -486,8 +477,8 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
       await dbCol.riderWalletEntries().countDocuments({
         challengeKey: `${riderId}:daily:${String(completedDaily!.periodKey)}:milestone:10`,
       }),
-      1,
-      "the 10-ride challenge creates one wallet bonus entry",
+      0,
+      "the 10-ride challenge must not create an early wallet bonus",
     );
 
     await dbCol.orders().insertMany(
@@ -502,7 +493,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     const dailyAtFive = await fetchWallet();
     assert.equal((dailyAtFive.todayChallenge as Record<string, unknown>).target, 15);
     assert.equal((dailyAtFive.todayChallenge as Record<string, unknown>).progress, 5);
-    assert.equal(dailyAtFive.challengeBonuses, 200, "five new rides do not complete the 15-ride challenge");
+    assert.equal(dailyAtFive.challengeBonuses, 0);
 
     await dbCol.orders().insertMany(
       walletOrderOids.slice(12, 22).map((oid, index) => ({
@@ -516,14 +507,14 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     const dailyAfterFifteenNewRides = await fetchWallet();
     assert.equal((dailyAfterFifteenNewRides.todayChallenge as Record<string, unknown>).target, 20);
     assert.equal((dailyAfterFifteenNewRides.todayChallenge as Record<string, unknown>).progress, 0);
-    assert.equal(dailyAfterFifteenNewRides.challengeBonuses, 400);
+    assert.equal(dailyAfterFifteenNewRides.challengeBonuses, 0);
 
     await dbCol.orders().deleteOne({ _id: walletOrderOids[21] });
     const afterDeletion = await fetchWallet();
     const dailyAfterDeletion = afterDeletion.todayChallenge as Record<string, unknown>;
     assert.equal(dailyAfterDeletion.target, 20);
     assert.equal(dailyAfterDeletion.progress, 0);
-    assert.equal(afterDeletion.challengeBonuses, 400, "completed challenge rewards are never clawed back");
+    assert.equal(afterDeletion.challengeBonuses, 0);
 
     const weekly = await dbCol.riderChallenges().findOne({
       riderId,
@@ -549,8 +540,8 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
       await dbCol.riderWalletEntries().countDocuments({
         challengeKey: `${riderId}:weekly:${String(weekly!.periodKey)}:milestone:50`,
       }),
-      1,
-      "simultaneous Wallet reads must produce one weekly bonus entry",
+      0,
+      "weekly milestones must not pay before week end",
     );
   });
 
@@ -740,6 +731,345 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
 });
 
 describe("GET /api/rider/wallet — missed period settlement", () => {
+  it("pays only the highest daily and weekly challenge reached at period end", async () => {
+    const settlementRiderOid = new ObjectId();
+    const riderId = settlementRiderOid.toHexString();
+    const phone = `03001112233__highest_settlement_${riderId}`;
+    const now = new Date();
+    const hourMs = 60 * 60 * 1000;
+    const dayMs = 24 * hourMs;
+    const periodEnd = new Date(now.getTime() - hourMs);
+    const weeklyStart = new Date(periodEnd.getTime() - 7 * dayMs);
+    const dailyStart = new Date(periodEnd.getTime() - dayMs);
+    const weeklyPeriodKey = `test-highest-weekly-${weeklyStart.getTime()}`;
+    const dailyPeriodKey = `test-highest-daily-${dailyStart.getTime()}`;
+    const orderIds = Array.from({ length: 126 }, () => new ObjectId());
+    const delayedOrderIds = Array.from({ length: 35 }, () => new ObjectId());
+
+    try {
+      await dbCol.users().insertOne({
+        _id: settlementRiderOid,
+        type: "rider",
+        name: "Test Rider (highest settlement)",
+        phone,
+        password: "highest-settlement-password",
+        city: "TestCity",
+        vehicleType: "bike",
+        deleted: false,
+        tillNoonFare: 100,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await dbCol.riderChallenges().insertMany([
+        {
+          riderId,
+          kind: "daily",
+          challengeMode: "sequential",
+          sequence: 0,
+          periodKey: dailyPeriodKey,
+          basePeriodKey: dailyPeriodKey,
+          weekKey: weeklyPeriodKey,
+          periodStart: dailyStart,
+          periodEnd,
+          settlementGraceUntil: new Date(now.getTime() + dayMs),
+          deliveryBaseline: 0,
+          tier: "Challenge 1 of 5",
+          target: 10,
+          reward: 200,
+          milestones: [{ target: 10, reward: 200 }],
+          earnedMilestoneTargets: [],
+          progress: 0,
+          status: "active",
+          createdAt: dailyStart,
+          updatedAt: dailyStart,
+        },
+        {
+          riderId,
+          kind: "weekly",
+          challengeMode: "sequential",
+          sequence: 0,
+          periodKey: weeklyPeriodKey,
+          basePeriodKey: weeklyPeriodKey,
+          weekKey: weeklyPeriodKey,
+          periodStart: weeklyStart,
+          periodEnd,
+          settlementGraceUntil: new Date(now.getTime() + dayMs),
+          deliveryBaseline: 0,
+          tier: "Challenge 1 of 3",
+          target: 50,
+          reward: 500,
+          milestones: [{ target: 50, reward: 500 }],
+          earnedMilestoneTargets: [],
+          progress: 0,
+          status: "active",
+          createdAt: weeklyStart,
+          updatedAt: weeklyStart,
+        },
+      ]);
+      await dbCol.orders().insertMany(
+        orderIds.map((orderId, index) => ({
+          _id: orderId,
+          riderId,
+          status: "Delivered",
+          riderFare: 100,
+          createdAt:
+            index < 11
+              ? new Date(dailyStart.getTime() + (index + 1) * 10 * 60_000)
+              : new Date(weeklyStart.getTime() + (index - 10) * 30 * 60_000),
+        })),
+      );
+
+      // Removing an eligible order before settlement leaves exactly 10 daily
+      // and 125 weekly deliveries.
+      await dbCol.orders().deleteOne({ _id: orderIds[0] });
+
+      const loginRes = await fetch(`${serverUrl}/api/rider/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, password: "highest-settlement-password" }),
+      });
+      assert.equal(loginRes.status, 200);
+      const loginBody = (await loginRes.json()) as Record<string, unknown>;
+      const headers = { Authorization: `Bearer ${String(loginBody.token)}` };
+      const fetchSettlementWallet = async () => {
+        const response = await fetch(`${serverUrl}/api/rider/wallet`, { headers });
+        assert.equal(response.status, 200);
+        return response.json() as Promise<Record<string, unknown>>;
+      };
+
+      await Promise.all([fetchSettlementWallet(), fetchSettlementWallet()]);
+
+      const dailySettlementKey = `${riderId}:daily:${dailyPeriodKey}:highest`;
+      const weeklySettlementKey = `${riderId}:weekly:${weeklyPeriodKey}:highest`;
+      const dailyEntry = await dbCol.riderWalletEntries().findOne({
+        challengeKey: dailySettlementKey,
+      });
+      const weeklyEntry = await dbCol.riderWalletEntries().findOne({
+        challengeKey: weeklySettlementKey,
+      });
+      assert.equal(dailyEntry?.milestoneTarget, 10);
+      assert.equal(dailyEntry?.amount, 200);
+      assert.equal(weeklyEntry?.milestoneTarget, 75);
+      assert.equal(weeklyEntry?.amount, 1000);
+      assert.equal(
+        await dbCol.riderWalletEntries().countDocuments({
+          riderId,
+          type: "challenge_bonus",
+        }),
+        2,
+        "each ended period creates exactly one highest-level reward",
+      );
+      assert.equal(
+        await dbCol.riderWalletEntries().countDocuments({
+          challengeKey: {
+            $in: [
+              `${riderId}:daily:${dailyPeriodKey}:milestone:10`,
+              `${riderId}:weekly:${weeklyPeriodKey}:milestone:50`,
+            ],
+          },
+        }),
+        0,
+        "lower completed challenges are skipped",
+      );
+
+      const dailyWinner = await dbCol.riderChallenges().findOne({
+        riderId,
+        kind: "daily",
+        basePeriodKey: dailyPeriodKey,
+        sequence: 0,
+      });
+      const weeklyWinner = await dbCol.riderChallenges().findOne({
+        riderId,
+        kind: "weekly",
+        basePeriodKey: weeklyPeriodKey,
+        sequence: 1,
+      });
+      assert.deepEqual(dailyWinner?.earnedMilestoneTargets, [10]);
+      assert.deepEqual(weeklyWinner?.earnedMilestoneTargets, [75]);
+
+      await dbCol.orders().insertMany(
+        delayedOrderIds.slice(0, 15).map((orderId, index) => ({
+          _id: orderId,
+          riderId,
+          status: "Delivered",
+          riderFare: 100,
+          createdAt: new Date(dailyStart.getTime() + (index + 30) * 10 * 60_000),
+        })),
+      );
+      await fetchSettlementWallet();
+      const sameValueUpgrade = await dbCol.riderWalletEntries().findOne({
+        challengeKey: dailySettlementKey,
+      });
+      assert.equal(sameValueUpgrade?.milestoneTarget, 15);
+      assert.equal(sameValueUpgrade?.challengeSequence, 1);
+      assert.equal(sameValueUpgrade?.amount, 200);
+
+      await dbCol.orders().insertMany(
+        delayedOrderIds.slice(15).map((orderId, index) => ({
+          _id: orderId,
+          riderId,
+          status: "Delivered",
+          riderFare: 100,
+          createdAt: new Date(dailyStart.getTime() + (index + 50) * 10 * 60_000),
+        })),
+      );
+      await fetchSettlementWallet();
+      const upgradedDailyEntry = await dbCol.riderWalletEntries().findOne({
+        challengeKey: dailySettlementKey,
+      });
+      assert.equal(upgradedDailyEntry?.milestoneTarget, 20);
+      assert.equal(upgradedDailyEntry?.challengeSequence, 2);
+      assert.equal(upgradedDailyEntry?.amount, 500);
+
+      await dbCol.orders().deleteMany({ _id: { $in: delayedOrderIds } });
+      await fetchSettlementWallet();
+      const permanentDailyEntry = await dbCol.riderWalletEntries().findOne({
+        challengeKey: dailySettlementKey,
+      });
+      assert.equal(permanentDailyEntry?.milestoneTarget, 20);
+      assert.equal(permanentDailyEntry?.challengeSequence, 2);
+      assert.equal(permanentDailyEntry?.amount, 500);
+      assert.equal(
+        await dbCol.riderWalletEntries().countDocuments({
+          riderId,
+          type: "challenge_bonus",
+        }),
+        2,
+        "grace-period upgrades and rereads do not duplicate settled bonuses",
+      );
+    } finally {
+      await dbCol.orders().deleteMany({ _id: { $in: orderIds } });
+      await dbCol.orders().deleteMany({ _id: { $in: delayedOrderIds } });
+      await dbCol.riderChallenges().deleteMany({ riderId });
+      await dbCol.riderWalletEntries().deleteMany({ riderId });
+      await dbCol.users().deleteOne({ _id: settlementRiderOid });
+    }
+  });
+
+  it("does not add a highest-only payout to legacy milestone history", async () => {
+    const legacyRiderOid = new ObjectId();
+    const riderId = legacyRiderOid.toHexString();
+    const challengeId = new ObjectId();
+    const phone = `03001112233__legacy_settlement_${riderId}`;
+    const now = new Date();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const periodEnd = new Date(now.getTime() - 60 * 60 * 1000);
+    const periodStart = new Date(periodEnd.getTime() - dayMs);
+    const periodKey = `test-legacy-settlement-${periodStart.getTime()}`;
+    const orderIds = Array.from({ length: 15 }, () => new ObjectId());
+    const milestoneKeys = [
+      `${riderId}:daily:${periodKey}:milestone:10`,
+      `${riderId}:daily:${periodKey}:milestone:15`,
+    ];
+
+    try {
+      await dbCol.users().insertOne({
+        _id: legacyRiderOid,
+        type: "rider",
+        name: "Test Rider (legacy settlement)",
+        phone,
+        password: "legacy-settlement-password",
+        city: "TestCity",
+        vehicleType: "bike",
+        deleted: false,
+        tillNoonFare: 100,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await dbCol.riderChallenges().insertOne({
+        _id: challengeId,
+        riderId,
+        kind: "daily",
+        periodKey,
+        weekKey: "test-legacy-week",
+        periodStart,
+        periodEnd,
+        settlementGraceUntil: new Date(now.getTime() + dayMs),
+        tier: "Daily delivery goals",
+        target: 30,
+        reward: 1000,
+        milestones: [
+          { target: 10, reward: 200 },
+          { target: 15, reward: 200 },
+          { target: 20, reward: 500 },
+          { target: 25, reward: 800 },
+          { target: 30, reward: 1000 },
+        ],
+        earnedMilestoneTargets: [10, 15],
+        progress: 15,
+        status: "active",
+        createdAt: periodStart,
+        updatedAt: periodStart,
+      });
+      await dbCol.orders().insertMany(
+        orderIds.map((orderId, index) => ({
+          _id: orderId,
+          riderId,
+          status: "Delivered",
+          riderFare: 100,
+          createdAt: new Date(periodStart.getTime() + (index + 1) * 10 * 60_000),
+        })),
+      );
+      await dbCol.riderWalletEntries().insertMany([
+        {
+          riderId,
+          challengeKey: milestoneKeys[0],
+          challengeId: String(challengeId),
+          weekKey: "test-legacy-week",
+          milestoneTarget: 10,
+          type: "challenge_bonus",
+          amount: 200,
+          title: "Daily challenge · Goal #1 (10 deliveries)",
+          createdAt: periodStart,
+        },
+        {
+          riderId,
+          challengeKey: milestoneKeys[1],
+          challengeId: String(challengeId),
+          weekKey: "test-legacy-week",
+          milestoneTarget: 15,
+          type: "challenge_bonus",
+          amount: 200,
+          title: "Daily challenge · Goal #2 (15 deliveries)",
+          createdAt: periodStart,
+        },
+      ]);
+
+      const loginRes = await fetch(`${serverUrl}/api/rider/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, password: "legacy-settlement-password" }),
+      });
+      assert.equal(loginRes.status, 200);
+      const loginBody = (await loginRes.json()) as Record<string, unknown>;
+      const walletRes = await fetch(`${serverUrl}/api/rider/wallet`, {
+        headers: { Authorization: `Bearer ${String(loginBody.token)}` },
+      });
+      assert.equal(walletRes.status, 200);
+
+      assert.equal(
+        await dbCol.riderWalletEntries().countDocuments({
+          riderId,
+          type: "challenge_bonus",
+        }),
+        2,
+        "legacy milestone rewards remain unchanged",
+      );
+      assert.equal(
+        await dbCol.riderWalletEntries().countDocuments({
+          challengeKey: `${riderId}:daily:${periodKey}:highest`,
+        }),
+        0,
+        "legacy history must not receive a second highest-only payout",
+      );
+    } finally {
+      await dbCol.orders().deleteMany({ _id: { $in: orderIds } });
+      await dbCol.riderChallenges().deleteMany({ riderId });
+      await dbCol.riderWalletEntries().deleteMany({ riderId });
+      await dbCol.users().deleteOne({ _id: legacyRiderOid });
+    }
+  });
+
   it("settles earned daily and weekly challenges before expiring them", async () => {
     const riderId = testRiderOid.toHexString();
     const now = new Date();
