@@ -104,7 +104,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
               {label}
             </Text>
             <Text style={{ marginTop: 2, fontFamily: "Inter_500Medium", fontSize: 12, color: c.mutedForeground }}>
-              {challenge.tier} tier · {milestones.length} reward {milestones.length === 1 ? "goal" : "goals"}
+              {challenge.tier} · {challenge.target}-delivery target
             </Text>
           </View>
         </View>
@@ -117,7 +117,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
           }}
         >
           <Text style={{ color: tone, fontFamily: "Inter_700Bold", fontSize: 11 }}>
-            {completed ? "All rewards earned" : expired ? "Expired" : `${milestones.filter((milestone) => milestone.earned).length} earned`}
+            {completed ? "Completed" : expired ? "Expired" : "In progress"}
           </Text>
         </View>
       </View>
@@ -125,7 +125,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
       <View>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 7 }}>
           <Text style={{ fontFamily: "Inter_700Bold", fontSize: 13, color: c.foreground }}>
-            Current progress: {challenge.progress} deliveries
+            {challenge.progress} / {challenge.target} deliveries
           </Text>
           <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: tone }}>{progress}%</Text>
         </View>
@@ -138,15 +138,15 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
         <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12, flex: 1 }}>{endLabel}</Text>
         {nextMilestone ? (
           <Text style={{ color: expired ? c.mutedForeground : c.primary, fontFamily: "Inter_700Bold", fontSize: 12 }}>
-            Next: {nextMilestone.target} deliveries
+            {remaining} rides to go
           </Text>
         ) : (
-          <Text style={{ color: c.successForeground, fontFamily: "Inter_700Bold", fontSize: 12 }}>All goals reached</Text>
+          <Text style={{ color: c.successForeground, fontFamily: "Inter_700Bold", fontSize: 12 }}>Challenge completed</Text>
         )}
       </View>
 
       <View style={{ gap: 8 }}>
-        <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 13 }}>Reward goals</Text>
+        <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 13 }}>Challenge reward</Text>
         {milestones.map((milestone, index) => {
           const earned = milestone.earned;
           return (
@@ -167,7 +167,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
                   {milestone.target} deliveries
                 </Text>
                 <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 2 }}>
-                  Goal {index + 1} · {earned ? "Earned" : "Upcoming"}
+                  {earned ? "Reward earned" : "Current challenge"}
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
@@ -235,7 +235,7 @@ function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
               </View>
             </View>
             <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 4 }}>
-              {formatChallengePeriod(challenge)} · {challenge.tier} tier
+              {formatChallengePeriod(challenge)} · {challenge.tier}
             </Text>
           </View>
         </View>

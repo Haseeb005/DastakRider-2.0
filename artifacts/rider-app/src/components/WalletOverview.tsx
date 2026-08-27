@@ -171,7 +171,7 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
                 </span>
               )}
             </div>
-             <h3 className="font-semibold text-base leading-tight">Milestone rewards</h3>
+             <h3 className="font-semibold text-base leading-tight">{challenge.target}-delivery challenge</h3>
           </div>
         </div>
       </div>
@@ -179,14 +179,14 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
        <div className="rounded-xl bg-primary/5 border border-primary/10 px-3.5 py-3">
          <div className="flex items-center justify-between gap-3 text-sm">
            <span className="font-semibold text-foreground">
-             {challenge.progress} deliveries completed
+              {challenge.progress} / {challenge.target} deliveries
            </span>
            {nextMilestone ? (
              <span className="text-primary font-medium text-right">
-               Next goal: {nextMilestone.target} deliveries
+                {Math.max(nextMilestone.target - challenge.progress, 0)} rides to go
              </span>
            ) : (
-             <span className="text-green-600 dark:text-green-400 font-medium">All goals earned</span>
+              <span className="text-green-600 dark:text-green-400 font-medium">Challenge completed</span>
            )}
         </div>
       </div>
@@ -221,7 +221,7 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
                    <p className={`text-[11px] font-medium ${
                      milestone.earned ? 'text-green-600 dark:text-green-400' : isNext ? 'text-primary' : 'text-muted-foreground'
                    }`}>
-                     {milestone.earned ? 'Earned' : isNext ? 'Next goal · Upcoming' : 'Upcoming'}
+                     {milestone.earned ? 'Reward earned' : isNext ? 'Current challenge' : 'Upcoming'}
                    </p>
                  </div>
                </div>
@@ -236,7 +236,7 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
           <Clock className="w-3.5 h-3.5" />
           <span>{isExpired ? 'Ended' : 'Ends'} {formatDate(challenge.periodEnd)}</span>
         </div>
-         {isCompleted && <span className="text-green-600 dark:text-green-400 font-medium">All goals earned!</span>}
+         {isCompleted && <span className="text-green-600 dark:text-green-400 font-medium">Challenge completed!</span>}
       </div>
     </div>
   );
@@ -274,7 +274,7 @@ const RecentChallengeCard = ({ challenge }: { challenge: Challenge }) => {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {formatChallengePeriod(challenge)} · {challenge.tier} tier
+              {formatChallengePeriod(challenge)} · {challenge.tier}
             </p>
           </div>
         </div>

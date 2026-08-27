@@ -286,19 +286,29 @@ let walletIndexesPromise: Promise<void> | null = null;
 
 function ensureWalletIndexes(): Promise<void> {
   if (!walletIndexesPromise) {
-    walletIndexesPromise = Promise.all([
-      riderChallengesCol().createIndex({ riderId: 1, kind: 1, periodKey: 1 }, { unique: true }),
-      riderChallengesCol().createIndex({ riderId: 1, periodEnd: -1 }),
-      riderChallengesCol().createIndex({
-        riderId: 1,
-        kind: 1,
-        status: 1,
-        settlementGraceUntil: 1,
-      }),
-      riderWalletEntriesCol().createIndex({ challengeKey: 1 }, { unique: true }),
-      riderWalletEntriesCol().createIndex({ entryKey: 1 }, { unique: true, sparse: true }),
-      riderWalletEntriesCol().createIndex({ riderId: 1, weekKey: 1, createdAt: -1 }),
-    ]).then(() => undefined);
+    walletIndexesPromise = (async () => {
+      const challenges = riderChallengesCol();
+      await Promise.all([
+        challenges.createIndex(
+          { riderId: 1, kind: 1, periodKey: 1 },
+          { unique: true, name: "riderId_1_kind_1_periodKey_1" },
+        ),
+        challenges.createIndex(
+          { riderId: 1, kind: 1, basePeriodKey: 1, sequence: 1 },
+          { name: "rider_challenge_sequence_lookup" },
+        ),
+        challenges.createIndex({ riderId: 1, periodEnd: -1 }),
+        challenges.createIndex({
+          riderId: 1,
+          kind: 1,
+          status: 1,
+          settlementGraceUntil: 1,
+        }),
+        riderWalletEntriesCol().createIndex({ challengeKey: 1 }, { unique: true }),
+        riderWalletEntriesCol().createIndex({ entryKey: 1 }, { unique: true, sparse: true }),
+        riderWalletEntriesCol().createIndex({ riderId: 1, weekKey: 1, createdAt: -1 }),
+      ]);
+    })();
   }
   return walletIndexesPromise;
 }
@@ -319,6 +329,20 @@ function challengePeriod(kind: ChallengeKind, now = new Date()) {
 
 function milestoneTemplate(kind: ChallengeKind): ChallengeMilestone[] {
   return CHALLENGE_MILESTONES[kind].map((milestone) => ({ ...milestone }));
+}
+
+const SEQUENTIAL_CHALLENGE_MODE = "sequential";
+
+function isSequentialChallenge(challenge: any): boolean {
+  return (
+    challenge?.challengeMode === SEQUENTIAL_CHALLENGE_MODE &&
+    Number.isInteger(Number(challenge?.sequence)) &&
+    Number(challenge.sequence) >= 0
+  );
+}
+
+function sequentialTierLabel(kind: ChallengeKind, sequence: number): string {
+  return `Challenge ${sequence + 1} of ${CHALLENGE_MILESTONES[kind].length}`;
 }
 
 function hasMilestoneDefinition(challenge: any): boolean {
@@ -420,88 +444,49 @@ function walletChallengeResponse(challenge: any) {
   };
 }
 
-async function ensureChallenge(
+async function countChallengeDeliveries(challenge: any): Promise<number> {
+  return ordersCol().countDocuments({
+    riderId: challenge.riderId,
+    status: DELIVERED_STATUS,
+    createdAt: {
+      $gte: new Date(challenge.periodStart),
+      $lt: new Date(challenge.periodEnd),
+    },
+  });
+}
+
+async function createSequentialChallenge(
   riderId: string,
   kind: ChallengeKind,
-  now = new Date(),
+  period: ReturnType<typeof challengePeriod>,
+  sequence: number,
+  deliveryBaseline: number,
+  now: Date,
 ): Promise<any> {
-  await ensureWalletIndexes();
-  const period = challengePeriod(kind, now);
+  const milestone = CHALLENGE_MILESTONES[kind][sequence];
+  if (!milestone) throw new Error(`No ${kind} challenge exists at sequence ${sequence}`);
+
   const challenges = riderChallengesCol();
-
-  // A rider may not open Wallet right at midnight. Settle every active, ended
-  // challenge before it can be expired so valid deliveries made in its window
-  // always receive their one-time reward.
-  const endedUnsettledChallenges = await challenges
-    .find({
-      riderId,
-      kind,
-      periodEnd: { $lte: now },
-      $or: [
-        { status: "active" },
-        { status: "expired", settlementGraceUntil: { $gt: now } },
-      ],
-    })
-    .toArray();
-  await Promise.all(
-    endedUnsettledChallenges.map((endedChallenge) =>
-      refreshChallengeProgress(endedChallenge, now),
-    ),
-  );
-
-  const existing = await challenges.findOne({
-    riderId,
-    kind,
-    periodKey: period.periodKey,
-  });
-  if (existing) {
-    // Upgrade only a currently active legacy challenge. Historical and completed
-    // records retain their original reward contract and wallet history.
-    if (
-      existing.status === "active" &&
-      (!hasMilestoneDefinition(existing) || hasRetiredDailyMilestoneSchedule(existing))
-    ) {
-      const milestones = milestoneTemplate(kind);
-      const finalMilestone = milestones.at(-1)!;
-      const earnedMilestoneTargets = Array.isArray(existing.earnedMilestoneTargets)
-        ? existing.earnedMilestoneTargets
-            .map((target: unknown) => Number(target))
-            .filter((target: number) => milestones.some((milestone) => milestone.target === target))
-        : [];
-      await challenges.updateOne(
-        { _id: existing._id, status: "active" },
-        {
-          $set: {
-            milestones,
-            earnedMilestoneTargets: [...new Set(earnedMilestoneTargets)],
-            tier: challengeTierLabel(kind),
-            target: finalMilestone.target,
-            reward: finalMilestone.reward,
-            updatedAt: now,
-          },
-        },
-      );
-      return challenges.findOne({ _id: existing._id });
-    }
-    return existing;
-  }
-
-  const milestones = milestoneTemplate(kind);
-  const finalMilestone = milestones.at(-1)!;
+  const storagePeriodKey =
+    sequence === 0 ? period.periodKey : `${period.periodKey}:sequence:${sequence}`;
   const challenge = {
     riderId,
     kind,
-    periodKey: period.periodKey,
+    challengeMode: SEQUENTIAL_CHALLENGE_MODE,
+    sequence,
+    periodKey: storagePeriodKey,
+    basePeriodKey: period.periodKey,
     weekKey: period.weekKey,
     periodStart: period.start,
     periodEnd: period.end,
     settlementGraceUntil: new Date(
       period.end.getTime() + CHALLENGE_SETTLEMENT_GRACE_MS,
     ),
-    tier: challengeTierLabel(kind),
-    target: finalMilestone.target,
-    reward: finalMilestone.reward,
-    milestones,
+    deliveryBaseline: Math.max(0, deliveryBaseline),
+    tier: sequentialTierLabel(kind, sequence),
+    target: milestone.target,
+    reward: milestone.reward,
+    milestones: [{ ...milestone }],
     earnedMilestoneTargets: [],
     progress: 0,
     status: "active",
@@ -511,19 +496,361 @@ async function ensureChallenge(
 
   try {
     await challenges.updateOne(
-      { riderId, kind, periodKey: period.periodKey },
+      {
+        riderId,
+        kind,
+        periodKey: storagePeriodKey,
+      },
       { $setOnInsert: challenge },
       { upsert: true },
     );
   } catch (error: any) {
-    // A simultaneous refresh may win the unique index race. Read its locked
-    // challenge instead of generating a new one with a different target.
     if (error?.code !== 11000) throw error;
   }
 
-  const locked = await challenges.findOne({ riderId, kind, periodKey: period.periodKey });
-  if (!locked) throw new Error("Could not create rider challenge");
-  return locked;
+  const created = await challenges.findOne({
+    riderId,
+    kind,
+    periodKey: storagePeriodKey,
+  });
+  if (!created) throw new Error("Could not create rider challenge");
+  return created;
+}
+
+async function migrateCurrentChallenge(
+  challenge: any,
+  now: Date,
+): Promise<any> {
+  const challenges = riderChallengesCol();
+  const lockToken = new ObjectId().toHexString();
+  const lockUntil = new Date(Date.now() + 15_000);
+  let lockedChallenge: any = null;
+
+  // Conversion must happen before legacy progress reconciliation. Otherwise a
+  // rider with surplus deliveries can be paid under the retired cumulative
+  // thresholds while two Wallet requests are racing the migration.
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const lock = await challenges.updateOne(
+      {
+        _id: challenge._id,
+        challengeMode: { $ne: SEQUENTIAL_CHALLENGE_MODE },
+        $or: [
+          { "settlementLock.until": { $exists: false } },
+          { "settlementLock.until": { $lte: new Date() } },
+        ],
+      },
+      { $set: { settlementLock: { token: lockToken, until: lockUntil } } },
+    );
+
+    if (lock.modifiedCount === 1) {
+      lockedChallenge = await challenges.findOne({
+        _id: challenge._id,
+        "settlementLock.token": lockToken,
+      });
+      break;
+    }
+
+    const current = await challenges.findOne({ _id: challenge._id });
+    if (!current) throw new Error("Rider challenge no longer exists");
+    if (isSequentialChallenge(current)) return current;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  if (!lockedChallenge) throw new Error("Rider challenge migration is busy");
+
+  const ownershipFilter = {
+    _id: lockedChallenge._id,
+    "settlementLock.token": lockToken,
+  };
+
+  try {
+    const kind = lockedChallenge.kind as ChallengeKind;
+    const schedule = CHALLENGE_MILESTONES[kind];
+    const existingEntries = await riderWalletEntriesCol()
+      .find({
+        riderId: lockedChallenge.riderId,
+        type: "challenge_bonus",
+        $or: [
+          { challengeId: String(lockedChallenge._id) },
+          {
+            challengeKey: {
+              $in: [
+                `${lockedChallenge.riderId}:${kind}:${lockedChallenge.periodKey}`,
+                ...schedule.map(
+                  (milestone) =>
+                    `${lockedChallenge.riderId}:${kind}:${lockedChallenge.periodKey}:milestone:${milestone.target}`,
+                ),
+              ],
+            },
+          },
+        ],
+      })
+      .toArray();
+    const earnedTargets = new Set<number>(
+      Array.isArray(lockedChallenge.earnedMilestoneTargets)
+        ? lockedChallenge.earnedMilestoneTargets.map((target: unknown) => Number(target))
+        : [],
+    );
+    for (const entry of existingEntries) {
+      const entryTarget = Number(entry.milestoneTarget);
+      if (Number.isFinite(entryTarget)) earnedTargets.add(entryTarget);
+    }
+
+    let completedSequence = schedule.reduce(
+      (latest, milestone, index) => earnedTargets.has(milestone.target) ? index : latest,
+      -1,
+    );
+    if (completedSequence < 0 && lockedChallenge.status === "completed") {
+      const legacyTarget = Number(lockedChallenge.target) || 0;
+      completedSequence = schedule.findIndex((milestone) => milestone.target === legacyTarget);
+      if (completedSequence < 0 && legacyTarget >= schedule.at(-1)!.target) {
+        completedSequence = schedule.length - 1;
+      }
+      if (completedSequence >= 0) {
+        earnedTargets.add(schedule[completedSequence].target);
+      }
+    }
+
+    const deliveredCount = await countChallengeDeliveries(lockedChallenge);
+    if (completedSequence >= 0) {
+      // Preserve every reward already marked as earned, but do not discover any
+      // new legacy milestone from deliveredCount during conversion.
+      for (const [index, milestone] of schedule.entries()) {
+        if (!earnedTargets.has(milestone.target)) continue;
+        const existingEntry = existingEntries.find(
+          (entry) => Number(entry.milestoneTarget) === milestone.target,
+        );
+        const challengeKey =
+          existingEntry?.challengeKey ||
+          (hasMilestoneDefinition(lockedChallenge)
+            ? `${lockedChallenge.riderId}:${kind}:${lockedChallenge.periodKey}:milestone:${milestone.target}`
+            : `${lockedChallenge.riderId}:${kind}:${lockedChallenge.periodKey}`);
+        await riderWalletEntriesCol().updateOne(
+          { challengeKey },
+          {
+            $setOnInsert: {
+              riderId: lockedChallenge.riderId,
+              challengeKey,
+              challengeId: String(lockedChallenge._id),
+              weekKey: lockedChallenge.weekKey,
+              milestoneTarget: milestone.target,
+              challengeSequence: index,
+              type: "challenge_bonus",
+              amount: milestone.reward,
+              title: milestoneTitle(lockedChallenge, index + 1, milestone),
+              createdAt: lockedChallenge.completedAt || now,
+            },
+          },
+          { upsert: true },
+        );
+      }
+
+      const milestone = schedule[completedSequence];
+      const matchingEntry = existingEntries.find(
+        (entry) => Number(entry.milestoneTarget) === milestone.target,
+      );
+      const payoutKey =
+        matchingEntry?.challengeKey ||
+        (hasMilestoneDefinition(lockedChallenge)
+          ? `${lockedChallenge.riderId}:${kind}:${lockedChallenge.periodKey}:milestone:${milestone.target}`
+          : `${lockedChallenge.riderId}:${kind}:${lockedChallenge.periodKey}`);
+      await challenges.updateOne(
+        ownershipFilter,
+        {
+          $set: {
+            challengeMode: SEQUENTIAL_CHALLENGE_MODE,
+            sequence: completedSequence,
+            basePeriodKey: String(lockedChallenge.basePeriodKey || lockedChallenge.periodKey),
+            // Old cumulative rewards are preserved, then the next challenge
+            // starts at migration time rather than granting surplus thresholds.
+            deliveryBaseline: Math.max(0, deliveredCount - milestone.target),
+            tier: sequentialTierLabel(kind, completedSequence),
+            target: milestone.target,
+            reward: milestone.reward,
+            milestones: [{ ...milestone }],
+            earnedMilestoneTargets: [milestone.target],
+            progress: milestone.target,
+            status: "completed",
+            completedAt: lockedChallenge.completedAt || now,
+            payoutKey,
+            migratedAt: now,
+            updatedAt: now,
+          },
+        },
+      );
+    } else {
+      const firstMilestone = schedule[0];
+      await challenges.updateOne(
+        ownershipFilter,
+        {
+          $set: {
+            challengeMode: SEQUENTIAL_CHALLENGE_MODE,
+            sequence: 0,
+            basePeriodKey: String(lockedChallenge.basePeriodKey || lockedChallenge.periodKey),
+            deliveryBaseline: 0,
+            tier: sequentialTierLabel(kind, 0),
+            target: firstMilestone.target,
+            reward: firstMilestone.reward,
+            milestones: [{ ...firstMilestone }],
+            earnedMilestoneTargets: [],
+            progress: deliveredCount,
+            status: "active",
+            migratedAt: now,
+            updatedAt: now,
+          },
+          $unset: { completedAt: "", payoutKey: "" },
+        },
+      );
+    }
+
+    const migrated = await challenges.findOne({ _id: lockedChallenge._id });
+    if (!migrated) throw new Error("Could not migrate rider challenge");
+    return migrated;
+  } finally {
+    await challenges.updateOne(ownershipFilter, { $unset: { settlementLock: "" } });
+  }
+}
+
+async function advanceSequentialChallenge(
+  challenge: any,
+  now: Date,
+): Promise<any> {
+  let current = challenge;
+  const maxSteps = CHALLENGE_MILESTONES[challenge.kind as ChallengeKind]?.length || 1;
+
+  for (let guard = 0; guard < maxSteps; guard += 1) {
+    const synced = await refreshChallengeProgress(current, now);
+    if (!isSequentialChallenge(synced) || synced.status !== "completed") return synced;
+
+    const kind = synced.kind as ChallengeKind;
+    const sequence = Number(synced.sequence);
+    if (sequence >= CHALLENGE_MILESTONES[kind].length - 1) return synced;
+
+    const period = {
+      start: new Date(synced.periodStart),
+      end: new Date(synced.periodEnd),
+      periodKey: String(synced.basePeriodKey || synced.periodKey),
+      weekKey: String(synced.weekKey),
+      duration: new Date(synced.periodEnd).getTime() - new Date(synced.periodStart).getTime(),
+    };
+    current = await createSequentialChallenge(
+      synced.riderId,
+      kind,
+      period,
+      sequence + 1,
+      (Number(synced.deliveryBaseline) || 0) + Number(synced.target),
+      now,
+    );
+  }
+
+  return current;
+}
+
+async function ensureChallenge(
+  riderId: string,
+  kind: ChallengeKind,
+  now = new Date(),
+): Promise<any> {
+  await ensureWalletIndexes();
+  const period = challengePeriod(kind, now);
+  const challenges = riderChallengesCol();
+
+  // Reconcile only the bounded set of ended challenges that can still settle.
+  // Sequential chains advance inside their original period so a delayed order
+  // cannot cause an earned next-level reward to be lost at midnight.
+  const graceCutoff = new Date(now.getTime() - CHALLENGE_SETTLEMENT_GRACE_MS);
+  await challenges.updateMany(
+    {
+      riderId,
+      kind,
+      status: "active",
+      periodEnd: { $lte: now },
+      $or: [
+        { settlementGraceUntil: { $lte: now } },
+        {
+          settlementGraceUntil: { $exists: false },
+          periodEnd: { $lte: graceCutoff },
+        },
+      ],
+    },
+    {
+      $set: { status: "expired", expiredAt: now, updatedAt: now },
+    },
+  );
+
+  const endedUnsettledChallenges = await challenges
+    .find({
+      riderId,
+      kind,
+      periodEnd: { $lte: now },
+      $and: [
+        {
+          $or: [
+            { status: "active" },
+            { status: "expired" },
+          ],
+        },
+        {
+          $or: [
+            { settlementGraceUntil: { $gt: now } },
+            {
+              settlementGraceUntil: { $exists: false },
+              periodEnd: { $gt: graceCutoff },
+            },
+          ],
+        },
+      ],
+    })
+    .toArray();
+  await Promise.all(
+    endedUnsettledChallenges.map((endedChallenge) =>
+      isSequentialChallenge(endedChallenge)
+        ? advanceSequentialChallenge(endedChallenge, now)
+        : refreshChallengeProgress(endedChallenge, now),
+    ),
+  );
+
+  const currentChallenges = await challenges
+    .find({
+      riderId,
+      kind,
+      $or: [
+        { basePeriodKey: period.periodKey },
+        { periodKey: period.periodKey },
+      ],
+    })
+    .sort({ sequence: -1, createdAt: -1 })
+    .toArray();
+  const activeSequential = currentChallenges.find(
+    (candidate) => isSequentialChallenge(candidate) && candidate.status === "active",
+  );
+  if (activeSequential) return activeSequential;
+
+  const latestCompletedSequential = currentChallenges.find(
+    (candidate) => isSequentialChallenge(candidate) && candidate.status === "completed",
+  );
+  if (latestCompletedSequential) {
+    const sequence = Number(latestCompletedSequential.sequence);
+    if (sequence >= CHALLENGE_MILESTONES[kind].length - 1) {
+      return latestCompletedSequential;
+    }
+    return createSequentialChallenge(
+      riderId,
+      kind,
+      period,
+      sequence + 1,
+      (Number(latestCompletedSequential.deliveryBaseline) || 0) +
+        Number(latestCompletedSequential.target),
+      now,
+    );
+  }
+
+  const otherSequential = currentChallenges.find(isSequentialChallenge);
+  if (otherSequential) return otherSequential;
+
+  const legacyChallenge = currentChallenges[0];
+  if (legacyChallenge) return migrateCurrentChallenge(legacyChallenge, now);
+
+  return createSequentialChallenge(riderId, kind, period, 0, 0, now);
 }
 
 async function refreshChallengeProgress(challenge: any, now = new Date()): Promise<any> {
@@ -561,25 +888,19 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
     const finalMilestone = milestones.at(-1);
     if (!finalMilestone) throw new Error("Rider challenge has no valid milestone");
 
-    const deliveredCount = await ordersCol().countDocuments({
-      riderId: challenge.riderId,
-      status: DELIVERED_STATUS,
-      createdAt: {
-        $gte: new Date(challenge.periodStart),
-        $lt: new Date(challenge.periodEnd),
-      },
-    });
+    const deliveredCount = await countChallengeDeliveries(currentBeforeCount);
+    const challengeProgress = isSequentialChallenge(currentBeforeCount)
+      ? Math.max(0, deliveredCount - (Number(currentBeforeCount.deliveryBaseline) || 0))
+      : deliveredCount;
     const ownershipFilter = { _id: challenge._id, "settlementLock.token": lockToken };
 
-    // Active and still-settleable challenges mirror the current delivered-order
-    // count, so deleting a shared order also removes its progress. Completed
-    // challenges remain monotonic because their reward has already been settled.
-    // Counting inside the per-challenge lock makes the terminal completed/expired
-    // transition serializable.
+    // Sequential progress counts only rides completed after the previous
+    // challenge's baseline. Active challenges can decrease when a shared order
+    // is removed, while completed rewards remain terminal and monotonic.
     const progressUpdate =
       currentBeforeCount.status === "completed"
-        ? { $max: { progress: deliveredCount }, $set: { updatedAt: now } }
-        : { $set: { progress: deliveredCount, updatedAt: now } };
+        ? { $max: { progress: challengeProgress }, $set: { updatedAt: now } }
+        : { $set: { progress: challengeProgress, updatedAt: now } };
     await challenges.updateOne(
       ownershipFilter,
       progressUpdate,
@@ -627,7 +948,42 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
     current = await challenges.findOne({ _id: challenge._id });
     if (!current) throw new Error("Rider challenge no longer exists");
 
-    if (hasMilestoneDefinition(current)) {
+    if (isSequentialChallenge(current) && current.status === "completed") {
+      const sequence = Number(current.sequence);
+      const milestone = CHALLENGE_MILESTONES[current.kind as ChallengeKind][sequence];
+      if (!milestone) throw new Error("Sequential rider challenge has no valid reward");
+      const challengeKey =
+        current.payoutKey ||
+        (sequence === 0
+          ? `${current.riderId}:${current.kind}:${current.periodKey}:milestone:${milestone.target}`
+          : `${current.riderId}:${current.kind}:${current.periodKey}:sequence:${sequence}:target:${milestone.target}`);
+
+      await riderWalletEntriesCol().updateOne(
+        { challengeKey },
+        {
+          $setOnInsert: {
+            riderId: current.riderId,
+            challengeKey,
+            challengeId: String(current._id),
+            weekKey: current.weekKey,
+            milestoneTarget: milestone.target,
+            challengeSequence: sequence,
+            type: "challenge_bonus",
+            amount: milestone.reward,
+            title: milestoneTitle(current, sequence + 1, milestone),
+            createdAt: current.completedAt || now,
+          },
+        },
+        { upsert: true },
+      );
+      await challenges.updateOne(
+        ownershipFilter,
+        {
+          $addToSet: { earnedMilestoneTargets: milestone.target },
+          $set: { updatedAt: now },
+        },
+      );
+    } else if (hasMilestoneDefinition(current)) {
       const currentMilestones = milestonesForChallenge(current);
       const reachedMilestones = currentMilestones.filter(
         (milestone) => Number(current.progress) >= milestone.target,
@@ -1518,8 +1874,8 @@ router.get("/rider/wallet", async (req: any, res: any) => {
       ensureChallenge(riderId, "weekly", now),
     ]);
     const [syncedDaily, syncedWeekly] = await Promise.all([
-      refreshChallengeProgress(dailyChallenge, now),
-      refreshChallengeProgress(weeklyChallenge, now),
+      advanceSequentialChallenge(dailyChallenge, now),
+      advanceSequentialChallenge(weeklyChallenge, now),
     ]);
 
     const orders = await ordersCol()
@@ -1553,8 +1909,8 @@ router.get("/rider/wallet", async (req: any, res: any) => {
         .toArray(),
       riderChallengesCol()
         .find({ riderId })
-        .sort({ periodEnd: -1 })
-        .limit(6)
+        .sort({ periodEnd: -1, updatedAt: -1, createdAt: -1 })
+        .limit(10)
         .toArray(),
     ]);
 

@@ -10,5 +10,5 @@
 - [Background-location consent](background-location-consent.md) — Android background location may only be requested after explicit action on the dedicated rider disclosure screen.
 - [Rider notification sounds](rider-notification-sounds.md) — OneSignal Expo plugin packages only WAV; derive the push WAV from the source audio and keep Android/iOS names aligned.
 - [Legacy chat notification dedupe](legacy-chat-notification-dedupe.md) — old customer messages can lack IDs; create deterministic fallback IDs and never pair a local alert with the same foreground push.
-- [Rider challenge settlement](rider-challenge-settlement.md) — challenge rewards need a bounded, locked post-deadline reconciliation window to survive shared-order write races.
+- [Rider challenge settlement](rider-challenge-settlement.md) — sequential rewards need locked migration, bounded grace settlement, and legacy-compatible period/payout keys.
 - [Fast delivery wallet bonus](fast-delivery-wallet-bonus.md) — fast-delivery awards are idempotent, delivery-time based wallet entries and must never turn a committed delivery into an error.

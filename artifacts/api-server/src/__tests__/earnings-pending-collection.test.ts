@@ -41,7 +41,7 @@ let bearerToken: string;
 const testRiderOid = new ObjectId();
 const testOrderOids = [new ObjectId(), new ObjectId(), new ObjectId()];
 const boundaryOrderOids = [new ObjectId(), new ObjectId()];
-const walletOrderOids = Array.from({ length: 17 }, () => new ObjectId());
+const walletOrderOids = Array.from({ length: 48 }, () => new ObjectId());
 const fastDeliveryOrderOids = [
   new ObjectId(),
   new ObjectId(),
@@ -394,35 +394,26 @@ describe("PKT calendar date filtering", () => {
 });
 
 describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
-  it("pays each reached daily milestone exactly once", async () => {
+  it("starts each daily bonus from zero after the previous challenge completes", async () => {
     const before = await fetchWallet();
     const firstDaily = before.todayChallenge as Record<string, unknown>;
     const firstWeekly = before.weeklyChallenge as Record<string, unknown>;
-    assert.equal(firstDaily.target, 30, "the final daily target is the fifth goal");
+    assert.equal(firstDaily.target, 10, "the first daily challenge requires 10 rides");
     assert.deepEqual(
       (firstDaily.milestones as Array<Record<string, unknown>>).map(({ target, reward }) => ({
         target,
         reward,
       })),
-      [
-        { target: 10, reward: 200 },
-        { target: 15, reward: 200 },
-        { target: 20, reward: 500 },
-        { target: 25, reward: 800 },
-        { target: 30, reward: 1000 },
-      ],
+      [{ target: 10, reward: 200 }],
     );
     assert.deepEqual(
       (firstWeekly.milestones as Array<Record<string, unknown>>).map(({ target, reward }) => ({
         target,
         reward,
       })),
-      [
-        { target: 50, reward: 500 },
-        { target: 75, reward: 1000 },
-        { target: 100, reward: 2000 },
-      ],
+      [{ target: 50, reward: 500 }],
     );
+    assert.equal(firstDaily.tier, "Challenge 1 of 5");
     assert.equal(firstDaily.status, "active");
 
     const riderId = testRiderOid.toHexString();
@@ -446,29 +437,61 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     );
 
     const earned = await fetchWallet();
-    const dailyAtTen = earned.todayChallenge as Record<string, unknown>;
-    assert.equal(dailyAtTen.status, "active");
-    assert.equal(dailyAtTen.progress, 10);
+    const dailyAfterTen = earned.todayChallenge as Record<string, unknown>;
+    assert.equal(dailyAfterTen.status, "active");
+    assert.equal(dailyAfterTen.target, 15);
+    assert.equal(dailyAfterTen.progress, 0, "the 15-ride challenge starts from zero");
+    assert.equal(dailyAfterTen.tier, "Challenge 2 of 5");
     assert.equal(earned.challengeBonuses, 200);
-    assert.deepEqual(
-      (dailyAtTen.milestones as Array<Record<string, unknown>>).map((milestone) => milestone.earned),
-      [true, false, false, false, false],
+    assert.ok(
+      (earned.recentChallenges as Array<Record<string, unknown>>).some(
+        (challenge) =>
+          challenge.kind === "daily" &&
+          challenge.target === 10 &&
+          challenge.status === "completed",
+      ),
+      "the completed 10-ride challenge remains in history",
     );
 
     const refreshed = await fetchWallet();
     assert.equal(refreshed.challengeBonuses, 200, "a refresh must not duplicate the bonus");
-    const daily = await dbCol.riderChallenges().findOne({ riderId, kind: "daily" });
-    assert.ok(daily, "the generated daily challenge should exist");
+    const completedDaily = await dbCol.riderChallenges().findOne({
+      riderId,
+      kind: "daily",
+      sequence: 0,
+    });
+    assert.ok(completedDaily, "the completed 10-ride challenge should exist");
+    const activeSecondDaily = await dbCol.riderChallenges().findOne({
+      riderId,
+      kind: "daily",
+      sequence: 1,
+    });
+    assert.ok(activeSecondDaily, "the 15-ride challenge should exist");
+    assert.equal(activeSecondDaily!.basePeriodKey, completedDaily!.periodKey);
+    assert.equal(
+      activeSecondDaily!.periodKey,
+      `${String(completedDaily!.periodKey)}:sequence:1`,
+    );
+    await assert.rejects(
+      dbCol.riderChallenges().insertOne({
+        riderId,
+        kind: "daily",
+        periodKey: completedDaily!.periodKey,
+        status: "active",
+      }),
+      (error: any) => error?.code === 11000,
+      "the legacy period key remains uniquely protected during mixed-writer rollout",
+    );
     assert.equal(
       await dbCol.riderWalletEntries().countDocuments({
-        challengeKey: `${riderId}:daily:${String(daily!.periodKey)}:milestone:10`,
+        challengeKey: `${riderId}:daily:${String(completedDaily!.periodKey)}:milestone:10`,
       }),
       1,
-      "the 10-delivery daily goal creates one wallet bonus entry",
+      "the 10-ride challenge creates one wallet bonus entry",
     );
 
     await dbCol.orders().insertMany(
-      walletOrderOids.slice(7, 9).map((oid, index) => ({
+      walletOrderOids.slice(7, 12).map((oid, index) => ({
         _id: oid,
         riderId,
         status: "Delivered",
@@ -476,12 +499,13 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
         createdAt: new Date(now.getTime() - (index + 30) * 60_000),
       })),
     );
-    const dailyAtTwelve = await fetchWallet();
-    assert.equal((dailyAtTwelve.todayChallenge as Record<string, unknown>).progress, 12);
-    assert.equal(dailyAtTwelve.challengeBonuses, 200, "12 deliveries earns only Goal #1");
+    const dailyAtFive = await fetchWallet();
+    assert.equal((dailyAtFive.todayChallenge as Record<string, unknown>).target, 15);
+    assert.equal((dailyAtFive.todayChallenge as Record<string, unknown>).progress, 5);
+    assert.equal(dailyAtFive.challengeBonuses, 200, "five new rides do not complete the 15-ride challenge");
 
     await dbCol.orders().insertMany(
-      walletOrderOids.slice(9, 12).map((oid, index) => ({
+      walletOrderOids.slice(12, 22).map((oid, index) => ({
         _id: oid,
         riderId,
         status: "Delivered",
@@ -489,35 +513,17 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
         createdAt: new Date(now.getTime() - (index + 40) * 60_000),
       })),
     );
-    const dailyAtFifteen = await fetchWallet();
-    assert.equal((dailyAtFifteen.todayChallenge as Record<string, unknown>).progress, 15);
-    assert.equal(dailyAtFifteen.challengeBonuses, 400, "Goal #2 pays its own Rs. 200 reward");
+    const dailyAfterFifteenNewRides = await fetchWallet();
+    assert.equal((dailyAfterFifteenNewRides.todayChallenge as Record<string, unknown>).target, 20);
+    assert.equal((dailyAfterFifteenNewRides.todayChallenge as Record<string, unknown>).progress, 0);
+    assert.equal(dailyAfterFifteenNewRides.challengeBonuses, 400);
 
-    await dbCol.orders().insertMany(
-      walletOrderOids.slice(12, 17).map((oid, index) => ({
-        _id: oid,
-        riderId,
-        status: "Delivered",
-        riderFare: 100,
-        createdAt: new Date(now.getTime() - (index + 50) * 60_000),
-      })),
-    );
-    const dailyAtTwenty = await fetchWallet();
-    assert.equal((dailyAtTwenty.todayChallenge as Record<string, unknown>).progress, 20);
-    assert.equal(dailyAtTwenty.challengeBonuses, 900, "Goal #3 adds its Rs. 500 reward");
-
-    await dbCol.orders().deleteOne({ _id: walletOrderOids[16] });
+    await dbCol.orders().deleteOne({ _id: walletOrderOids[21] });
     const afterDeletion = await fetchWallet();
     const dailyAfterDeletion = afterDeletion.todayChallenge as Record<string, unknown>;
-    assert.equal(dailyAfterDeletion.progress, 19, "active progress mirrors a removed delivered order");
-    assert.equal(afterDeletion.challengeBonuses, 900, "an earned milestone is never clawed back");
-    assert.deepEqual(
-      (dailyAfterDeletion.milestones as Array<Record<string, unknown>>)
-        .slice(0, 3)
-        .map((milestone) => milestone.earned),
-      [true, true, true],
-      "previously earned goals stay settled after progress decreases",
-    );
+    assert.equal(dailyAfterDeletion.target, 20);
+    assert.equal(dailyAfterDeletion.progress, 0);
+    assert.equal(afterDeletion.challengeBonuses, 400, "completed challenge rewards are never clawed back");
 
     const weekly = await dbCol.riderChallenges().findOne({
       riderId,
@@ -525,9 +531,15 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
       status: "active",
     });
     assert.ok(weekly, "the generated weekly challenge should remain active");
-    await dbCol.riderChallenges().updateOne(
-      { _id: weekly!._id },
-      { $set: { milestones: [{ target: 10, reward: 500 }], target: 10, reward: 500 } },
+
+    await dbCol.orders().insertMany(
+      walletOrderOids.slice(22, 48).map((oid, index) => ({
+        _id: oid,
+        riderId,
+        status: "Delivered",
+        riderFare: 100,
+        createdAt: new Date(now.getTime() - (index + 70) * 60_000),
+      })),
     );
 
     await Promise.all([fetchWallet(), fetchWallet()]);
@@ -535,7 +547,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     assert.equal(settledWeekly?.status, "completed");
     assert.equal(
       await dbCol.riderWalletEntries().countDocuments({
-        challengeKey: `${riderId}:weekly:${String(weekly!.periodKey)}:milestone:10`,
+        challengeKey: `${riderId}:weekly:${String(weekly!.periodKey)}:milestone:50`,
       }),
       1,
       "simultaneous Wallet reads must produce one weekly bonus entry",
@@ -597,6 +609,132 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
       await dbCol.riderChallenges().deleteMany({ riderId });
       await dbCol.riderWalletEntries().deleteMany({ riderId });
       await dbCol.users().deleteOne({ _id: deletionRiderOid });
+    }
+  });
+
+  it("migrates concurrently without paying retired cumulative targets from surplus rides", async () => {
+    const migrationRiderOid = new ObjectId();
+    const riderId = migrationRiderOid.toHexString();
+    const migrationOrderOids = Array.from({ length: 20 }, () => new ObjectId());
+    const phone = `03001112233__challenge_migration_${riderId}`;
+    const now = new Date();
+
+    try {
+      await dbCol.users().insertOne({
+        _id: migrationRiderOid,
+        type: "rider",
+        name: "Test Rider (challenge migration)",
+        phone,
+        password: "challenge-migration-password",
+        city: "TestCity",
+        vehicleType: "bike",
+        deleted: false,
+        tillNoonFare: 100,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const loginRes = await fetch(`${serverUrl}/api/rider/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, password: "challenge-migration-password" }),
+      });
+      assert.equal(loginRes.status, 200);
+      const loginBody = (await loginRes.json()) as Record<string, unknown>;
+      const headers = { Authorization: `Bearer ${String(loginBody.token)}` };
+      const walletForMigrationRider = async () => {
+        const response = await fetch(`${serverUrl}/api/rider/wallet`, { headers });
+        assert.equal(response.status, 200);
+        return response.json() as Promise<Record<string, unknown>>;
+      };
+
+      await walletForMigrationRider();
+      const daily = await dbCol.riderChallenges().findOne({
+        riderId,
+        kind: "daily",
+        sequence: 0,
+      });
+      assert.ok(daily);
+
+      await dbCol.orders().insertMany(
+        migrationOrderOids.map((orderId, index) => ({
+          _id: orderId,
+          riderId,
+          status: "Delivered",
+          riderFare: 100,
+          createdAt: new Date(now.getTime() - (index + 1) * 60_000),
+        })),
+      );
+      await dbCol.riderChallenges().updateOne(
+        { _id: daily!._id },
+        {
+          $unset: {
+            challengeMode: "",
+            sequence: "",
+            deliveryBaseline: "",
+          },
+          $set: {
+            tier: "Daily delivery goals",
+            target: 30,
+            reward: 1000,
+            milestones: [
+              { target: 10, reward: 200 },
+              { target: 15, reward: 200 },
+              { target: 20, reward: 500 },
+              { target: 25, reward: 800 },
+              { target: 30, reward: 1000 },
+            ],
+            earnedMilestoneTargets: [10],
+            progress: 20,
+            status: "active",
+          },
+        },
+      );
+
+      const [migratedWallet, simultaneousWallet] = await Promise.all([
+        walletForMigrationRider(),
+        walletForMigrationRider(),
+      ]);
+      const activeDaily = migratedWallet.todayChallenge as Record<string, unknown>;
+      assert.equal(activeDaily.target, 15);
+      assert.equal(activeDaily.progress, 0);
+      assert.equal(activeDaily.tier, "Challenge 2 of 5");
+      assert.equal(migratedWallet.challengeBonuses, 200);
+      assert.equal(
+        (simultaneousWallet.todayChallenge as Record<string, unknown>).target,
+        15,
+      );
+      assert.equal(simultaneousWallet.challengeBonuses, 200);
+      assert.equal(
+        await dbCol.riderWalletEntries().countDocuments({
+          challengeKey: `${riderId}:daily:${String(daily!.periodKey)}:milestone:10`,
+        }),
+        1,
+      );
+      assert.equal(
+        await dbCol.riderWalletEntries().countDocuments({
+          challengeKey: {
+            $in: [
+              `${riderId}:daily:${String(daily!.periodKey)}:milestone:15`,
+              `${riderId}:daily:${String(daily!.periodKey)}:milestone:20`,
+            ],
+          },
+        }),
+        0,
+        "surplus legacy rides must not trigger the retired cumulative targets",
+      );
+
+      const migratedCompleted = await dbCol.riderChallenges().findOne({
+        _id: daily!._id,
+      });
+      assert.equal(migratedCompleted?.status, "completed");
+      assert.equal(migratedCompleted?.target, 10);
+      assert.equal(migratedCompleted?.sequence, 0);
+    } finally {
+      await dbCol.orders().deleteMany({ _id: { $in: migrationOrderOids } });
+      await dbCol.riderChallenges().deleteMany({ riderId });
+      await dbCol.riderWalletEntries().deleteMany({ riderId });
+      await dbCol.users().deleteOne({ _id: migrationRiderOid });
     }
   });
 });
@@ -694,6 +832,58 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
     await dbCol.orders().deleteMany({ _id: { $in: [dailyOrderId, weeklyOrderId] } });
     await dbCol.riderChallenges().deleteMany({ _id: { $in: [dailyChallengeId, weeklyChallengeId] } });
     await dbCol.riderWalletEntries().deleteMany({ challengeKey: { $in: [dailyKey, weeklyKey] } });
+  });
+
+  it("expires an old active challenge without paying it after the grace window", async () => {
+    const riderId = testRiderOid.toHexString();
+    const now = new Date();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const periodEnd = new Date(now.getTime() - 2 * dayMs);
+    const periodStart = new Date(periodEnd.getTime() - dayMs);
+    const challengeId = new ObjectId();
+    const orderId = new ObjectId();
+    const periodKey = `test-beyond-grace-${periodEnd.getTime()}`;
+    const challengeKey = `${riderId}:daily:${periodKey}`;
+
+    try {
+      await dbCol.riderChallenges().insertOne({
+        _id: challengeId,
+        riderId,
+        kind: "daily",
+        periodKey,
+        weekKey: "test-beyond-grace",
+        periodStart,
+        periodEnd,
+        settlementGraceUntil: new Date(now.getTime() - dayMs),
+        tier: "Legacy challenge",
+        target: 1,
+        reward: 200,
+        progress: 0,
+        status: "active",
+        createdAt: periodStart,
+        updatedAt: periodStart,
+      });
+      await dbCol.orders().insertOne({
+        _id: orderId,
+        riderId,
+        status: "Delivered",
+        riderFare: 100,
+        createdAt: new Date(periodStart.getTime() + 60 * 60 * 1000),
+      });
+
+      await fetchWallet();
+
+      const expired = await dbCol.riderChallenges().findOne({ _id: challengeId });
+      assert.equal(expired?.status, "expired");
+      assert.equal(
+        await dbCol.riderWalletEntries().countDocuments({ challengeKey }),
+        0,
+      );
+    } finally {
+      await dbCol.orders().deleteOne({ _id: orderId });
+      await dbCol.riderChallenges().deleteOne({ _id: challengeId });
+      await dbCol.riderWalletEntries().deleteMany({ challengeKey });
+    }
   });
 });
 
