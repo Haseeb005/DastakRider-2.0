@@ -1,7 +1,7 @@
 /**
  * orderPushWatcher
  *
- * Watches the shared MongoDB change-event WebSocket for `orders` collection
+ * Watches the local MongoDB change-event source for `orders` collection
  * changes. When an order transitions to "Admin Accepted" (unassigned), it
  * finds all online, eligible riders (matching city + zones) and sends each of
  * them a OneSignal push notification so they can tap to accept it.
@@ -11,19 +11,19 @@
  */
 
 import { ObjectId } from "mongodb";
-import WebSocket from "ws";
 
 import { logger } from "./logger";
-import { ordersCol, usersCol } from "./mongo";
+import { ordersCol, subscribeToLiveChanges, usersCol } from "./mongo";
 import { sendNewOrderPush } from "./onesignal";
-
-const WS_URL = "wss://dastakbites.com/ws/live";
-const RETRY_MS = 5_000;
 
 /** Tracks orderIds we have already pushed so we don't repeat on subsequent updates. */
 const pushedOrders = new Set<string>();
+const processingOrders = new Set<string>();
 
 async function handleOrderChange(rawId: string): Promise<void> {
+  if (processingOrders.has(rawId)) return;
+  processingOrders.add(rawId);
+
   try {
     // Fetch the order document.
     let order: Record<string, any> | null = null;
@@ -35,19 +35,16 @@ async function handleOrderChange(rawId: string): Promise<void> {
 
     if (!order) return;
 
-    // Only act when the order is in "Admin Accepted" state and has no rider yet.
-    if (order.status !== "Admin Accepted") return;
+    // Leaving the availability window resets deduplication so a later re-open
+    // can notify riders again.
     const hasRider = order.riderId && order.riderId !== "";
-    if (hasRider) {
-      // Order was accepted — clear the dedup entry so a future re-open can push again.
+    if (order.status !== "Admin Accepted" || hasRider) {
       pushedOrders.delete(rawId);
       return;
     }
 
     // Deduplicate: only push once per order per availability window.
     if (pushedOrders.has(rawId)) return;
-    pushedOrders.add(rawId);
-
     const city: string = order.city ?? "";
     const zone: string = order.zone ?? "";
     const orderId = String(order._id);
@@ -90,48 +87,55 @@ async function handleOrderChange(rawId: string): Promise<void> {
       .filter((r: any) => !r.playerId)
       .map((r: any) => String(r._id));
 
-    await sendNewOrderPush({ playerIds, riderIds, orderId, orderNum, area });
+    const sent = await sendNewOrderPush({
+      playerIds,
+      riderIds,
+      orderId,
+      orderNum,
+      area,
+    });
+    if (!sent) return;
+
+    pushedOrders.add(rawId);
     logger.info(
       { orderId, withPlayerId: playerIds.length, withExternalId: riderIds.length, city, zone },
       "orderPushWatcher: sent new-order push",
     );
   } catch (err) {
     logger.error({ err, rawId }, "orderPushWatcher: error processing change");
+  } finally {
+    processingOrders.delete(rawId);
+  }
+}
+
+async function reconcileAvailableOrders(): Promise<void> {
+  const orders = ordersCol().find(
+    {
+      status: "Admin Accepted",
+      $or: [
+        { riderId: { $exists: false } },
+        { riderId: null },
+        { riderId: "" },
+      ],
+    },
+    { projection: { _id: 1 } },
+  );
+
+  for await (const order of orders) {
+    await handleOrderChange(String(order._id));
   }
 }
 
 export function startOrderPushWatcher(): void {
-  function connect() {
-    const ws = new WebSocket(WS_URL);
-
-    ws.on("open", () => {
-      logger.info("orderPushWatcher: connected to WS feed");
-    });
-
-    ws.on("message", (data) => {
-      try {
-        const msg = JSON.parse(data.toString()) as Record<string, unknown>;
-        if (
-          msg.type === "change" &&
-          msg.collection === "orders" &&
-          typeof msg.id === "string"
-        ) {
-          handleOrderChange(msg.id);
-        }
-      } catch {
-        // malformed message — ignore
+  subscribeToLiveChanges(
+    async (change) => {
+      if (change.collection === "orders") {
+        await handleOrderChange(change.id);
       }
-    });
-
-    ws.on("error", (err) => {
-      logger.warn({ err: String(err) }, "orderPushWatcher: WS error");
-    });
-
-    ws.on("close", () => {
-      logger.info(`orderPushWatcher: disconnected — reconnecting in ${RETRY_MS / 1000}s`);
-      setTimeout(connect, RETRY_MS);
-    });
-  }
-
-  connect();
+    },
+    async () => {
+      logger.info("orderPushWatcher: reconciling available orders after change-stream reset");
+      await reconcileAvailableOrders();
+    },
+  );
 }

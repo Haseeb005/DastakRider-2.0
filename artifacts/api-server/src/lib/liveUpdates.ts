@@ -3,7 +3,7 @@ import { ObjectId, type ChangeStream } from "mongodb";
 import { WebSocket, WebSocketServer } from "ws";
 
 import { logger } from "./logger";
-import { chatsCol, ordersCol, watchLiveChanges } from "./mongo";
+import { chatsCol, ordersCol, subscribeToLiveChanges } from "./mongo";
 import { verifyRiderToken } from "./riderToken";
 
 const RETRY_MS = 5_000;
@@ -37,9 +37,10 @@ export function startLiveUpdateServer(
 
   const retryMs = options.retryMs ?? RETRY_MS;
   const authTimeoutMs = options.authTimeoutMs ?? AUTH_TIMEOUT_MS;
-  const watchChanges = options.watchChanges ?? watchLiveChanges;
+  const watchChanges = options.watchChanges;
   const verifyToken = options.verifyToken ?? verifyRiderToken;
   let changeStream: ChangeStream | null = null;
+  let unsubscribeFromChanges: (() => void) | null = null;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
   const authenticatedRiders = new WeakMap<WebSocket, string>();
@@ -111,7 +112,7 @@ export function startLiveUpdateServer(
   }
 
   function connectChangeStream(): void {
-    if (stopped) return;
+    if (stopped || !watchChanges) return;
     try {
       const stream = watchChanges();
       changeStream = stream;
@@ -177,11 +178,30 @@ export function startLiveUpdateServer(
     logger.error({ err: String(error) }, "Live update WebSocket server error");
   });
 
-  connectChangeStream();
+  if (watchChanges) {
+    // Tests can inject a controllable stream to exercise socket reconnect
+    // behavior without touching the shared production event source.
+    connectChangeStream();
+  } else {
+    unsubscribeFromChanges = subscribeToLiveChanges((change) => {
+      return broadcast(change.collection, change.id).catch((error) => {
+        logger.warn(
+          {
+            err: String(error),
+            collection: change.collection,
+            documentId: change.id,
+          },
+          "Failed to resolve live update recipient",
+        );
+      });
+    });
+  }
 
   return {
     close: async () => {
       stopped = true;
+      unsubscribeFromChanges?.();
+      unsubscribeFromChanges = null;
       if (retryTimer !== null) {
         clearTimeout(retryTimer);
         retryTimer = null;

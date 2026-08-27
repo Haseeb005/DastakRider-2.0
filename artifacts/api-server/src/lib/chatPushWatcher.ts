@@ -1,7 +1,7 @@
 /**
  * chatPushWatcher
  *
- * Connects to the shared MongoDB change-event WebSocket feed and sends a
+ * Subscribes to the local MongoDB change-event source and sends a
  * OneSignal push notification to the assigned rider whenever a new customer
  * message appears in the `chats` collection.
  *
@@ -9,32 +9,33 @@
  * rider's app is backgrounded or killed, only a server-side push reaches them.
  *
  * Flow:
- *   1. WS receives { type:"change", collection:"chats", id:"<docId>" }
+ *   1. MongoDB emits a change for a chat document.
  *   2. Fetch the chat document from MongoDB to find the latest customer message.
  *   3. Deduplicate: skip if we already pushed for this message ID.
  *   4. Throttle: at most one push per order per 10 s.
  *   5. Resolve the rider and order metadata, then call sendChatPush().
  *
- * The watcher reconnects automatically on WS close/error.
+ * The shared MongoDB source reconnects automatically after a stream failure.
  */
 
 import { ObjectId } from "mongodb";
-import WebSocket from "ws";
 import crypto from "crypto";
 
 import { logger } from "./logger";
-import { chatsCol, ordersCol, usersCol } from "./mongo";
+import { chatsCol, ordersCol, subscribeToLiveChanges, usersCol } from "./mongo";
 import { sendChatPush } from "./onesignal";
 
-const WS_URL = "wss://dastakbites.com/ws/live";
 const THROTTLE_MS = 10_000;   // minimum gap between pushes for the same order
-const RETRY_MS = 5_000;       // WS reconnect delay
 
 /** Last customer-message _id we sent a push for, keyed by chat document _id. */
 const lastPushedMsgId = new Map<string, string>();
 
 /** Timestamp of the last push sent for an orderId. */
 const lastPushAt = new Map<string, number>();
+const pendingChatTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const chatWork = new Map<string, Promise<void>>();
+const bufferedInitialChanges = new Set<string>();
+let chatDedupeReady = false;
 
 function chatMessageKey(message: Record<string, any>, index: number): string {
   const messageId = message._id ?? message.id;
@@ -47,6 +48,21 @@ function chatMessageKey(message: Record<string, any>, index: number): string {
     index,
   ].join("\u0000");
   return `legacy:${crypto.createHash("sha256").update(identity).digest("hex")}`;
+}
+
+function latestCustomerMessage(doc: Record<string, any>): {
+  message: Record<string, any>;
+  index: number;
+} | null {
+  if (!Array.isArray(doc.chat) || doc.chat.length === 0) return null;
+
+  const customerMsgs = (doc.chat as any[])
+    .map((message, index) => ({ message, index }))
+    .filter(
+      ({ message }) =>
+        message.type === "user" || message.fromRole === "customer",
+    );
+  return customerMsgs[customerMsgs.length - 1] ?? null;
 }
 
 async function handleChatsChange(rawId: string): Promise<void> {
@@ -62,36 +78,40 @@ async function handleChatsChange(rawId: string): Promise<void> {
       doc = await chatsCol().findOne({ orderId: rawId } as any);
     }
 
-    if (!doc || !Array.isArray(doc.chat) || doc.chat.length === 0) return;
+    if (!doc) return;
+    const latestMessage = latestCustomerMessage(doc);
+    if (!latestMessage) return;
 
-    // Find the most recent message from a customer (type "user").
-    const customerMsgs = (doc.chat as any[])
-      .map((message, index) => ({ message, index }))
-      .filter(
-        ({ message }) =>
-          message.type === "user" || message.fromRole === "customer",
-      );
-    if (customerMsgs.length === 0) return;
-
-    const { message: lastMsg, index: lastMsgIndex } =
-      customerMsgs[customerMsgs.length - 1];
+    const { message: lastMsg, index: lastMsgIndex } = latestMessage;
     const lastMsgId = chatMessageKey(lastMsg, lastMsgIndex);
     const chatKey = String(doc._id);
 
     // Skip if we already pushed for this exact message.
     if (lastPushedMsgId.get(chatKey) === lastMsgId) return;
-    lastPushedMsgId.set(chatKey, lastMsgId);
 
-    // Throttle per order to avoid burst pushes on rapid successive messages.
     const orderId: string = doc.orderId ?? "";
     if (!orderId) return;
 
-    const now = Date.now();
-    if (now - (lastPushAt.get(orderId) ?? 0) < THROTTLE_MS) return;
-    lastPushAt.set(orderId, now);
-
     const riderId: string = doc.riderId ?? "";
     if (!riderId) return;
+
+    // Throttle per order to avoid burst pushes on rapid successive messages,
+    // but retain the latest message for delivery after the window expires.
+    const now = Date.now();
+    const remainingThrottle =
+      THROTTLE_MS - (now - (lastPushAt.get(orderId) ?? 0));
+    if (remainingThrottle > 0) {
+      const pendingTimer = pendingChatTimers.get(chatKey);
+      if (pendingTimer) clearTimeout(pendingTimer);
+      pendingChatTimers.set(
+        chatKey,
+        setTimeout(() => {
+          pendingChatTimers.delete(chatKey);
+          enqueueChatsChange(rawId);
+        }, remainingThrottle),
+      );
+      return;
+    }
 
     // Resolve order metadata (customer name + order number) for the notification.
     let customerName: string | undefined;
@@ -126,45 +146,96 @@ async function handleChatsChange(rawId: string): Promise<void> {
       // riderId not a valid ObjectId or lookup failed — fall back to external_id
     }
 
-    await sendChatPush({ riderId, playerId, orderId, customerName, orderNum, messageText });
+    const sent = await sendChatPush({
+      riderId,
+      playerId,
+      orderId,
+      customerName,
+      orderNum,
+      messageText,
+    });
+    if (!sent) return;
+
+    const pendingTimer = pendingChatTimers.get(chatKey);
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      pendingChatTimers.delete(chatKey);
+    }
+    lastPushedMsgId.set(chatKey, lastMsgId);
+    lastPushAt.set(orderId, Date.now());
     logger.info({ riderId, orderId, hasPlayerId: !!playerId }, "chatPushWatcher: sent OneSignal push");
   } catch (err) {
     logger.error({ err, rawId }, "chatPushWatcher: error processing change");
   }
 }
 
-export function startChatPushWatcher(): void {
-  function connect() {
-    const ws = new WebSocket(WS_URL);
-
-    ws.on("open", () => {
-      logger.info("chatPushWatcher: connected to WS feed");
-    });
-
-    ws.on("message", (data) => {
-      try {
-        const msg = JSON.parse(data.toString()) as Record<string, unknown>;
-        if (
-          msg.type === "change" &&
-          msg.collection === "chats" &&
-          typeof msg.id === "string"
-        ) {
-          handleChatsChange(msg.id);
-        }
-      } catch {
-        // malformed message — ignore
+function enqueueChatsChange(rawId: string): Promise<void> {
+  const previous = chatWork.get(rawId) ?? Promise.resolve();
+  const next = previous
+    .then(() => handleChatsChange(rawId))
+    .finally(() => {
+      if (chatWork.get(rawId) === next) {
+        chatWork.delete(rawId);
       }
     });
+  chatWork.set(rawId, next);
+  return next;
+}
 
-    ws.on("error", (err) => {
-      logger.warn({ err: String(err) }, "chatPushWatcher: WS error");
-    });
-
-    ws.on("close", () => {
-      logger.info(`chatPushWatcher: disconnected — reconnecting in ${RETRY_MS / 1000}s`);
-      setTimeout(connect, RETRY_MS);
-    });
+async function initializeChatDedupe(): Promise<void> {
+  const chats = chatsCol().find(
+    {},
+    { projection: { _id: 1, chat: 1 } },
+  );
+  for await (const doc of chats) {
+    const latestMessage = latestCustomerMessage(doc);
+    if (!latestMessage) continue;
+    lastPushedMsgId.set(
+      String(doc._id),
+      chatMessageKey(latestMessage.message, latestMessage.index),
+    );
   }
+}
 
-  connect();
+async function reconcileCustomerMessages(): Promise<void> {
+  const chats = chatsCol().find(
+    { riderId: { $nin: [null, ""] } },
+    { projection: { _id: 1 } },
+  );
+  for await (const doc of chats) {
+    await enqueueChatsChange(String(doc._id));
+  }
+}
+
+export function startChatPushWatcher(): void {
+  subscribeToLiveChanges(
+    async (change) => {
+      if (change.collection !== "chats") return;
+      if (!chatDedupeReady) {
+        bufferedInitialChanges.add(change.id);
+        return;
+      }
+      await enqueueChatsChange(change.id);
+    },
+    async () => {
+      logger.info("chatPushWatcher: reconciling customer messages after change-stream reset");
+      await reconcileCustomerMessages();
+    },
+  );
+
+  initializeChatDedupe()
+    .catch((error) => {
+      logger.error(
+        { err: String(error) },
+        "chatPushWatcher: failed to initialize deduplication baseline",
+      );
+    })
+    .finally(() => {
+      chatDedupeReady = true;
+      for (const rawId of bufferedInitialChanges) {
+        lastPushedMsgId.delete(rawId);
+        enqueueChatsChange(rawId);
+      }
+      bufferedInitialChanges.clear();
+    });
 }

@@ -64,14 +64,14 @@ interface RiderNotificationPayload {
 }
 
 /** Send one rider notification through the official OneSignal Node SDK. */
-async function notifyRiders(payload: RiderNotificationPayload): Promise<void> {
+async function notifyRiders(payload: RiderNotificationPayload): Promise<boolean> {
   const subscriptionIds = payload.subscriptionIds ?? [];
   const riderIds = payload.riderIds ?? [];
   if (!riderClient || !APP_ID || !REST_KEY) {
     logger.warn("notifyRiders: OneSignal env vars not set — skipping");
-    return;
+    return false;
   }
-  if (subscriptionIds.length === 0 && riderIds.length === 0) return;
+  if (subscriptionIds.length === 0 && riderIds.length === 0) return false;
 
   const notification = new Notification();
   notification.app_id = APP_ID;
@@ -101,6 +101,7 @@ async function notifyRiders(payload: RiderNotificationPayload): Promise<void> {
       },
       "OneSignal: rider notification accepted",
     );
+    return true;
   } catch (error: any) {
     const errors = error?.body?.errors;
     logger.error(
@@ -111,6 +112,7 @@ async function notifyRiders(payload: RiderNotificationPayload): Promise<void> {
       },
       "OneSignal: rider notification failed",
     );
+    return false;
   }
 }
 
@@ -118,9 +120,9 @@ async function notifyRiders(payload: RiderNotificationPayload): Promise<void> {
  * Send a push notification to the given rider about a new customer chat message.
  * Silently no-ops when the env vars are not configured.
  */
-export async function sendChatPush(payload: ChatPushPayload): Promise<void> {
+export async function sendChatPush(payload: ChatPushPayload): Promise<boolean> {
   const { riderId, playerId, orderId, customerName, orderNum, messageText } = payload;
-  await notifyRiders({
+  return notifyRiders({
     message: messageText || "Tap to reply",
     heading: customerName ? `Message from ${customerName}` : "New message from customer",
     subscriptionIds: playerId ? [playerId] : undefined,
@@ -138,7 +140,7 @@ export async function sendChatPush(payload: ChatPushPayload): Promise<void> {
  * Send a new-order push to multiple riders simultaneously.
  * OneSignal accepts up to 2 000 external_ids per request.
  */
-export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<void> {
+export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<boolean> {
   const { playerIds, riderIds = [], orderId, orderNum, area } = payload;
 
   const heading = "New Order Available";
@@ -154,7 +156,7 @@ export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<vo
     orderId,
     ...(orderNum ? { orderNum } : {}),
   };
-  await notifyRiders({
+  return notifyRiders({
     message: body,
     heading,
     subscriptionIds: playerIds,
