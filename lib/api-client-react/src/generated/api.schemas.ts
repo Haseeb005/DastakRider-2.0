@@ -216,6 +216,19 @@ export const RiderChallengeStatus = {
   expired: 'expired',
 } as const;
 
+/**
+ * Whether the challenge bonus is still being worked toward, awaiting period-end settlement, paid, or not earned.
+ */
+export type RiderChallengePayoutStatus = typeof RiderChallengePayoutStatus[keyof typeof RiderChallengePayoutStatus];
+
+
+export const RiderChallengePayoutStatus = {
+  in_progress: 'in_progress',
+  pending: 'pending',
+  paid: 'paid',
+  not_earned: 'not_earned',
+} as const;
+
 export interface RiderChallenge {
   id: string;
   kind: RiderChallengeKind;
@@ -226,6 +239,12 @@ export interface RiderChallenge {
   reward: number;
   milestones: RiderChallengeMilestone[];
   status: RiderChallengeStatus;
+  /** Whether the challenge bonus is still being worked toward, awaiting period-end settlement, paid, or not earned. */
+  payoutStatus: RiderChallengePayoutStatus;
+  /** Actual challenge bonus credited to the rider wallet. Zero until a payout is made. */
+  bonusAmount: number;
+  /** Total eligible deliveries completed during this daily or weekly period. */
+  periodDeliveries: number;
   periodStart: string;
   periodEnd: string;
 }

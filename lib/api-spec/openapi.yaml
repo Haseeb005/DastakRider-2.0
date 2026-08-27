@@ -692,6 +692,16 @@ components:
         status:
           type: string
           enum: [active, completed, expired]
+        payoutStatus:
+          type: string
+          enum: [in_progress, pending, paid, not_earned]
+          description: Whether the challenge bonus is still being worked toward, awaiting period-end settlement, paid, or not earned.
+        bonusAmount:
+          type: number
+          description: Actual challenge bonus credited to the rider wallet. Zero until a payout is made.
+        periodDeliveries:
+          type: number
+          description: Total eligible deliveries completed during this daily or weekly period.
         periodStart:
           type: string
           format: date-time
@@ -707,6 +717,9 @@ components:
         - reward
         - milestones
         - status
+        - payoutStatus
+        - bonusAmount
+        - periodDeliveries
         - periodStart
         - periodEnd
 

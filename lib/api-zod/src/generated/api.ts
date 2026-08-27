@@ -576,6 +576,9 @@ export const GetRiderWalletResponse = zod.object({
   "earned": zod.boolean()
 })),
   "status": zod.enum(['active', 'completed', 'expired']),
+  "payoutStatus": zod.enum(['in_progress', 'pending', 'paid', 'not_earned']).describe('Whether the challenge bonus is still being worked toward, awaiting period-end settlement, paid, or not earned.'),
+  "bonusAmount": zod.number().describe('Actual challenge bonus credited to the rider wallet. Zero until a payout is made.'),
+  "periodDeliveries": zod.number().describe('Total eligible deliveries completed during this daily or weekly period.'),
   "periodStart": zod.coerce.date(),
   "periodEnd": zod.coerce.date()
 }),
@@ -592,6 +595,9 @@ export const GetRiderWalletResponse = zod.object({
   "earned": zod.boolean()
 })),
   "status": zod.enum(['active', 'completed', 'expired']),
+  "payoutStatus": zod.enum(['in_progress', 'pending', 'paid', 'not_earned']).describe('Whether the challenge bonus is still being worked toward, awaiting period-end settlement, paid, or not earned.'),
+  "bonusAmount": zod.number().describe('Actual challenge bonus credited to the rider wallet. Zero until a payout is made.'),
+  "periodDeliveries": zod.number().describe('Total eligible deliveries completed during this daily or weekly period.'),
   "periodStart": zod.coerce.date(),
   "periodEnd": zod.coerce.date()
 }),
@@ -608,6 +614,9 @@ export const GetRiderWalletResponse = zod.object({
   "earned": zod.boolean()
 })),
   "status": zod.enum(['active', 'completed', 'expired']),
+  "payoutStatus": zod.enum(['in_progress', 'pending', 'paid', 'not_earned']).describe('Whether the challenge bonus is still being worked toward, awaiting period-end settlement, paid, or not earned.'),
+  "bonusAmount": zod.number().describe('Actual challenge bonus credited to the rider wallet. Zero until a payout is made.'),
+  "periodDeliveries": zod.number().describe('Total eligible deliveries completed during this daily or weekly period.'),
   "periodStart": zod.coerce.date(),
   "periodEnd": zod.coerce.date()
 }))

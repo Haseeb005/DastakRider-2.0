@@ -7,6 +7,7 @@
  */
 import type { RiderChallengeKind } from './riderChallengeKind';
 import type { RiderChallengeMilestone } from './riderChallengeMilestone';
+import type { RiderChallengePayoutStatus } from './riderChallengePayoutStatus';
 import type { RiderChallengeStatus } from './riderChallengeStatus';
 
 export interface RiderChallenge {
@@ -19,6 +20,12 @@ export interface RiderChallenge {
   reward: number;
   milestones: RiderChallengeMilestone[];
   status: RiderChallengeStatus;
+  /** Whether the challenge bonus is still being worked toward, awaiting period-end settlement, paid, or not earned. */
+  payoutStatus: RiderChallengePayoutStatus;
+  /** Actual challenge bonus credited to the rider wallet. Zero until a payout is made. */
+  bonusAmount: number;
+  /** Total eligible deliveries completed during this daily or weekly period. */
+  periodDeliveries: number;
   periodStart: Date;
   periodEnd: Date;
 }

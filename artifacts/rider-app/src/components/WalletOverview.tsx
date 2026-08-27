@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 export type ChallengeStatus = 'active' | 'completed' | 'expired';
+export type ChallengePayoutStatus = 'in_progress' | 'pending' | 'paid' | 'not_earned';
 
 export interface Challenge {
   id?: string;
@@ -29,6 +30,9 @@ export interface Challenge {
     earned: boolean;
   }>;
   status: ChallengeStatus;
+  payoutStatus: ChallengePayoutStatus;
+  bonusAmount: number;
+  periodDeliveries: number;
   periodStart: string | Date;
   periodEnd: string | Date;
 }
@@ -138,22 +142,30 @@ const WalletError = ({ error, onRetry }: { error: any, onRetry?: () => void }) =
 );
 
 const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge, title: string, icon: any }) => {
-  const isCompleted = challenge.status === 'completed';
   const isExpired = challenge.status === 'expired';
-  const targetReachedAwaitingSettlement =
-    !isCompleted && !isExpired && challenge.progress >= challenge.target;
+  const isPaid = challenge.payoutStatus === 'paid';
+  const isPending = challenge.payoutStatus === 'pending';
+  const periodInProgress = new Date(challenge.periodEnd).getTime() > Date.now();
   const milestones = challenge.milestones?.length
     ? challenge.milestones
     : [{
         target: challenge.target,
         reward: challenge.reward,
-        earned: challenge.status === 'completed',
+        earned: challenge.progress >= challenge.target,
       }];
-  const nextMilestone = milestones.find((milestone) => !milestone.earned);
+  const currentMilestone = milestones.find((milestone) => challenge.progress < milestone.target);
+  const availableReward = Math.max(...milestones.map((milestone) => milestone.reward), challenge.reward);
+  const payoutLabel = isPaid
+    ? `Bonus paid: Rs. ${challenge.bonusAmount.toLocaleString()}`
+    : isPending
+      ? 'Bonus pending'
+      : challenge.payoutStatus === 'not_earned'
+        ? 'No bonus earned'
+        : 'In progress';
 
   return (
     <div className="bg-card text-card-foreground rounded-2xl p-5 border shadow-sm flex flex-col gap-4 relative overflow-hidden transition-all hover:shadow-md">
-      {isCompleted && (
+      {isPaid && (
         <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/10 rounded-bl-full flex items-start justify-end p-4">
           <CheckCircle2 className="w-6 h-6 text-green-600" />
         </div>
@@ -161,7 +173,7 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
       
       <div className="flex justify-between items-start">
         <div className="flex items-center gap-3">
-          <div className={`p-2.5 rounded-xl ${isCompleted ? 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' : 'bg-primary/10 text-primary'}`}>
+          <div className={`p-2.5 rounded-xl ${isPaid ? 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' : 'bg-primary/10 text-primary'}`}>
              <Icon className="w-5 h-5" />
           </div>
           <div>
@@ -172,6 +184,9 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
                   {challenge.tier}
                 </span>
               )}
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">
+                {periodInProgress ? 'In progress' : isPaid ? 'Paid' : isPending ? 'Bonus pending' : 'Ended'}
+              </span>
             </div>
              <h3 className="font-semibold text-base leading-tight">{challenge.target}-delivery challenge</h3>
           </div>
@@ -180,58 +195,62 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
       
        <div className="rounded-xl bg-primary/5 border border-primary/10 px-3.5 py-3">
          <div className="flex items-center justify-between gap-3 text-sm">
-           <span className="font-semibold text-foreground">
-              {challenge.progress} / {challenge.target} deliveries
-           </span>
-            {targetReachedAwaitingSettlement ? (
-              <span className="text-primary font-medium text-right">
-                Target reached
+            <div>
+              <span className="block font-semibold text-foreground">
+                Current stage: {challenge.progress} / {currentMilestone?.target ?? challenge.target}
               </span>
-            ) : nextMilestone ? (
+              <span className="text-xs text-muted-foreground">
+                {challenge.periodDeliveries} eligible deliveries this period
+              </span>
+            </div>
+             {currentMilestone ? (
              <span className="text-primary font-medium text-right">
-                {Math.max(nextMilestone.target - challenge.progress, 0)} rides to go
+                {Math.max(currentMilestone.target - challenge.progress, 0)} rides to go
              </span>
            ) : (
-              <span className="text-green-600 dark:text-green-400 font-medium">Challenge completed</span>
+               <span className={isPending ? 'text-primary font-medium text-right' : 'text-green-600 dark:text-green-400 font-medium'}>
+                 {isPending ? 'Bonus pending' : isPaid ? 'Bonus paid' : 'Target reached'}
+               </span>
            )}
         </div>
       </div>
 
        <div className="space-y-2">
          {milestones.map((milestone, index) => {
-           const isNext = milestone === nextMilestone;
+            const stageReached = challenge.progress >= milestone.target;
+            const isCurrent = milestone === currentMilestone;
 
            return (
              <div
                key={`${milestone.target}-${milestone.reward}-${index}`}
                className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-3 ${
-                 milestone.earned
+                  stageReached
                    ? 'border-green-500/20 bg-green-500/5'
-                   : isNext
+                    : isCurrent
                      ? 'border-primary/25 bg-primary/5'
                      : 'border-border bg-muted/30'
                }`}
              >
                <div className="flex items-center gap-2.5 min-w-0">
                  <div className={`shrink-0 p-1.5 rounded-full ${
-                   milestone.earned
+                    stageReached
                      ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-                     : isNext
+                      : isCurrent
                        ? 'bg-primary/10 text-primary'
                        : 'bg-muted text-muted-foreground'
                  }`}>
-                   {milestone.earned ? <CheckCircle2 className="w-4 h-4" /> : <Target className="w-4 h-4" />}
+                    {stageReached ? <CheckCircle2 className="w-4 h-4" /> : <Target className="w-4 h-4" />}
                  </div>
                  <div>
                    <p className="text-sm font-semibold text-foreground">{milestone.target} deliveries</p>
                    <p className={`text-[11px] font-medium ${
-                     milestone.earned ? 'text-green-600 dark:text-green-400' : isNext ? 'text-primary' : 'text-muted-foreground'
+                      stageReached ? 'text-green-600 dark:text-green-400' : isCurrent ? 'text-primary' : 'text-muted-foreground'
                    }`}>
-                      {milestone.earned
-                        ? 'Highest reward paid'
-                        : targetReachedAwaitingSettlement && isNext
-                          ? 'Target reached'
-                          : isNext
+                       {stageReached
+                          ? periodInProgress
+                            ? 'Stage reached · in progress'
+                            : isPending ? 'Reached — bonus pending' : 'Stage reached'
+                         : isCurrent
                             ? 'Current challenge'
                             : 'Upcoming'}
                    </p>
@@ -246,32 +265,33 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
       <div className="flex items-center justify-between text-xs text-muted-foreground pt-3 border-t mt-2">
         <div className="flex items-center gap-1.5">
           <Clock className="w-3.5 h-3.5" />
-          <span>{isExpired ? 'Ended' : 'Ends'} {formatDate(challenge.periodEnd)}</span>
+           <span>
+             {isExpired ? 'Ended' : 'Ends'}{' '}
+             {formatDate(new Date(new Date(challenge.periodEnd).getTime() - 1))}
+           </span>
         </div>
-          {isCompleted ? (
-            <span className="text-green-600 dark:text-green-400 font-medium">Highest reward paid</span>
-          ) : !isExpired ? (
+          {isPaid ? (
+             <span className="text-green-600 dark:text-green-400 font-medium">{payoutLabel}</span>
+           ) : !isExpired ? (
             <span className="text-primary font-medium text-right">
-              Highest reward pays after {challenge.kind === 'daily' ? 'day' : 'week'} end
+               Reward available: Rs. {availableReward.toLocaleString()} · highest only pays at period end
             </span>
-          ) : null}
+           ) : (
+             <span className="font-medium text-right">{payoutLabel}</span>
+           )}
       </div>
     </div>
   );
 };
 
 const RecentChallengeCard = ({ challenge }: { challenge: Challenge }) => {
-  const isCompleted = challenge.status === 'completed';
-  const earnedReward = challenge.milestones?.length
-    ? challenge.milestones
-        .filter((milestone) => milestone.earned)
-        .reduce((total, milestone) => total + milestone.reward, 0)
-    : challenge.reward;
+  const isPaid = challenge.payoutStatus === 'paid';
+  const isNotEarned = challenge.payoutStatus === 'not_earned';
   const progressPercent = challenge.target > 0
     ? Math.min(100, Math.max(0, (challenge.progress / challenge.target) * 100))
     : 0;
-  const statusLabel = isCompleted ? 'Completed' : 'Expired';
-  const statusClass = isCompleted
+  const statusLabel = isPaid ? 'Paid' : isNotEarned ? 'No bonus' : challenge.payoutStatus === 'pending' ? 'Pending' : 'In progress';
+  const statusClass = isPaid
     ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'
     : 'bg-muted text-muted-foreground';
 
@@ -279,8 +299,8 @@ const RecentChallengeCard = ({ challenge }: { challenge: Challenge }) => {
     <div className="bg-card text-card-foreground rounded-2xl p-4 border shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0">
-          <div className={`p-2.5 rounded-xl shrink-0 ${isCompleted ? 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}>
-            {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+           <div className={`p-2.5 rounded-xl shrink-0 ${isPaid ? 'bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}>
+             {isPaid ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -292,16 +312,16 @@ const RecentChallengeCard = ({ challenge }: { challenge: Challenge }) => {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {formatChallengePeriod(challenge)} · {challenge.tier}
+               {formatChallengePeriod(challenge)} · {challenge.tier} · Target: {challenge.target}
             </p>
           </div>
         </div>
         <div className="text-right shrink-0">
-          <p className={`font-bold text-sm ${isCompleted ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
-            {isCompleted ? `+Rs. ${earnedReward.toLocaleString()}` : `Rs. ${challenge.reward.toLocaleString()}`}
+           <p className={`font-bold text-sm ${isPaid ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+             {isPaid ? `+Rs. ${challenge.bonusAmount.toLocaleString()}` : isNotEarned ? 'No bonus earned' : 'Bonus pending'}
           </p>
           <p className="text-[10px] text-muted-foreground mt-0.5">
-            {isCompleted ? 'Reward earned' : 'Reward not earned'}
+             {isPaid ? 'Bonus paid' : isNotEarned ? 'Period result' : 'Awaiting settlement'}
           </p>
         </div>
       </div>
@@ -309,13 +329,13 @@ const RecentChallengeCard = ({ challenge }: { challenge: Challenge }) => {
       <div className="mt-4 space-y-2">
         <div className="flex items-center justify-between text-xs">
           <span className="font-semibold text-foreground">
-            {challenge.progress} / {challenge.target} deliveries
+             {challenge.periodDeliveries} eligible deliveries
           </span>
           <span className="text-muted-foreground">{Math.round(progressPercent)}%</span>
         </div>
         <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full ${isCompleted ? 'bg-green-500' : 'bg-muted-foreground'}`}
+             className={`h-full rounded-full ${isPaid ? 'bg-green-500' : 'bg-muted-foreground'}`}
             style={{ width: `${progressPercent}%` }}
           />
         </div>

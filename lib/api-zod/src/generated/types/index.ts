@@ -22,6 +22,7 @@ export * from './rider';
 export * from './riderChallenge';
 export * from './riderChallengeKind';
 export * from './riderChallengeMilestone';
+export * from './riderChallengePayoutStatus';
 export * from './riderChallengeStatus';
 export * from './riderLocation';
 export * from './riderLocationInput';

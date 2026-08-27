@@ -60,21 +60,33 @@ function getChallengeMilestones(challenge: RiderChallenge): RiderChallengeMilest
 function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
   const c = useColors();
   const milestones = getChallengeMilestones(challenge);
-  const allMilestonesEarned = milestones.every((milestone) => milestone.earned);
-  const completed = challenge.status === "completed" || allMilestonesEarned;
+  const payoutPaid = challenge.payoutStatus === "paid";
+  const payoutPending = challenge.payoutStatus === "pending";
+  const notEarned = challenge.payoutStatus === "not_earned";
   const expired = challenge.status === "expired";
-  const targetReachedAwaitingSettlement =
-    !completed && !expired && challenge.progress >= challenge.target;
-  const progress = challenge.target > 0
-    ? Math.min(100, Math.round((challenge.progress / challenge.target) * 100))
-    : 0;
+  const periodInProgress = new Date(challenge.periodEnd).getTime() > Date.now();
   const nextMilestone = milestones.find((milestone) => !milestone.earned);
-  const remaining = nextMilestone ? Math.max(nextMilestone.target - challenge.progress, 0) : 0;
-  const tone = completed ? c.successForeground : expired ? c.mutedForeground : c.primary;
+  const currentMilestone = nextMilestone ?? milestones[milestones.length - 1];
+  const stageTarget = currentMilestone?.target ?? challenge.target;
+  const progress = stageTarget > 0
+    ? Math.min(100, Math.round((challenge.progress / stageTarget) * 100))
+    : 0;
+  const remaining = currentMilestone ? Math.max(currentMilestone.target - challenge.progress, 0) : 0;
+  const tone = payoutPaid ? c.successForeground : expired || notEarned ? c.mutedForeground : c.primary;
   const label = challenge.kind === "daily" ? "Today's challenge" : "Weekly challenge";
+  const periodLabel = challenge.kind === "daily" ? "day" : "week";
   const endLabel = challenge.kind === "daily"
     ? "Ends today"
     : `Ends ${formatDate(new Date(new Date(challenge.periodEnd).getTime() - 1).toISOString(), { weekday: "short", day: "numeric", month: "short" })}`;
+  const statusLabel = payoutPaid
+    ? "Paid"
+    : periodInProgress
+      ? "In progress"
+    : payoutPending
+      ? "Bonus pending"
+      : notEarned
+        ? "No bonus"
+        : "In progress";
 
   return (
     <View
@@ -83,7 +95,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
         borderRadius: 20,
         padding: 16,
         borderWidth: 1,
-        borderColor: completed ? c.successBg : c.border,
+        borderColor: payoutPaid ? c.successBg : c.border,
         gap: 14,
       }}
     >
@@ -96,7 +108,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
               borderRadius: 14,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: completed ? c.successBg : c.accent,
+              backgroundColor: payoutPaid ? c.successBg : c.accent,
             }}
           >
             <Icon name={challenge.kind === "daily" ? "zap" : "target"} size={20} color={tone} />
@@ -112,14 +124,14 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
         </View>
         <View
           style={{
-            backgroundColor: completed ? c.successBg : expired ? c.muted : c.accent,
+              backgroundColor: payoutPaid ? c.successBg : expired || notEarned ? c.muted : c.accent,
             paddingHorizontal: 9,
             paddingVertical: 5,
             borderRadius: 999,
           }}
         >
           <Text style={{ color: tone, fontFamily: "Inter_700Bold", fontSize: 11 }}>
-            {completed ? "Completed" : expired ? "Expired" : "In progress"}
+            {statusLabel}
           </Text>
         </View>
       </View>
@@ -127,7 +139,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
       <View>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 7 }}>
           <Text style={{ fontFamily: "Inter_700Bold", fontSize: 13, color: c.foreground }}>
-            {challenge.progress} / {challenge.target} deliveries
+            Stage: {challenge.progress} / {stageTarget} deliveries
           </Text>
           <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: tone }}>{progress}%</Text>
         </View>
@@ -138,23 +150,35 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
 
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12, flex: 1 }}>{endLabel}</Text>
-        {targetReachedAwaitingSettlement ? (
+        {periodInProgress ? (
           <Text style={{ color: c.primary, fontFamily: "Inter_700Bold", fontSize: 12 }}>
-            Target reached
+            In progress
           </Text>
-        ) : nextMilestone ? (
+        ) : payoutPending ? (
+          <Text style={{ color: c.primary, fontFamily: "Inter_700Bold", fontSize: 12 }}>
+            Bonus pending
+          </Text>
+        ) : currentMilestone && !notEarned ? (
           <Text style={{ color: expired ? c.mutedForeground : c.primary, fontFamily: "Inter_700Bold", fontSize: 12 }}>
             {remaining} rides to go
           </Text>
         ) : (
-          <Text style={{ color: c.successForeground, fontFamily: "Inter_700Bold", fontSize: 12 }}>Challenge completed</Text>
+          <Text style={{ color: tone, fontFamily: "Inter_700Bold", fontSize: 12 }}>
+            {payoutPaid ? `+${rupees(challenge.bonusAmount)} paid` : "No bonus earned"}
+          </Text>
         )}
       </View>
 
       <View style={{ gap: 8 }}>
-        <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 13 }}>Highest challenge reward</Text>
+        <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 13 }}>
+          Up to {rupees(challenge.reward)} extra bonus available
+        </Text>
+        <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 11, lineHeight: 16 }}>
+          {challenge.periodDeliveries} eligible deliveries this {periodLabel} · only your highest reached tier is paid at period end.
+        </Text>
         {milestones.map((milestone, index) => {
           const earned = milestone.earned;
+          const milestonePaid = payoutPaid && milestone.reward === challenge.bonusAmount;
           return (
             <View
               key={`${milestone.target}-${milestone.reward}-${index}`}
@@ -164,27 +188,27 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
                 gap: 10,
                 padding: 11,
                 borderRadius: 12,
-                backgroundColor: earned ? c.successBg : c.muted,
+                backgroundColor: milestonePaid ? c.successBg : c.muted,
               }}
             >
-              <Icon name={earned ? "check-circle" : "target"} size={18} color={earned ? c.successForeground : c.mutedForeground} />
+              <Icon name={milestonePaid ? "check-circle" : "target"} size={18} color={milestonePaid ? c.successForeground : c.mutedForeground} />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
                   {milestone.target} deliveries
                 </Text>
                 <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 2 }}>
-                  {earned
-                    ? "Highest reward paid"
-                    : targetReachedAwaitingSettlement
-                      ? "Target reached"
-                      : "Current challenge"}
+                  {milestonePaid
+                    ? "Paid"
+                    : earned
+                      ? periodInProgress ? "Target reached · in progress" : payoutPending ? "Target reached · bonus pending" : "Target reached"
+                      : milestone === currentMilestone ? "Current stage" : "Next tier"}
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={{ color: earned ? c.successForeground : c.foreground, fontFamily: "Inter_700Bold", fontSize: 13 }}>
                   +{rupees(milestone.reward)}
                 </Text>
-                {!earned && milestone === nextMilestone ? (
+                  {!earned && milestone === currentMilestone && !notEarned ? (
                   <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 10, marginTop: 2 }}>
                     {remaining} to go
                   </Text>
@@ -195,9 +219,9 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
         })}
       </View>
 
-      {!completed && !expired ? (
+      {!payoutPaid && !notEarned ? (
         <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 11, lineHeight: 16 }}>
-          Only your highest completed challenge is paid after the {challenge.kind === "daily" ? "day" : "week"} ends.
+          Keep delivering to reach the next tier. Your highest reached tier is settled after the {periodLabel} ends.
         </Text>
       ) : null}
     </View>
@@ -206,15 +230,14 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
 
 function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
   const c = useColors();
-  const completed = challenge.status === "completed";
-  const earnedReward = getChallengeMilestones(challenge)
-    .filter((milestone) => milestone.earned)
-    .reduce((total, milestone) => total + milestone.reward, 0);
+  const payoutPaid = challenge.payoutStatus === "paid";
+  const payoutPending = challenge.payoutStatus === "pending";
+  const notEarned = challenge.payoutStatus === "not_earned";
   const progress = challenge.target > 0
     ? Math.min(100, Math.round((challenge.progress / challenge.target) * 100))
     : 0;
-  const tone = completed ? "#15803d" : c.mutedForeground;
-  const status = completed ? "Completed" : "Expired";
+  const tone = payoutPaid ? "#15803d" : c.mutedForeground;
+  const status = payoutPaid ? "Paid" : payoutPending ? "Bonus pending" : notEarned ? "No bonus" : "In progress";
 
   return (
     <View
@@ -236,31 +259,31 @@ function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
               borderRadius: 14,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: completed ? "#dcfce7" : c.muted,
+              backgroundColor: payoutPaid ? "#dcfce7" : c.muted,
             }}
           >
-            <Icon name={completed ? "check-circle" : "clock"} size={20} color={tone} />
+            <Icon name={payoutPaid ? "check-circle" : "clock"} size={20} color={tone} />
           </View>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 7 }}>
               <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 14 }}>
                 {challenge.kind === "daily" ? "Daily challenge" : "Weekly challenge"}
               </Text>
-              <View style={{ backgroundColor: completed ? "#dcfce7" : c.muted, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 }}>
+              <View style={{ backgroundColor: payoutPaid ? "#dcfce7" : c.muted, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 }}>
                 <Text style={{ color: tone, fontFamily: "Inter_700Bold", fontSize: 10 }}>{status}</Text>
               </View>
             </View>
             <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 4 }}>
-              {formatChallengePeriod(challenge)} · {challenge.tier}
+              {formatChallengePeriod(challenge)} · {challenge.tier} · {challenge.target}-delivery target
             </Text>
           </View>
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={{ color: tone, fontFamily: "Inter_700Bold", fontSize: 13 }}>
-            {completed ? `+${rupees(earnedReward)}` : rupees(challenge.reward)}
+            {payoutPaid ? `+${rupees(challenge.bonusAmount)}` : notEarned ? "No bonus earned" : "Settlement pending"}
           </Text>
           <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 2 }}>
-            {completed ? "Reward earned" : "Reward not earned"}
+            {payoutPaid ? "Bonus paid" : payoutPending ? "Highest tier settling" : notEarned ? "No bonus earned" : "In progress"}
           </Text>
         </View>
       </View>
@@ -268,7 +291,7 @@ function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
       <View>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 7 }}>
           <Text style={{ fontFamily: "Inter_700Bold", fontSize: 13, color: c.foreground }}>
-            {challenge.progress} / {challenge.target} deliveries
+            {challenge.periodDeliveries} eligible deliveries
           </Text>
           <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: c.mutedForeground }}>{progress}%</Text>
         </View>

@@ -249,6 +249,8 @@ type ChallengeMilestone = {
   reward: number;
 };
 
+type ChallengePayoutStatus = "in_progress" | "pending" | "paid" | "not_earned";
+
 const CHALLENGE_MILESTONES: Record<ChallengeKind, ChallengeMilestone[]> = {
   daily: [
     { target: 10, reward: 200 },
@@ -430,7 +432,11 @@ function legacyChallengeTitle(challenge: any): string {
   return `${label} · ${challenge.tier || challengeTierLabel(challenge.kind)}`;
 }
 
-function walletChallengeResponse(challenge: any) {
+function walletChallengeResponse(
+  challenge: any,
+  payoutAmount = 0,
+  reference = new Date(),
+) {
   const milestones = milestonesForChallenge(challenge);
   const settledTargets = new Set(
     Array.isArray(challenge.earnedMilestoneTargets)
@@ -439,16 +445,27 @@ function walletChallengeResponse(challenge: any) {
   );
   const isLegacyCompleted = !hasMilestoneDefinition(challenge) && challenge.status === "completed";
   const finalMilestone = milestones.at(-1) ?? { target: 0, reward: 0 };
-  const hasSettledSequentialReward =
-    isSequentialChallenge(challenge) && settledTargets.size > 0;
-  const responseStatus =
-    isSequentialChallenge(challenge) &&
-    challenge.status === "completed" &&
-    !hasSettledSequentialReward
-      ? new Date(challenge.periodEnd) <= new Date()
-        ? "expired"
-        : "active"
-      : challenge.status;
+  const periodEnded = new Date(challenge.periodEnd) <= reference;
+  const targetReached =
+    challenge.status === "completed" ||
+    Number(challenge.progress) >= finalMilestone.target;
+  const normalizedPayoutAmount = Math.max(0, Number(payoutAmount) || 0);
+  const payoutStatus: ChallengePayoutStatus =
+    normalizedPayoutAmount > 0
+      ? "paid"
+      : !periodEnded
+        ? targetReached
+          ? "pending"
+          : "in_progress"
+        : "not_earned";
+  const periodDeliveries = Math.max(
+    0,
+    Number.isFinite(Number(challenge.periodDeliveries))
+      ? Number(challenge.periodDeliveries)
+      : isSequentialChallenge(challenge)
+        ? (Number(challenge.deliveryBaseline) || 0) + (Number(challenge.progress) || 0)
+        : Number(challenge.progress) || 0,
+  );
 
   return {
     id: String(challenge._id),
@@ -460,22 +477,58 @@ function walletChallengeResponse(challenge: any) {
     milestones: milestones.map((milestone) => ({
       target: milestone.target,
       reward: milestone.reward,
-      earned: isLegacyCompleted || settledTargets.has(milestone.target),
+      earned:
+        isLegacyCompleted ||
+        settledTargets.has(milestone.target) ||
+        (isSequentialChallenge(challenge) &&
+          challenge.status === "completed" &&
+          milestone.target === finalMilestone.target),
     })),
-    status: responseStatus,
+    status: challenge.status,
+    payoutStatus,
+    bonusAmount: payoutStatus === "paid" ? normalizedPayoutAmount : 0,
+    periodDeliveries,
     periodStart: new Date(challenge.periodStart).toISOString(),
     periodEnd: new Date(challenge.periodEnd).toISOString(),
   };
 }
 
+function legacyChallengePayoutKeys(challenge: any): string[] {
+  const kind = challenge.kind as ChallengeKind;
+  const riderId = String(challenge.riderId);
+  const periodKey = String(challenge.periodKey || "");
+  const basePeriodKey = String(challenge.basePeriodKey || periodKey);
+  return Array.from(
+    new Set(
+      [
+        challenge.payoutKey ? String(challenge.payoutKey) : "",
+        `${riderId}:${kind}:${periodKey}`,
+        `${riderId}:${kind}:${basePeriodKey}`,
+        `${riderId}:${kind}:${basePeriodKey}:highest`,
+        ...milestonesForChallenge(challenge).flatMap((milestone) => [
+          `${riderId}:${kind}:${periodKey}:milestone:${milestone.target}`,
+          `${riderId}:${kind}:${basePeriodKey}:milestone:${milestone.target}`,
+        ]),
+      ].filter(Boolean),
+    ),
+  );
+}
+
 async function countChallengeDeliveries(challenge: any): Promise<number> {
+  const periodRange = {
+    $gte: new Date(challenge.periodStart),
+    $lt: new Date(challenge.periodEnd),
+  };
   return ordersCol().countDocuments({
     riderId: challenge.riderId,
     status: DELIVERED_STATUS,
-    createdAt: {
-      $gte: new Date(challenge.periodStart),
-      $lt: new Date(challenge.periodEnd),
-    },
+    $or: [
+      { riderDeliveredAt: periodRange },
+      {
+        riderDeliveredAt: null,
+        createdAt: periodRange,
+      },
+    ],
   });
 }
 
@@ -792,23 +845,43 @@ async function settleSequentialChallengePeriod(
   if (!rootChallenge) return;
 
   const lockToken = new ObjectId().toHexString();
-  const lockUntil = new Date(Date.now() + 15_000);
-  const lock = await challenges.updateOne(
-    {
-      _id: rootChallenge._id,
-      $or: [
-        { "periodSettlementLock.until": { $exists: false } },
-        { "periodSettlementLock.until": { $lte: new Date() } },
-      ],
-    },
-    {
-      $set: {
-        periodSettlementLock: { token: lockToken, until: lockUntil },
+  let lockAcquired = false;
+  while (!lockAcquired) {
+    const lock = await challenges.updateOne(
+      {
+        _id: rootChallenge._id,
+        $or: [
+          { "periodSettlementLock.until": { $exists: false } },
+          { "periodSettlementLock.until": { $lte: new Date() } },
+        ],
       },
-    },
-  );
-  if (lock.modifiedCount !== 1) return;
+      {
+        $set: {
+          periodSettlementLock: {
+            token: lockToken,
+            until: new Date(Date.now() + 15_000),
+          },
+        },
+      },
+    );
+    if (lock.modifiedCount === 1) {
+      lockAcquired = true;
+      break;
+    }
 
+    const lockHolder = await challenges.findOne(
+      { _id: rootChallenge._id },
+      { projection: { periodSettlementLock: 1 } },
+    );
+    if (!lockHolder) return;
+    if (!lockHolder.periodSettlementLock?.until) {
+      // The holder removes the lease only after payout/history writes finish.
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  let settlementFinished = false;
   try {
     const latestBeforeSettlement = periodChallenges.at(-1) ?? rootChallenge;
     await advanceSequentialChallenge(latestBeforeSettlement, now);
@@ -862,11 +935,13 @@ async function settleSequentialChallengePeriod(
           $set: {
             status: "expired",
             progress: Math.max(0, deliveredCount),
+            periodDeliveries: Math.max(0, deliveredCount),
             settlementSkipped: false,
             updatedAt: now,
           },
         },
       );
+      settlementFinished = true;
       return;
     }
 
@@ -959,6 +1034,7 @@ async function settleSequentialChallengePeriod(
           reward: milestone.reward,
           milestones: [{ ...milestone }],
           progress: milestone.target,
+          periodDeliveries: Math.max(0, deliveredCount),
           status: "completed",
           completedAt: now,
           payoutKey: settlementKey,
@@ -970,15 +1046,74 @@ async function settleSequentialChallengePeriod(
         },
       },
     );
+    settlementFinished = true;
   } finally {
-    await challenges.updateOne(
-      {
-        _id: rootChallenge._id,
-        "periodSettlementLock.token": lockToken,
-      },
-      { $unset: { periodSettlementLock: "" } },
-    );
+    if (settlementFinished) {
+      await challenges.updateOne(
+        {
+          _id: rootChallenge._id,
+          "periodSettlementLock.token": lockToken,
+        },
+        { $unset: { periodSettlementLock: "" } },
+      );
+    }
   }
+}
+
+async function expireSequentialChallengePeriod(
+  challenge: any,
+  now: Date,
+): Promise<void> {
+  const challenges = riderChallengesCol();
+  const basePeriodKey = String(challenge.basePeriodKey || challenge.periodKey);
+  const periodFilter = {
+    riderId: challenge.riderId,
+    kind: challenge.kind,
+    $or: [
+      { basePeriodKey },
+      { periodKey: basePeriodKey },
+    ],
+  };
+  const periodChallenges = await challenges
+    .find(periodFilter)
+    .sort({ sequence: 1, createdAt: 1 })
+    .toArray();
+  if (!periodChallenges.length) return;
+
+  const completedRepresentative = [...periodChallenges]
+    .reverse()
+    .find((candidate) => candidate.status === "completed");
+  const representative = completedRepresentative ?? periodChallenges.at(-1)!;
+  const periodDeliveries = await countChallengeDeliveries(representative);
+
+  await challenges.updateMany(periodFilter, {
+    $set: {
+      settlementSkipped: true,
+      periodSettlementAt: now,
+      updatedAt: now,
+    },
+  });
+  await challenges.updateMany(
+    { ...periodFilter, status: "active" },
+    {
+      $set: {
+        status: "expired",
+        expiredAt: now,
+        updatedAt: now,
+      },
+    },
+  );
+  await challenges.updateOne(
+    { _id: representative._id },
+    {
+      $set: {
+        status: representative.status === "completed" ? "completed" : "expired",
+        periodDeliveries,
+        settlementSkipped: false,
+        updatedAt: now,
+      },
+    },
+  );
 }
 
 async function ensureChallenge(
@@ -994,6 +1129,34 @@ async function ensureChallenge(
   // Sequential chains advance inside their original period so a delayed order
   // cannot cause an earned next-level reward to be lost at midnight.
   const graceCutoff = new Date(now.getTime() - CHALLENGE_SETTLEMENT_GRACE_MS);
+  const endedBeyondGraceSequential = await challenges
+    .find({
+      riderId,
+      kind,
+      challengeMode: SEQUENTIAL_CHALLENGE_MODE,
+      periodEnd: { $lte: now },
+      periodSettlementAt: { $exists: false },
+      $or: [
+        { settlementGraceUntil: { $lte: now } },
+        {
+          settlementGraceUntil: { $exists: false },
+          periodEnd: { $lte: graceCutoff },
+        },
+      ],
+    })
+    .toArray();
+  const expiredSequentialPeriods = new Map<string, any>();
+  for (const endedChallenge of endedBeyondGraceSequential) {
+    const basePeriodKey = String(
+      endedChallenge.basePeriodKey || endedChallenge.periodKey,
+    );
+    expiredSequentialPeriods.set(basePeriodKey, endedChallenge);
+  }
+  await Promise.all(
+    Array.from(expiredSequentialPeriods.values()).map((endedChallenge) =>
+      expireSequentialChallengePeriod(endedChallenge, now),
+    ),
+  );
   await challenges.updateMany(
     {
       riderId,
@@ -2190,11 +2353,64 @@ router.get("/rider/wallet", async (req: any, res: any) => {
         .sort({ createdAt: -1 })
         .toArray(),
       riderChallengesCol()
-        .find({ riderId, settlementSkipped: { $ne: true } })
+        .find({
+          riderId,
+          periodEnd: { $lte: now },
+          settlementSkipped: { $ne: true },
+        })
         .sort({ periodEnd: -1, updatedAt: -1, createdAt: -1 })
         .limit(10)
         .toArray(),
     ]);
+    const visibleChallengeDocs = [syncedDaily, syncedWeekly, ...recentChallengeDocs];
+    const challengeIds = Array.from(
+      new Set(visibleChallengeDocs.map((challenge) => String(challenge._id))),
+    );
+    const visibleChallengeIdSet = new Set(challengeIds);
+    const fallbackPayoutOwnerByKey = new Map<string, string>();
+    for (const challenge of recentChallengeDocs) {
+      for (const payoutKey of legacyChallengePayoutKeys(challenge)) {
+        if (!fallbackPayoutOwnerByKey.has(payoutKey)) {
+          fallbackPayoutOwnerByKey.set(payoutKey, String(challenge._id));
+        }
+      }
+    }
+    const fallbackPayoutKeys = Array.from(fallbackPayoutOwnerByKey.keys());
+    const challengePayoutEntries = challengeIds.length
+      ? await riderWalletEntriesCol()
+          .find({
+            riderId,
+            type: "challenge_bonus",
+            $or: [
+              { challengeId: { $in: challengeIds } },
+              ...(fallbackPayoutKeys.length
+                ? [{ challengeKey: { $in: fallbackPayoutKeys } }]
+                : []),
+            ],
+          })
+          .toArray()
+      : [];
+    const payoutByChallengeId = challengePayoutEntries.reduce(
+      (totals: Map<string, number>, entry: any) => {
+        const entryChallengeId = String(entry.challengeId || "");
+        const challengeId = visibleChallengeIdSet.has(entryChallengeId)
+          ? entryChallengeId
+          : fallbackPayoutOwnerByKey.get(String(entry.challengeKey || "")) || "";
+        if (!challengeId) return totals;
+        totals.set(
+          challengeId,
+          (totals.get(challengeId) || 0) + (Number(entry.amount) || 0),
+        );
+        return totals;
+      },
+      new Map<string, number>(),
+    );
+    const challengeResponse = (challenge: any) =>
+      walletChallengeResponse(
+        challenge,
+        payoutByChallengeId.get(String(challenge._id)) || 0,
+        now,
+      );
 
     const deliveryEarnings = Math.round(
       orders.reduce(
@@ -2241,9 +2457,9 @@ router.get("/rider/wallet", async (req: any, res: any) => {
       totalEarnings: deliveryEarnings + challengeBonuses + fastDeliveryBonuses,
       deliveries: orders.length,
       transactions,
-      todayChallenge: walletChallengeResponse(syncedDaily),
-      weeklyChallenge: walletChallengeResponse(syncedWeekly),
-      recentChallenges: recentChallengeDocs.map(walletChallengeResponse),
+      todayChallenge: challengeResponse(syncedDaily),
+      weeklyChallenge: challengeResponse(syncedWeekly),
+      recentChallenges: recentChallengeDocs.map(challengeResponse),
     });
   } catch (e: any) {
     req.log.error(e, "Could not load rider wallet");
