@@ -88,6 +88,21 @@ export const GetRiderMeResponse = zod.object({
 
 
 /**
+ * @summary Get customer reviews for the current rider
+ */
+export const GetRiderReviewsResponse = zod.object({
+  "reviews": zod.array(zod.object({
+  "id": zod.string(),
+  "rating": zod.number(),
+  "comment": zod.string().nullable(),
+  "createdAt": zod.coerce.date().nullable()
+})),
+  "rating": zod.number().describe('Average rating across the returned reviews.'),
+  "ratingCount": zod.number().describe('Number of returned reviews included in the average.')
+})
+
+
+/**
  * @summary Toggle rider online/offline status
  */
 export const UpdateRiderAvailabilityBody = zod.object({

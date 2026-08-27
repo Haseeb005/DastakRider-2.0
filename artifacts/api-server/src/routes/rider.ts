@@ -1626,6 +1626,64 @@ router.get("/rider/me", async (req: any, res: any) => {
   }
 });
 
+// Customer reviews — only reviews belonging to the authenticated rider.
+// The response summary is calculated from the same bounded list shown to the
+// rider so its rating and count always match the displayed review source.
+router.get("/rider/reviews", async (req: any, res: any) => {
+  try {
+    const riderId = requireRiderId(req, res);
+    if (!riderId) return;
+    const rider = await findRiderById(riderId);
+    if (!rider || isDeleted(rider)) {
+      return res.status(401).json({ message: "Rider not found" });
+    }
+
+    const docs = await reviewsCol()
+      .find({ riderId, type: "delivery" } as any)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(100)
+      .toArray();
+
+    const reviews = docs.map((review: any) => {
+      const rawCreatedAt = review.createdAt;
+      const parsedCreatedAt =
+        rawCreatedAt instanceof Date
+          ? rawCreatedAt
+          : new Date(String(rawCreatedAt || ""));
+      const createdAt = Number.isNaN(parsedCreatedAt.getTime())
+        ? null
+        : parsedCreatedAt.toISOString();
+      const numericRating = Number(review.riderRating);
+      const comment =
+        typeof review.comment === "string" && review.comment.trim()
+          ? review.comment.trim()
+          : null;
+
+      return {
+        id: String(review._id),
+        rating: Number.isFinite(numericRating) ? numericRating : 0,
+        comment,
+        createdAt,
+      };
+    });
+
+    const ratingCount = reviews.length;
+    const rating =
+      ratingCount > 0
+        ? Math.round(
+            (reviews.reduce((sum: number, review: any) => sum + review.rating, 0) /
+              ratingCount) *
+              10,
+          ) / 10
+        : 0;
+
+    res.json({ reviews, rating, ratingCount });
+  } catch (e: any) {
+    req.log.error(e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
 // Toggle availability
 router.put("/rider/availability", async (req: any, res: any) => {
   try {

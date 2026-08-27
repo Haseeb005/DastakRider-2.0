@@ -176,6 +176,23 @@ export interface EarningsSummary {
   unpaidCollection?: number;
 }
 
+export interface RiderReview {
+  id: string;
+  rating: number;
+  /** @nullable */
+  comment: string | null;
+  /** @nullable */
+  createdAt: string | null;
+}
+
+export interface RiderReviewsResponse {
+  reviews: RiderReview[];
+  /** Average rating across the returned reviews. */
+  rating: number;
+  /** Number of returned reviews included in the average. */
+  ratingCount: number;
+}
+
 export interface RiderChallengeMilestone {
   target: number;
   reward: number;

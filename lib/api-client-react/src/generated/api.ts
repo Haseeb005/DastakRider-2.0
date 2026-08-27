@@ -34,6 +34,7 @@ import type {
   RiderLoginInput,
   RiderOrder,
   RiderRegisterInput,
+  RiderReviewsResponse,
   RiderWallet
 } from './api.schemas';
 
@@ -403,6 +404,83 @@ export function useGetRiderMe<TData = Awaited<ReturnType<typeof getRiderMe>>, TE
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetRiderMeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetRiderReviewsUrl = () => {
+
+
+
+
+  return `/api/rider/reviews`
+}
+
+/**
+ * @summary Get customer reviews for the current rider
+ */
+export const getRiderReviews = async ( options?: RequestInit): Promise<RiderReviewsResponse> => {
+
+  return customFetch<RiderReviewsResponse>(getGetRiderReviewsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRiderReviewsQueryKey = () => {
+    return [
+    `/api/rider/reviews`
+    ] as const;
+    }
+
+
+export const getGetRiderReviewsQueryOptions = <TData = Awaited<ReturnType<typeof getRiderReviews>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderReviews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRiderReviewsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRiderReviews>>> = ({ signal }) => getRiderReviews({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRiderReviews>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRiderReviewsQueryResult = NonNullable<Awaited<ReturnType<typeof getRiderReviews>>>
+export type GetRiderReviewsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get customer reviews for the current rider
+ */
+
+export function useGetRiderReviews<TData = Awaited<ReturnType<typeof getRiderReviews>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRiderReviews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRiderReviewsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

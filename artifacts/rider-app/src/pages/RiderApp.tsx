@@ -19,6 +19,8 @@ import {
   getGetRiderEarningsQueryKey,
   useGetRiderWallet,
   getGetRiderWalletQueryKey,
+  useGetRiderReviews,
+  getGetRiderReviewsQueryKey,
   usePushRiderLocation,
   type Rider,
   type RiderOrder,
@@ -1672,6 +1674,12 @@ function RiderProfile({ rider }: { rider: Rider }) {
 
   const toggleMutation = useUpdateRiderAvailability();
   const logoutMutation = useLogoutRider();
+  const reviewsQ = useGetRiderReviews({
+    query: {
+      queryKey: getGetRiderReviewsQueryKey(),
+      staleTime: 30_000,
+    },
+  });
 
   const handleToggle = (isOnline: boolean) => {
     toggleMutation.mutate(
@@ -1731,6 +1739,88 @@ function RiderProfile({ rider }: { rider: Rider }) {
             <p className="text-xs text-gray-500 mt-0.5">Rating</p>
           </div>
         </div>
+      </Card>
+
+      {/* Customer reviews */}
+      <Card className="border-0 shadow-md bg-white">
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-gray-900">Customer Reviews</h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {reviewsQ.data
+                  ? `${reviewsQ.data.rating.toFixed(1)} average from ${reviewsQ.data.ratingCount} ${
+                      reviewsQ.data.ratingCount === 1 ? "review" : "reviews"
+                    }`
+                  : "Feedback from your delivered orders"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => reviewsQ.refetch()}
+              disabled={reviewsQ.isFetching}
+              aria-label="Refresh customer reviews"
+              className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-brand-600 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${reviewsQ.isFetching ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+
+          {reviewsQ.isLoading ? (
+            <div className="mt-4 space-y-3" aria-label="Loading customer reviews">
+              {[1, 2].map((item) => (
+                <div key={item} className="h-20 animate-pulse rounded-xl bg-gray-100" />
+              ))}
+            </div>
+          ) : reviewsQ.isError ? (
+            <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p>We couldn’t load your customer reviews.</p>
+              <button
+                type="button"
+                onClick={() => reviewsQ.refetch()}
+                className="mt-2 font-semibold underline underline-offset-2"
+              >
+                Try again
+              </button>
+            </div>
+          ) : reviewsQ.data?.reviews.length ? (
+            <div className="mt-4 space-y-3">
+              {reviewsQ.data.reviews.map((review) => (
+                <div key={review.id} className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-0.5" aria-label={`${review.rating} out of 5 stars`}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`h-4 w-4 ${
+                            star <= Math.round(review.rating)
+                              ? "fill-amber-400 text-amber-400"
+                              : "text-gray-300"
+                          }`}
+                        />
+                      ))}
+                      <span className="ml-1 text-xs font-semibold text-gray-600">
+                        {review.rating.toFixed(1)}
+                      </span>
+                    </div>
+                    <span className="shrink-0 text-xs text-gray-400">
+                      {review.createdAt ? formatDateTime(review.createdAt) : "Date unavailable"}
+                    </span>
+                  </div>
+                  <p className={`mt-2 text-sm ${review.comment ? "text-gray-700" : "italic text-gray-400"}`}>
+                    {review.comment || "No written comment"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl bg-gray-50 px-4 py-5 text-center">
+              <Star className="mx-auto h-7 w-7 text-gray-300" />
+              <p className="mt-2 text-sm font-medium text-gray-700">No customer reviews yet</p>
+              <p className="mt-1 text-xs text-gray-500">Reviews will appear here after customers rate your deliveries.</p>
+            </div>
+          )}
+        </CardContent>
       </Card>
 
       {/* Online toggle */}

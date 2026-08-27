@@ -104,6 +104,21 @@ paths:
         "401":
           description: Not authenticated
 
+  /rider/reviews:
+    get:
+      operationId: getRiderReviews
+      tags: [auth]
+      summary: Get customer reviews for the current rider
+      responses:
+        "200":
+          description: Customer reviews and their aggregate rating
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiderReviewsResponse"
+        "401":
+          description: Not authenticated
+
   /rider/availability:
     put:
       operationId: updateRiderAvailability
@@ -600,6 +615,42 @@ components:
         - todayDeliveries
         - weekEarnings
         - weekDeliveries
+        - rating
+        - ratingCount
+
+    RiderReview:
+      type: object
+      properties:
+        id:
+          type: string
+        rating:
+          type: number
+        comment:
+          type: ["string", "null"]
+        createdAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - rating
+        - comment
+        - createdAt
+
+    RiderReviewsResponse:
+      type: object
+      properties:
+        reviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiderReview"
+        rating:
+          type: number
+          description: Average rating across the returned reviews.
+        ratingCount:
+          type: integer
+          description: Number of returned reviews included in the average.
+      required:
+        - reviews
         - rating
         - ratingCount
 

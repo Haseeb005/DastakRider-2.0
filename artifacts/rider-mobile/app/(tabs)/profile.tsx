@@ -2,6 +2,8 @@ import { Icon, type IconName } from "@/components/Icon";
 import {
   getGetRiderMeQueryKey,
   useGetRiderMe,
+  getGetRiderReviewsQueryKey,
+  useGetRiderReviews,
   useLogoutRider,
   useUpdateRiderAvailability,
 } from "@workspace/api-client-react";
@@ -12,6 +14,7 @@ import * as Sentry from "@sentry/react-native";
 import React, { useCallback } from "react";
 import {
   Alert,
+  ActivityIndicator,
   Platform,
   ScrollView,
   Switch,
@@ -130,6 +133,18 @@ function CollectionCard({
   );
 }
 
+function formatReviewDate(dateValue: string | null) {
+  if (!dateValue) return "Date unavailable";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+  return new Intl.DateTimeFormat("en-PK", {
+    timeZone: "Asia/Karachi",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
 export default function ProfileScreen() {
   const c = useColors();
   const qc = useQueryClient();
@@ -138,11 +153,21 @@ export default function ProfileScreen() {
   const meQ = useGetRiderMe({
     query: { queryKey: getGetRiderMeQueryKey(), enabled: !!token },
   });
+  const reviewsQ = useGetRiderReviews({
+    query: {
+      queryKey: getGetRiderReviewsQueryKey(),
+      enabled: !!token,
+      staleTime: 30_000,
+    },
+  });
 
   // Refetch every time the user navigates to this tab so cash/earnings are fresh.
   useFocusEffect(
     useCallback(() => {
-      if (token) qc.invalidateQueries({ queryKey: getGetRiderMeQueryKey() });
+      if (token) {
+        qc.invalidateQueries({ queryKey: getGetRiderMeQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetRiderReviewsQueryKey() });
+      }
     }, [token, qc]),
   );
   const rider = meQ.data;
@@ -265,6 +290,210 @@ export default function ProfileScreen() {
               {rider.totalDeliveries ?? 0} deliveries
             </Text>
           </View>
+        </View>
+
+        <View
+          style={{
+            backgroundColor: c.card,
+            borderRadius: c.radius,
+            borderWidth: 1,
+            borderColor: c.border,
+            padding: 16,
+            marginBottom: 16,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontFamily: "Inter_600SemiBold",
+                  fontSize: 16,
+                  color: c.foreground,
+                }}
+              >
+                Customer Reviews
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "Inter_400Regular",
+                  fontSize: 13,
+                  color: c.mutedForeground,
+                  marginTop: 3,
+                }}
+              >
+                {reviewsQ.data
+                  ? `${reviewsQ.data.rating.toFixed(1)} average from ${reviewsQ.data.ratingCount} ${
+                      reviewsQ.data.ratingCount === 1 ? "review" : "reviews"
+                    }`
+                  : "Feedback from your delivered orders"}
+              </Text>
+            </View>
+            <TouchableOpacity
+              accessibilityLabel="Refresh customer reviews"
+              accessibilityRole="button"
+              onPress={() => reviewsQ.refetch()}
+              disabled={reviewsQ.isFetching}
+              style={{ padding: 4, opacity: reviewsQ.isFetching ? 0.5 : 1 }}
+            >
+              <Icon
+                name="refresh-cw"
+                size={18}
+                color={c.mutedForeground}
+                style={reviewsQ.isFetching ? { transform: [{ rotate: "180deg" }] } : undefined}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {reviewsQ.isLoading ? (
+            <View
+              accessibilityLabel="Loading customer reviews"
+              style={{ alignItems: "center", paddingVertical: 28 }}
+            >
+              <ActivityIndicator color={c.primary} />
+            </View>
+          ) : reviewsQ.isError ? (
+            <View
+              style={{
+                backgroundColor: c.accent,
+                borderRadius: 10,
+                padding: 12,
+                marginTop: 14,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: "Inter_400Regular",
+                  fontSize: 13,
+                  lineHeight: 19,
+                  color: c.accentForeground,
+                }}
+              >
+                We couldn’t load your customer reviews.
+              </Text>
+              <TouchableOpacity
+                onPress={() => reviewsQ.refetch()}
+                style={{ marginTop: 7, alignSelf: "flex-start" }}
+              >
+                <Text
+                  style={{
+                    fontFamily: "Inter_600SemiBold",
+                    fontSize: 13,
+                    color: c.accentForeground,
+                  }}
+                >
+                  Try again
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : reviewsQ.data?.reviews.length ? (
+            <View style={{ marginTop: 14, gap: 10 }}>
+              {reviewsQ.data.reviews.map((review) => (
+                <View
+                  key={review.id}
+                  style={{
+                    backgroundColor: c.muted,
+                    borderRadius: 10,
+                    padding: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Icon
+                          key={star}
+                          name="star"
+                          size={15}
+                          color={star <= Math.round(review.rating) ? c.warning : c.border}
+                        />
+                      ))}
+                      <Text
+                        style={{
+                          fontFamily: "Inter_600SemiBold",
+                          fontSize: 12,
+                          color: c.mutedForeground,
+                          marginLeft: 4,
+                        }}
+                      >
+                        {review.rating.toFixed(1)}
+                      </Text>
+                    </View>
+                    <Text
+                      style={{
+                        flexShrink: 1,
+                        fontFamily: "Inter_400Regular",
+                        fontSize: 11,
+                        color: c.mutedForeground,
+                        textAlign: "right",
+                      }}
+                    >
+                      {formatReviewDate(review.createdAt)}
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      fontFamily: "Inter_400Regular",
+                      fontSize: 13,
+                      lineHeight: 19,
+                      color: review.comment ? c.foreground : c.mutedForeground,
+                      fontStyle: review.comment ? "normal" : "italic",
+                      marginTop: 8,
+                    }}
+                  >
+                    {review.comment || "No written comment"}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View
+              style={{
+                backgroundColor: c.muted,
+                borderRadius: 10,
+                alignItems: "center",
+                paddingHorizontal: 16,
+                paddingVertical: 22,
+                marginTop: 14,
+              }}
+            >
+              <Icon name="star" size={26} color={c.border} />
+              <Text
+                style={{
+                  fontFamily: "Inter_600SemiBold",
+                  fontSize: 14,
+                  color: c.foreground,
+                  marginTop: 8,
+                }}
+              >
+                No customer reviews yet
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "Inter_400Regular",
+                  fontSize: 12,
+                  lineHeight: 18,
+                  color: c.mutedForeground,
+                  textAlign: "center",
+                  marginTop: 4,
+                }}
+              >
+                Reviews will appear here after customers rate your deliveries.
+              </Text>
+            </View>
+          )}
         </View>
 
         <View

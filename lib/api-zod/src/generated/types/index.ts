@@ -28,6 +28,8 @@ export * from './riderLocationInput';
 export * from './riderLoginInput';
 export * from './riderOrder';
 export * from './riderRegisterInput';
+export * from './riderReview';
+export * from './riderReviewsResponse';
 export * from './riderWallet';
 export * from './walletTransaction';
 export * from './walletTransactionType';
