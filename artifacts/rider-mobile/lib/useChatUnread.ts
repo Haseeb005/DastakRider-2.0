@@ -24,11 +24,11 @@ import {
   getOpenChatOrderId,
   subscribe,
 } from "./chatBadgeStore";
+import { subscribeWS } from "./sharedWS";
 
 const CHAT_BASE = process.env.EXPO_PUBLIC_DOMAIN
   ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
   : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000");
-const WS_URL = "wss://dastakbites.com/ws/live";
 const POLL_MS = 15_000;
 
 type RawMessage = {
@@ -167,39 +167,26 @@ export function useChatUnread(orderId: string, customerName?: string): number {
 
     const pollId = setInterval(fetchAndUpdate, POLL_MS);
 
-    let ws: WebSocket;
-    let retryTimeout: ReturnType<typeof setTimeout>;
-
-    function connect() {
+    // Use the shared connection so unread badges, the active-tab watcher, and
+    // the chat screen all share the same deployment-aware reconnect loop.
+    const unsubscribe = subscribeWS((event) => {
       try {
-        ws = new WebSocket(WS_URL);
-        ws.onmessage = (event) => {
-          try {
-            const msg = JSON.parse(event.data as string);
-            if (msg.type === "change") {
-              if (
-                (msg.collection === "orders" && msg.id === orderId) ||
-                msg.collection === "chats"
-              ) {
-                fetchAndUpdate();
-              }
-            }
-          } catch {}
-        };
-        ws.onerror = () => {};
-        ws.onclose = () => {
-          if (mountedRef.current) retryTimeout = setTimeout(connect, 5_000);
-        };
+        const msg = JSON.parse(event.data as string);
+        if (msg.type === "change") {
+          if (
+            (msg.collection === "orders" && msg.id === orderId) ||
+            msg.collection === "chats"
+          ) {
+            fetchAndUpdate();
+          }
+        }
       } catch {}
-    }
-
-    connect();
+    });
 
     return () => {
       mountedRef.current = false;
       clearInterval(pollId);
-      clearTimeout(retryTimeout);
-      ws?.close();
+      unsubscribe();
     };
   }, [orderId, fetchAndUpdate]);
 

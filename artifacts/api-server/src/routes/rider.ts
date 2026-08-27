@@ -11,6 +11,7 @@ import {
   riderWalletEntriesCol,
 } from "../lib/mongo";
 import { getHeatmapSnapshot } from "../lib/heatmapService";
+import { signRiderToken, verifyRiderToken } from "../lib/riderToken";
 
 const router = Router();
 
@@ -21,45 +22,12 @@ const router = Router();
 // encodes the riderId. The token is verified on each request as a fallback
 // when no session riderId is present. No DB writes — purely stateless.
 // ---------------------------------------------------------------------------
-const TOKEN_SECRET: string =
-  process.env.SESSION_SECRET ??
-  (() => {
-    throw new Error(
-      "SESSION_SECRET is required to sign/verify rider bearer tokens",
-    );
-  })();
-
-function b64url(buf: Buffer): string {
-  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function signToken(riderId: string): string {
-  const payload = b64url(Buffer.from(riderId, "utf8"));
-  const sig = b64url(crypto.createHmac("sha256", TOKEN_SECRET).update(payload).digest());
-  return `${payload}.${sig}`;
-}
-
-function verifyToken(token: string): string | null {
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
-  const [payload, sig] = parts;
-  const expected = b64url(crypto.createHmac("sha256", TOKEN_SECRET).update(payload).digest());
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-  try {
-    return Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
-  } catch {
-    return null;
-  }
-}
-
 function bearerRiderId(req: any): string {
   const h = req.headers?.authorization || req.headers?.Authorization;
   if (typeof h !== "string" || !h.toLowerCase().startsWith("bearer ")) return "";
   const token = h.slice(7).trim();
   if (!token) return "";
-  return verifyToken(token) || "";
+  return verifyRiderToken(token) || "";
 }
 
 // Real order status flow in the Dastak database:
@@ -1732,7 +1700,7 @@ router.post("/rider/register", async (req: any, res: any) => {
     await saveSession(req);
     res.status(201).json({
       ...(await safeRider({ ...rider, _id: result.insertedId })),
-      token: signToken(String(result.insertedId)),
+      token: signRiderToken(String(result.insertedId)),
     });
   } catch (e: any) {
     req.log.error(e);
@@ -1752,7 +1720,7 @@ router.post("/rider/login", async (req: any, res: any) => {
       return res.status(401).json({ message: "Invalid phone number or password" });
     (req.session as any).riderId = String(rider._id);
     await saveSession(req);
-    res.json({ ...(await safeRider(rider)), token: signToken(String(rider._id)) });
+    res.json({ ...(await safeRider(rider)), token: signRiderToken(String(rider._id)) });
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
@@ -2806,6 +2774,30 @@ function mapChatMsg(m: any, index = 0) {
   };
 }
 
+async function requireAssignedChatOrder(
+  orderId: string,
+  riderId: string,
+  res: any,
+): Promise<boolean> {
+  let orderObjectId: ObjectId;
+  try {
+    orderObjectId = new ObjectId(orderId);
+  } catch {
+    res.status(400).json({ message: "Invalid orderId" });
+    return false;
+  }
+
+  const order = await ordersCol().findOne({
+    _id: orderObjectId,
+    riderId,
+  } as any);
+  if (!order) {
+    res.status(403).json({ message: "Not authorized" });
+    return false;
+  }
+  return true;
+}
+
 // GET /api/orders/:orderId/chat
 router.get("/orders/:orderId/chat", async (req, res) => {
   const riderId = requireRiderId(req, res);
@@ -2813,6 +2805,8 @@ router.get("/orders/:orderId/chat", async (req, res) => {
 
   const { orderId } = req.params;
   try {
+    if (!(await requireAssignedChatOrder(orderId, riderId, res))) return;
+
     const doc = await chatsCol().findOne({ orderId } as any);
     const msgs = Array.isArray(doc?.chat)
       ? doc.chat.map((m: any, index: number) => mapChatMsg(m, index))
@@ -2837,6 +2831,8 @@ router.post("/orders/:orderId/chat", async (req, res) => {
   }
 
   try {
+    if (!(await requireAssignedChatOrder(orderId, riderId, res))) return;
+
     // Find the rider's name for the message
     const rider = await findRiderById(riderId);
     const name = rider?.name ?? "Rider";
@@ -2882,19 +2878,7 @@ router.patch("/orders/:orderId/chat/read", async (req, res) => {
 
   const { orderId } = req.params;
   try {
-    // Verify the order is assigned to this rider before touching anything.
-    let orderObjectId: ObjectId;
-    try {
-      orderObjectId = new ObjectId(orderId);
-    } catch {
-      res.status(400).json({ message: "Invalid orderId" });
-      return;
-    }
-    const order = await ordersCol().findOne({ _id: orderObjectId, riderId } as any);
-    if (!order) {
-      res.status(403).json({ message: "Not authorized" });
-      return;
-    }
+    if (!(await requireAssignedChatOrder(orderId, riderId, res))) return;
 
     await chatsCol().updateOne(
       { orderId } as any,
@@ -2933,8 +2917,25 @@ router.post("/rider/player-id", async (req, res) => {
 // ---------------------------------------------------------------------------
 // Version check
 // ---------------------------------------------------------------------------
-const IOS_VERSIONS     = ["2.0", "3.0", "4.3.0", "4.6.0", "4.6.1", "4.6.2"];
-const ANDROID_VERSIONS = ["4.3.0", "4.5.0", "4.6.0", "4.6.1", "4.6.2"];
+const IOS_VERSIONS = [
+  "2.0",
+  "3.0",
+  "4.3.0",
+  "4.6.0",
+  "4.6.1",
+  "4.6.2",
+  "4.6.3",
+  "4.6.4",
+];
+const ANDROID_VERSIONS = [
+  "4.3.0",
+  "4.5.0",
+  "4.6.0",
+  "4.6.1",
+  "4.6.2",
+  "4.6.3",
+  "4.6.4",
+];
 
 router.post("/ridersCheckVersion", (req, res) => {
   try {

@@ -12,3 +12,4 @@
 - [Legacy chat notification dedupe](legacy-chat-notification-dedupe.md) — old customer messages can lack IDs; create deterministic fallback IDs and never pair a local alert with the same foreground push.
 - [Rider challenge settlement](rider-challenge-settlement.md) — sequential rewards need locked migration, bounded grace settlement, and legacy-compatible period/payout keys.
 - [Fast delivery wallet bonus](fast-delivery-wallet-bonus.md) — fast-delivery awards are idempotent, delivery-time based wallet entries and must never turn a committed delivery into an error.
+- [Rider live-update feed](rider-live-update-feed.md) — Replit live updates route through `/api/ws/live`; authenticate sockets and scope every event to the assigned rider.

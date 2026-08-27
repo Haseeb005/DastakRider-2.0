@@ -26,7 +26,7 @@ import { useAuth } from "@/lib/auth";
 const API_BASE =
   process.env.EXPO_PUBLIC_DOMAIN
     ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : (process.env.EXPO_PUBLIC_API_URL ?? "https://dastakbites.com");
+    : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000");
 
 const POLL_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes — matches server recalc
 const CELL_LAT = 0.0045;

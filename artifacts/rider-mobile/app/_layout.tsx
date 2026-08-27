@@ -9,6 +9,8 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  getGetActiveOrdersQueryKey,
+  getGetAvailableOrdersQueryKey,
   setAuthTokenGetter,
   setBaseUrl,
 } from "@workspace/api-client-react";
@@ -47,6 +49,7 @@ import {
   oneSignalLogout,
   setPlayerIdSaver,
 } from "@/lib/onesignal";
+import { subscribeWS } from "@/lib/sharedWS";
 import {
   ensureNotificationHandler,
   requestNotificationPermission,
@@ -110,6 +113,26 @@ function RootLayoutNav() {
   const { token, isReady } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  // Keep order screens current as soon as the authenticated live feed reports
+  // a change. Polling remains the fallback for missed events and brief drops.
+  useEffect(() => {
+    if (!token) return;
+    return subscribeWS((event) => {
+      try {
+        const message = JSON.parse(event.data as string);
+        if (message.type !== "change" || message.collection !== "orders") return;
+        void Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: getGetActiveOrdersQueryKey(),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: getGetAvailableOrdersQueryKey(),
+          }),
+        ]);
+      } catch {}
+    });
+  }, [token]);
 
   // Initialise OneSignal once — pass a stable navigation callback.
   // initOneSignal is idempotent so calling it in a useEffect is safe.
@@ -204,7 +227,7 @@ function RootLayoutNav() {
   );
 }
 
-const APP_VERSION = "4.6.2";
+const APP_VERSION = "4.6.4";
 const API_BASE = process.env.EXPO_PUBLIC_DOMAIN
   ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
   : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000");

@@ -32,6 +32,16 @@ export function chatsCol() {
   return db.collection("chats");
 }
 
+export function watchLiveChanges() {
+  return db.watch([
+    {
+      $match: {
+        "ns.coll": { $in: ["orders", "chats"] },
+      },
+    },
+  ]);
+}
+
 // Rider challenge definitions are additive records owned by the rider app.
 // They intentionally live outside the shared users/orders documents.
 export function riderChallengesCol() {

@@ -1,7 +1,10 @@
+import { createServer } from "node:http";
+
 import app from "./app";
 import { startChatPushWatcher } from "./lib/chatPushWatcher";
 import { startOrderPushWatcher } from "./lib/orderPushWatcher";
 import { startHeatmapScheduler } from "./lib/heatmapService";
+import { startLiveUpdateServer } from "./lib/liveUpdates";
 import { logger } from "./lib/logger";
 import { connectMongo } from "./lib/mongo";
 
@@ -28,11 +31,14 @@ async function start() {
   startOrderPushWatcher();
   startHeatmapScheduler();
 
-  app.listen(port, (err) => {
-    if (err) {
-      logger.error({ err }, "Error listening on port");
-      process.exit(1);
-    }
+  const server = createServer(app);
+  startLiveUpdateServer(server);
+
+  server.on("error", (err) => {
+    logger.error({ err }, "Error listening on port");
+    process.exit(1);
+  });
+  server.listen(port, () => {
     logger.info({ port }, "Server listening");
   });
 }
