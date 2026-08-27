@@ -17,9 +17,9 @@ export { createSharedWebSocket, type SharedWebSocketOptions };
  */
 
 function getWebSocketUrl(): string {
-  // EXPO_PUBLIC_DOMAIN is injected by the dev command and every EAS build.
-  // Prefer it over any local fallback so mobile always follows the deployment
-  // domain used by the REST API.
+  // EAS builds provide EXPO_PUBLIC_DOMAIN. Local development uses the
+  // published API URL from EXPO_PUBLIC_API_URL, keeping REST and WebSocket
+  // traffic on the same host.
   const domain = process.env.EXPO_PUBLIC_DOMAIN?.trim();
   if (domain) {
     const normalizedDomain = domain

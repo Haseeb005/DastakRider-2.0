@@ -64,10 +64,10 @@ SplashScreen.preventAutoHideAsync();
 
 // Point the generated API client at the shared backend (served at /api via the
 // reverse proxy) and supply the rider's bearer token on every request.
-// On Replit, EXPO_PUBLIC_DOMAIN is injected by the dev script.
-// Locally, fall back to EXPO_PUBLIC_API_URL (set in .env.local) or the
-// default local API server port.  Android emulator needs 10.0.2.2 instead
-// of localhost — set EXPO_PUBLIC_API_URL=http://10.0.2.2:3000 in that case.
+// EAS builds provide EXPO_PUBLIC_DOMAIN. During local/Expo development,
+// EXPO_PUBLIC_API_URL from .env.local points to the published rider API.
+// Android emulator users can replace it with http://10.0.2.2:3000 only when
+// intentionally running a local API server.
 setBaseUrl(
   process.env.EXPO_PUBLIC_DOMAIN
     ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
