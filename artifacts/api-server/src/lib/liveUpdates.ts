@@ -7,20 +7,44 @@ import { chatsCol, ordersCol, watchLiveChanges } from "./mongo";
 import { verifyRiderToken } from "./riderToken";
 
 const RETRY_MS = 5_000;
+const AUTH_TIMEOUT_MS = 10_000;
 
 type LiveCollection = "orders" | "chats";
 
-export function startLiveUpdateServer(server: Server): void {
+export type LiveUpdateServerOptions = {
+  watchChanges?: () => ChangeStream;
+  resolveRiderForChange?: (
+    collection: LiveCollection,
+    id: string,
+  ) => Promise<string | null>;
+  verifyToken?: (token: string) => string | null;
+  retryMs?: number;
+  authTimeoutMs?: number;
+};
+
+export type LiveUpdateServer = {
+  close: () => Promise<void>;
+};
+
+export function startLiveUpdateServer(
+  server: Server,
+  options: LiveUpdateServerOptions = {},
+): LiveUpdateServer {
   const wss = new WebSocketServer({
     server,
     path: "/api/ws/live",
   });
 
+  const retryMs = options.retryMs ?? RETRY_MS;
+  const authTimeoutMs = options.authTimeoutMs ?? AUTH_TIMEOUT_MS;
+  const watchChanges = options.watchChanges ?? watchLiveChanges;
+  const verifyToken = options.verifyToken ?? verifyRiderToken;
   let changeStream: ChangeStream | null = null;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let stopped = false;
   const authenticatedRiders = new WeakMap<WebSocket, string>();
 
-  async function riderForChange(
+  async function defaultRiderForChange(
     collection: LiveCollection,
     id: string,
   ): Promise<string | null> {
@@ -47,6 +71,9 @@ export function startLiveUpdateServer(server: Server): void {
     return order?.riderId ? String(order.riderId) : null;
   }
 
+  const riderForChange =
+    options.resolveRiderForChange ?? defaultRiderForChange;
+
   async function broadcast(collection: LiveCollection, id: string): Promise<void> {
     const riderId = await riderForChange(collection, id);
     if (!riderId) return;
@@ -63,7 +90,7 @@ export function startLiveUpdateServer(server: Server): void {
   }
 
   function scheduleReconnect(error?: unknown): void {
-    if (retryTimer !== null) return;
+    if (stopped || retryTimer !== null) return;
 
     if (error) {
       logger.warn(
@@ -80,12 +107,13 @@ export function startLiveUpdateServer(server: Server): void {
     retryTimer = setTimeout(() => {
       retryTimer = null;
       connectChangeStream();
-    }, RETRY_MS);
+    }, retryMs);
   }
 
   function connectChangeStream(): void {
+    if (stopped) return;
     try {
-      const stream = watchLiveChanges();
+      const stream = watchChanges();
       changeStream = stream;
 
       stream.on("change", (change) => {
@@ -118,7 +146,7 @@ export function startLiveUpdateServer(server: Server): void {
       if (!authenticatedRiders.has(client)) {
         client.close(4401, "Authentication required");
       }
-    }, 10_000);
+    }, authTimeoutMs);
 
     client.on("message", (data) => {
       if (authenticatedRiders.has(client)) return;
@@ -126,7 +154,7 @@ export function startLiveUpdateServer(server: Server): void {
         const message = JSON.parse(data.toString()) as Record<string, unknown>;
         const riderId =
           message.type === "auth" && typeof message.token === "string"
-            ? verifyRiderToken(message.token)
+            ? verifyToken(message.token)
             : null;
         if (!riderId) {
           client.close(4401, "Invalid authentication");
@@ -150,4 +178,21 @@ export function startLiveUpdateServer(server: Server): void {
   });
 
   connectChangeStream();
+
+  return {
+    close: async () => {
+      stopped = true;
+      if (retryTimer !== null) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+      const stream = changeStream;
+      changeStream = null;
+      stream?.removeAllListeners();
+      if (stream) await stream.close().catch(() => {});
+      await new Promise<void>((resolve) => {
+        wss.close(() => resolve());
+      });
+    },
+  };
 }

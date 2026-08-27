@@ -9,7 +9,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx/esm --test --test-force-exit src/__tests__/**/*.test.ts"
+    "test": "node --import tsx/esm --test --test-force-exit src/__tests__/**/*.test.ts src/__tests__/**/*.test.mjs"
   },
   "dependencies": {
     "@onesignal/node-onesignal": "^5.13.1",

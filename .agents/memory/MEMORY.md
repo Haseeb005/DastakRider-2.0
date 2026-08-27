@@ -13,3 +13,4 @@
 - [Rider challenge settlement](rider-challenge-settlement.md) — sequential rewards need locked migration, bounded grace settlement, and legacy-compatible period/payout keys.
 - [Fast delivery wallet bonus](fast-delivery-wallet-bonus.md) — fast-delivery awards are idempotent, delivery-time based wallet entries and must never turn a committed delivery into an error.
 - [Rider live-update feed](rider-live-update-feed.md) — Replit live updates route through `/api/ws/live`; authenticate sockets and scope every event to the assigned rider.
+- [Expo socket regression tests](expo-socket-regression-tests.md) — keep reusable socket state machines platform-neutral so Node tests do not cross-load Expo TypeScript through another package.

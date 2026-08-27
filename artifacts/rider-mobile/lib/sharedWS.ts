@@ -1,6 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { TOKEN_KEY } from "./auth";
+import {
+  createSharedWebSocket,
+  type SharedWebSocketOptions,
+} from "./sharedWSFactory.mjs";
+
+export { createSharedWebSocket, type SharedWebSocketOptions };
 
 /**
  * Module-level singleton WebSocket for the live change feed.
@@ -33,77 +39,12 @@ const WS_URL = getWebSocketUrl();
 
 type Listener = (event: MessageEvent) => void;
 
-const listeners = new Set<Listener>();
-let ws: WebSocket | null = null;
-let retryTimer: ReturnType<typeof setTimeout> | null = null;
-
-function scheduleReconnect() {
-  if (listeners.size === 0 || retryTimer !== null) return;
-  retryTimer = setTimeout(() => {
-    retryTimer = null;
-    connect();
-  }, 5_000);
-}
-
-function connect() {
-  if (listeners.size === 0) return;
-  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
-    return;
-  }
-
-  try {
-    const socket = new WebSocket(WS_URL);
-    ws = socket;
-
-    socket.onopen = async () => {
-      const token = await AsyncStorage.getItem(TOKEN_KEY).catch(() => null);
-      if (ws !== socket) return;
-      if (!token) {
-        socket.close(4401, "Authentication required");
-        return;
-      }
-      socket.send(JSON.stringify({ type: "auth", token }));
-    };
-
-    socket.onmessage = (event) => {
-      if (ws !== socket) return;
-      listeners.forEach((fn) => {
-        try {
-          fn(event);
-        } catch {}
-      });
-    };
-
-    socket.onerror = () => {};
-
-    socket.onclose = () => {
-      if (ws !== socket) return;
-      ws = null;
-      scheduleReconnect();
-    };
-  } catch {
-    scheduleReconnect();
-  }
-}
-
-function maybeDisconnect() {
-  if (listeners.size === 0) {
-    if (retryTimer !== null) {
-      clearTimeout(retryTimer);
-      retryTimer = null;
-    }
-    const socket = ws;
-    ws = null;
-    socket?.close();
-  }
-}
+const sharedWebSocket = createSharedWebSocket({
+  url: WS_URL,
+  getToken: () => AsyncStorage.getItem(TOKEN_KEY).catch(() => null),
+});
 
 /** Subscribe to all incoming WebSocket messages. Returns an unsubscribe fn. */
 export function subscribeWS(listener: Listener): () => void {
-  listeners.add(listener);
-  connect();
-  return () => {
-    listeners.delete(listener);
-    maybeDisconnect();
-  };
+  return sharedWebSocket.subscribe(listener);
 }
