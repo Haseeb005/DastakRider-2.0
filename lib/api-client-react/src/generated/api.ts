@@ -127,6 +127,83 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
+export const getPingUrl = () => {
+
+
+
+
+  return `/api/ping`
+}
+
+/**
+ * @summary Lightweight uptime ping
+ */
+export const ping = async ( options?: RequestInit): Promise<HealthStatus> => {
+
+  return customFetch<HealthStatus>(getPingUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getPingQueryKey = () => {
+    return [
+    `/api/ping`
+    ] as const;
+    }
+
+
+export const getPingQueryOptions = <TData = Awaited<ReturnType<typeof ping>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof ping>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPingQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof ping>>> = ({ signal }) => ping({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof ping>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type PingQueryResult = NonNullable<Awaited<ReturnType<typeof ping>>>
+export type PingQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Lightweight uptime ping
+ */
+
+export function usePing<TData = Awaited<ReturnType<typeof ping>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof ping>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getPingQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getRegisterRiderUrl = () => {
 
 

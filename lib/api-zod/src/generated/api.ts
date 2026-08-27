@@ -17,6 +17,14 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Lightweight uptime ping
+ */
+export const PingResponse = zod.object({
+  "status": zod.string()
+})
+
+
+/**
  * @summary Register a new rider
  */
 export const RegisterRiderBody = zod.object({

@@ -32,6 +32,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
+  /ping:
+    get:
+      operationId: ping
+      tags: [health]
+      summary: Lightweight uptime ping
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
   /rider/register:
     post:
       operationId: registerRider
