@@ -204,7 +204,7 @@ function RootLayoutNav() {
   );
 }
 
-const APP_VERSION = "4.6.2";
+const APP_VERSION = "4.6.3";
 const API_BASE = process.env.EXPO_PUBLIC_DOMAIN
   ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
   : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000");

@@ -1,5 +1,6 @@
 import {
   getGetActiveOrdersQueryKey,
+  getGetOrderHistoryQueryOptions,
   getGetOrderHistoryQueryKey,
   getGetRiderEarningsQueryKey,
   getGetRiderMeQueryKey,
@@ -39,6 +40,15 @@ import {
   subscribe as subscribeLocationStore,
 } from "@/lib/locationShareStore";
 import { useChatWatcher } from "@/lib/useChatWatcher";
+
+function shouldRetryStatusMutation(failureCount: number, error: any): boolean {
+  if (failureCount >= 2) return false;
+
+  const status = Number(error?.status);
+  if (!Number.isFinite(status)) return true;
+
+  return status === 408 || status === 429 || status >= 500;
+}
 
 export default function ActiveScreen() {
   const c = useColors();
@@ -87,8 +97,18 @@ export default function ActiveScreen() {
   const locationStatus = getLocationStatus();
   const trackCount = getTrackCount();
 
-  const statusM = useUpdateOrderStatus();
-  const arrivedM = useMarkOrderArrived();
+  const statusM = useUpdateOrderStatus({
+    mutation: {
+      retry: shouldRetryStatusMutation,
+      retryDelay: (attemptIndex) => Math.min(750 * 2 ** attemptIndex, 3000),
+    },
+  });
+  const arrivedM = useMarkOrderArrived({
+    mutation: {
+      retry: shouldRetryStatusMutation,
+      retryDelay: (attemptIndex) => Math.min(750 * 2 ** attemptIndex, 3000),
+    },
+  });
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: getGetActiveOrdersQueryKey() });
@@ -105,24 +125,74 @@ export default function ActiveScreen() {
   };
 
   const onMutateError = (e: any) => {
+    const isNetworkError = !Number.isFinite(Number(e?.status));
     Alert.alert(
       "Update failed",
-      e?.data?.message || "Could not update order status. Please try again.",
+      e?.data?.message ||
+        (isNetworkError
+          ? "The network connection was interrupted. Check mobile data and try again."
+          : e?.message) ||
+        "Could not update order status. Please try again.",
     );
   };
 
-  const setStatus = (order: RiderOrder, status: string) => {
-    statusM.mutate(
-      { orderId: order.id, data: { status } },
-      { onSuccess: onMutated, onError: onMutateError },
+  const confirmStatusUpdate = async (
+    orderId: string,
+    status: "Rider Picked Up" | "Delivered",
+  ): Promise<boolean> => {
+    if (status === "Delivered") {
+      try {
+        const history = await qc.fetchQuery(getGetOrderHistoryQueryOptions());
+        const latest = history.find((item) => item.id === orderId);
+        return Boolean(
+          latest?.timeWhenDelivered || latest?.status === "Delivered",
+        );
+      } catch {
+        return false;
+      }
+    }
+
+    const refreshed = await ordersQ.refetch();
+    const latest = refreshed.data?.find((item) => item.id === orderId);
+    return Boolean(
+      latest?.pickUpTime ||
+        latest?.status === "Rider Picked Up" ||
+        latest?.status === "Delivered",
     );
   };
 
-  const markArrived = (order: RiderOrder) => {
-    arrivedM.mutate(
-      { orderId: order.id },
-      { onSuccess: onMutated, onError: onMutateError },
-    );
+  const setStatus = async (
+    order: RiderOrder,
+    status: "Rider Picked Up" | "Delivered",
+  ) => {
+    try {
+      await statusM.mutateAsync({ orderId: order.id, data: { status } });
+      onMutated();
+    } catch (error) {
+      if (await confirmStatusUpdate(order.id, status)) {
+        onMutated();
+        return;
+      }
+      onMutateError(error);
+    }
+  };
+
+  const markArrived = async (order: RiderOrder) => {
+    try {
+      await arrivedM.mutateAsync({ orderId: order.id });
+      onMutated();
+    } catch (error) {
+      // A mobile connection can drop after the API commits the update but before
+      // the response reaches the device. Confirm current state before telling the
+      // rider the action failed.
+      const refreshed = await ordersQ.refetch();
+      const latest = refreshed.data?.find((item) => item.id === order.id);
+      if (latest?.riderArrived || latest?.status === "Rider Picked Up") {
+        onMutated();
+        return;
+      }
+      onMutateError(error);
+    }
   };
 
   const completePickup = async (order: RiderOrder, requestBackground: boolean) => {
