@@ -7,6 +7,7 @@ import { startHeatmapScheduler } from "./lib/heatmapService";
 import { startLiveUpdateServer } from "./lib/liveUpdates";
 import { logger } from "./lib/logger";
 import { connectMongo } from "./lib/mongo";
+import { ensureRiderWalletIndexes } from "./routes/rider";
 
 const rawPort = process.env["PORT"];
 
@@ -24,6 +25,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 async function start() {
   await connectMongo();
+  await ensureRiderWalletIndexes();
 
   // Start the background watcher that sends OneSignal push notifications to
   // riders when a customer message arrives while their app is backgrounded.

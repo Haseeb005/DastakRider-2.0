@@ -254,11 +254,19 @@ const DELIVERY_GEOFENCE_RADIUS_METERS = 20;
 
 let walletIndexesPromise: Promise<void> | null = null;
 
-function ensureWalletIndexes(): Promise<void> {
+export function ensureRiderWalletIndexes(): Promise<void> {
   if (!walletIndexesPromise) {
     walletIndexesPromise = (async () => {
       const challenges = riderChallengesCol();
       await Promise.all([
+        ordersCol().createIndex(
+          { riderId: 1, status: 1, createdAt: -1 },
+          { name: "rider_wallet_orders_by_period" },
+        ),
+        ordersCol().createIndex(
+          { riderId: 1, status: 1, riderDeliveredAt: 1, createdAt: 1 },
+          { name: "rider_challenge_deliveries_by_period" },
+        ),
         challenges.createIndex(
           { riderId: 1, kind: 1, periodKey: 1 },
           { unique: true, name: "riderId_1_kind_1_periodKey_1" },
@@ -1089,7 +1097,7 @@ async function ensureChallenge(
   kind: ChallengeKind,
   now = new Date(),
 ): Promise<any> {
-  await ensureWalletIndexes();
+  await ensureRiderWalletIndexes();
   const period = challengePeriod(kind, now);
   const challenges = riderChallengesCol();
 
@@ -1433,7 +1441,7 @@ async function awardFastDeliveryBonus(
   const durationMs = deliveredAt.getTime() - acceptedAt.getTime();
   if (durationMs < 0 || durationMs > FAST_DELIVERY_WINDOW_MS) return false;
 
-  await ensureWalletIndexes();
+  await ensureRiderWalletIndexes();
   const orderId = String(order._id);
   const entryKey = `fast_delivery:${riderId}:${orderId}`;
   const weekKey = pktDateKey(pktPeriodStartAt("week", deliveredAt));
