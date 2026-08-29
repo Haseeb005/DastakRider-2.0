@@ -136,11 +136,16 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
 
   console.log("Starting Metro...");
   console.log(`Setting EXPO_PUBLIC_DOMAIN=${expoPublicDomain}`);
+  const liveApiBaseUrl = process.env.LIVE_API_BASE_URL?.trim();
   const env = {
     ...process.env,
     EXPO_PUBLIC_DOMAIN: expoPublicDomain,
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
   };
+  if (liveApiBaseUrl) {
+    env.EXPO_PUBLIC_API_URL = liveApiBaseUrl;
+    console.log("Using LIVE_API_BASE_URL for the mobile API: configured");
+  }
 
   if (expoPublicReplId) {
     console.log(`Setting EXPO_PUBLIC_REPL_ID=${expoPublicReplId}`);
