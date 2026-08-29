@@ -1,6 +1,7 @@
 import { Icon } from "@/components/Icon";
 import { Loading } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
+import { API_BASE_URL } from "@/lib/apiBase";
 import { useOrderChat } from "@/lib/useOrderChat";
 import { closeChat, openChat } from "@/lib/chatBadgeStore";
 import { TOKEN_KEY } from "@/lib/auth";
@@ -9,9 +10,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/lib/useChatWatcher";
 
-const CHAT_BASE = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-  : "";
+const CHAT_BASE = API_BASE_URL;
 import {
   FlatList,
   KeyboardAvoidingView,

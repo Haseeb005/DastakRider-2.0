@@ -19,14 +19,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
+import { API_BASE_URL } from "@/lib/apiBase";
 import { useAuth } from "@/lib/auth";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const API_BASE =
-  process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000");
+const API_BASE = API_BASE_URL;
 
 const POLL_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes — matches server recalc
 const CELL_LAT = 0.0045;

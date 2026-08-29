@@ -54,6 +54,7 @@ import {
   ensureNotificationHandler,
   requestNotificationPermission,
 } from "@/lib/useChatUnread";
+import { API_BASE_URL } from "@/lib/apiBase";
 
 // Configure the notification handler so alerts fire while the app is
 // foregrounded. Must be called before any component tries to schedule one.
@@ -62,17 +63,9 @@ ensureNotificationHandler();
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Point the generated API client at the shared backend (served at /api via the
-// reverse proxy) and supply the rider's bearer token on every request.
-// EAS builds provide EXPO_PUBLIC_DOMAIN. During local/Expo development,
-// EXPO_PUBLIC_API_URL from .env.local points to the published rider API.
-// Android emulator users can replace it with http://10.0.2.2:3000 only when
-// intentionally running a local API server.
-setBaseUrl(
-  process.env.EXPO_PUBLIC_DOMAIN
-    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-    : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000"),
-);
+// Point the generated API client at the permanent published backend and
+// supply the rider's bearer token on every request.
+setBaseUrl(API_BASE_URL);
 setAuthTokenGetter(async () => {
   try {
     return await AsyncStorage.getItem(TOKEN_KEY);
@@ -228,9 +221,7 @@ function RootLayoutNav() {
 }
 
 const APP_VERSION = "4.6.4";
-const API_BASE = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-  : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000");
+const API_BASE = API_BASE_URL;
 
 function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({

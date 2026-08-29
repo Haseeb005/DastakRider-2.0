@@ -11,13 +11,11 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { API_BASE_URL } from "./apiBase";
 import { TOKEN_KEY } from "./auth";
 import { subscribeWS } from "./sharedWS";
 
-// Resolve the api-server base URL the same way the rest of the mobile app does.
-const CHAT_BASE = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-  : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000");
+const CHAT_BASE = API_BASE_URL;
 
 export type ChatMessage = {
   id: string;

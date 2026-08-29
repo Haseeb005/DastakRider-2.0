@@ -18,6 +18,7 @@ import {
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { Platform } from "react-native";
 
+import { API_BASE_URL } from "./apiBase";
 import { TOKEN_KEY } from "./auth";
 import {
   getClearedAt,
@@ -26,9 +27,7 @@ import {
 } from "./chatBadgeStore";
 import { subscribeWS } from "./sharedWS";
 
-const CHAT_BASE = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-  : (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000");
+const CHAT_BASE = API_BASE_URL;
 const POLL_MS = 15_000;
 
 type RawMessage = {

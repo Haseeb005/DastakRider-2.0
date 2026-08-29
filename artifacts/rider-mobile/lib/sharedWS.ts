@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { API_WEBSOCKET_URL } from "./apiBase";
 import { TOKEN_KEY } from "./auth";
 import {
   createSharedWebSocket,
@@ -16,31 +17,10 @@ export { createSharedWebSocket, type SharedWebSocketOptions };
  * of how many components are mounted.
  */
 
-function getWebSocketUrl(): string {
-  // EAS builds provide EXPO_PUBLIC_DOMAIN. Local development uses the
-  // published API URL from EXPO_PUBLIC_API_URL, keeping REST and WebSocket
-  // traffic on the same host.
-  const domain = process.env.EXPO_PUBLIC_DOMAIN?.trim();
-  if (domain) {
-    const normalizedDomain = domain
-      .replace(/^https?:\/\//i, "")
-      .replace(/\/+$/, "");
-    return `wss://${normalizedDomain}/api/ws/live`;
-  }
-
-  // Keep local development usable when the injected domain is unavailable.
-  const apiUrl = (
-    process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000"
-  ).replace(/\/+$/, "");
-  return `${apiUrl.replace(/^http/i, "ws")}/api/ws/live`;
-}
-
-const WS_URL = getWebSocketUrl();
-
 type Listener = (event: MessageEvent) => void;
 
 const sharedWebSocket = createSharedWebSocket({
-  url: WS_URL,
+  url: API_WEBSOCKET_URL,
   getToken: () => AsyncStorage.getItem(TOKEN_KEY).catch(() => null),
 });
 
