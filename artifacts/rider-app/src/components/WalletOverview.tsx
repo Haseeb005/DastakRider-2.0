@@ -278,7 +278,7 @@ const ChallengeMilestoneBar = ({
               <span className={`mt-0.5 whitespace-nowrap text-[10px] font-semibold leading-none ${
                 reached ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
               }`}>
-                +Rs. {milestone.reward.toLocaleString()}
+                Rs. {milestone.reward.toLocaleString()}
               </span>
             </div>
           );
@@ -351,13 +351,15 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
               </span>
               <span className="text-xs text-muted-foreground">
                  {highestReached
-                   ? `Highest reached: ${highestReached.target}-delivery tier · Rs. ${highestReached.reward.toLocaleString()}`
-                   : 'No milestone reached yet'}
+                   ? `Current reward tier: Rs. ${highestReached.reward.toLocaleString()} at ${highestReached.target} deliveries`
+                   : currentMilestone
+                     ? `Next reward: Rs. ${currentMilestone.reward.toLocaleString()} at ${getMilestoneThreshold(currentMilestone)} deliveries`
+                     : 'No milestone reached yet'}
               </span>
             </div>
              {currentMilestone ? (
              <span className="text-primary font-medium text-right">
-                 {Math.max(getMilestoneThreshold(currentMilestone) - cumulativeProgress, 0)} rides to next milestone
+                  {Math.max(getMilestoneThreshold(currentMilestone) - cumulativeProgress, 0)} rides to unlock Rs. {currentMilestone.reward.toLocaleString()}
              </span>
            ) : (
                <span className={isPending ? 'text-primary font-medium text-right' : 'text-green-600 dark:text-green-400 font-medium'}>
@@ -387,7 +389,7 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
              <span className="text-green-600 dark:text-green-400 font-medium">{payoutLabel}</span>
            ) : !isExpired ? (
             <span className="text-primary font-medium text-right">
-               Reward available: Rs. {availableReward.toLocaleString()} · highest only pays at period end
+                Top tier: Rs. {availableReward.toLocaleString()} · only the highest tier pays at period end
             </span>
            ) : (
              <span className="font-medium text-right">{payoutLabel}</span>

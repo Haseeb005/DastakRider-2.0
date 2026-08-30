@@ -174,7 +174,7 @@ function ChallengeMilestoneBar({
                   fontSize: 8,
                 }}
               >
-                +{rupees(milestone.reward)}
+                {rupees(milestone.reward)}
               </Text>
             </View>
           );
@@ -287,14 +287,20 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
         <ChallengeMilestoneBar milestones={milestones} progress={cumulativeProgress} tone={tone} />
         <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 10 }}>
           {highestReached
-            ? `Highest reached: ${highestReached.target}-delivery tier · ${rupees(highestReached.reward)}`
-            : "No milestone reached yet"}
+            ? `Current reward tier: ${rupees(highestReached.reward)} at ${highestReached.target} deliveries`
+            : currentMilestone
+              ? `Next reward: ${rupees(currentMilestone.reward)} at ${getMilestoneThreshold(currentMilestone)} deliveries`
+              : "No milestone reached yet"}
         </Text>
       </View>
 
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12, flex: 1 }}>{endLabel}</Text>
-        {periodInProgress ? (
+        {periodInProgress && currentMilestone ? (
+          <Text style={{ color: c.primary, fontFamily: "Inter_700Bold", fontSize: 12 }}>
+            {remaining} rides to unlock {rupees(currentMilestone.reward)}
+          </Text>
+        ) : periodInProgress ? (
           <Text style={{ color: c.primary, fontFamily: "Inter_700Bold", fontSize: 12 }}>
             In progress
           </Text>
@@ -318,7 +324,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
           Up to {rupees(availableReward)} extra bonus available
         </Text>
         <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 11, lineHeight: 16 }}>
-          {challenge.periodDeliveries} eligible deliveries this {periodLabel} · only your highest reached tier is paid at period end.
+          {challenge.periodDeliveries} eligible deliveries this {periodLabel} · only the highest tier reached is paid at period end.
         </Text>
       </View>
 

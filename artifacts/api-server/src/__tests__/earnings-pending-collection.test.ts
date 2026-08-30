@@ -419,10 +419,10 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
       ),
       [
         { target: 10, reward: 200, cumulativeTarget: 10 },
-        { target: 15, reward: 200, cumulativeTarget: 25 },
-        { target: 20, reward: 500, cumulativeTarget: 45 },
-        { target: 25, reward: 800, cumulativeTarget: 70 },
-        { target: 30, reward: 1000, cumulativeTarget: 100 },
+        { target: 15, reward: 200, cumulativeTarget: 15 },
+        { target: 20, reward: 500, cumulativeTarget: 20 },
+        { target: 25, reward: 800, cumulativeTarget: 25 },
+        { target: 30, reward: 1000, cumulativeTarget: 30 },
       ],
     );
     assert.equal(firstDaily.cumulativeProgress, 3);
@@ -522,7 +522,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     assert.equal(dailyAtFive.challengeBonuses, 0);
 
     await dbCol.orders().insertMany(
-      walletOrderOids.slice(12, 22).map((oid, index) => ({
+      walletOrderOids.slice(12, 20).map((oid, index) => ({
         _id: oid,
         riderId,
         status: "Delivered",
@@ -530,16 +530,43 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
         createdAt: new Date(now.getTime() - (index + 40) * 60_000),
       })),
     );
-    const dailyAfterFifteenNewRides = await fetchWallet();
-    assert.equal((dailyAfterFifteenNewRides.todayChallenge as Record<string, unknown>).target, 20);
-    assert.equal((dailyAfterFifteenNewRides.todayChallenge as Record<string, unknown>).progress, 0);
-    assert.equal(dailyAfterFifteenNewRides.challengeBonuses, 0);
+    const dailyAtTwentyThree = await fetchWallet();
+    const dailyAtTwentyThreeChallenge =
+      dailyAtTwentyThree.todayChallenge as Record<string, unknown>;
+    assert.equal(dailyAtTwentyThreeChallenge.target, 15);
+    assert.equal(dailyAtTwentyThreeChallenge.progress, 13);
+    assert.equal(dailyAtTwentyThreeChallenge.periodDeliveries, 23);
+    assert.equal(dailyAtTwentyThreeChallenge.cumulativeProgress, 23);
+    assert.equal(dailyAtTwentyThree.challengeBonuses, 0);
+    assert.deepEqual(
+      (dailyAtTwentyThreeChallenge.milestoneScale as Array<Record<string, unknown>>)
+        .filter(({ earned }) => earned)
+        .map(({ target, reward }) => ({ target, reward })),
+      [
+        { target: 10, reward: 200 },
+        { target: 15, reward: 200 },
+        { target: 20, reward: 500 },
+      ],
+      "23 deliveries reaches the 20-delivery tier without paying before period end",
+    );
 
-    await dbCol.orders().deleteOne({ _id: walletOrderOids[21] });
+    await dbCol.orders().deleteOne({ _id: walletOrderOids[19] });
     const afterDeletion = await fetchWallet();
     const dailyAfterDeletion = afterDeletion.todayChallenge as Record<string, unknown>;
-    assert.equal(dailyAfterDeletion.target, 20);
-    assert.equal(dailyAfterDeletion.progress, 0);
+    assert.equal(dailyAfterDeletion.periodDeliveries, 22);
+    assert.equal(dailyAfterDeletion.cumulativeProgress, 22);
+    assert.equal(dailyAfterDeletion.target, 15);
+    assert.equal(dailyAfterDeletion.progress, 12);
+    assert.deepEqual(
+      (dailyAfterDeletion.milestoneScale as Array<Record<string, unknown>>)
+        .filter(({ earned }) => earned)
+        .map(({ target, reward }) => ({ target, reward })),
+      [
+        { target: 10, reward: 200 },
+        { target: 15, reward: 200 },
+        { target: 20, reward: 500 },
+      ],
+    );
     assert.equal(afterDeletion.challengeBonuses, 0);
 
     const weekly = await dbCol.riderChallenges().findOne({
@@ -995,13 +1022,13 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
           status: "Delivered",
           riderFare: 100,
           createdAt:
-            index < 11
+            index < 24
               ? new Date(dailyStart.getTime() + (index + 1) * 10 * 60_000)
-              : new Date(weeklyStart.getTime() + (index - 10) * 30 * 60_000),
+              : new Date(weeklyStart.getTime() + (index - 23) * 30 * 60_000),
         })),
       );
 
-      // Removing an eligible order before settlement leaves exactly 10 daily
+      // Removing an eligible order before settlement leaves exactly 23 daily
       // and 125 weekly deliveries.
       await dbCol.orders().deleteOne({ _id: orderIds[0] });
 
@@ -1032,8 +1059,8 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
       const weeklyEntry = await dbCol.riderWalletEntries().findOne({
         challengeKey: weeklySettlementKey,
       });
-      assert.equal(dailyEntry?.milestoneTarget, 10);
-      assert.equal(dailyEntry?.amount, 200);
+      assert.equal(dailyEntry?.milestoneTarget, 20);
+      assert.equal(dailyEntry?.amount, 500);
       assert.equal(weeklyEntry?.milestoneTarget, 75);
       assert.equal(weeklyEntry?.amount, 1000);
       assert.equal(
@@ -1069,7 +1096,7 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
         basePeriodKey: weeklyPeriodKey,
         sequence: 1,
       });
-      assert.deepEqual(dailyWinner?.earnedMilestoneTargets, [10]);
+      assert.deepEqual(dailyWinner?.earnedMilestoneTargets, [20]);
       assert.deepEqual(weeklyWinner?.earnedMilestoneTargets, [75]);
       const recentResults = settledWallet.recentChallenges as Array<Record<string, unknown>>;
       const dailyResult = recentResults.find(
@@ -1083,8 +1110,8 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
           challenge.periodStart === weeklyStart.toISOString(),
       );
       assert.equal(dailyResult?.payoutStatus, "paid");
-      assert.equal(dailyResult?.bonusAmount, 200);
-      assert.equal(dailyResult?.periodDeliveries, 10);
+      assert.equal(dailyResult?.bonusAmount, 500);
+      assert.equal(dailyResult?.periodDeliveries, 23);
       assert.equal(weeklyResult?.payoutStatus, "paid");
       assert.equal(weeklyResult?.bonusAmount, 1000);
       assert.equal(weeklyResult?.periodDeliveries, 125);
@@ -1108,7 +1135,7 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
       );
 
       await dbCol.orders().insertMany(
-        delayedOrderIds.slice(0, 15).map((orderId, index) => ({
+        delayedOrderIds.slice(0, 1).map((orderId, index) => ({
           _id: orderId,
           riderId,
           status: "Delivered",
@@ -1120,12 +1147,12 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
       const sameValueUpgrade = await dbCol.riderWalletEntries().findOne({
         challengeKey: dailySettlementKey,
       });
-      assert.equal(sameValueUpgrade?.milestoneTarget, 15);
-      assert.equal(sameValueUpgrade?.challengeSequence, 1);
-      assert.equal(sameValueUpgrade?.amount, 200);
+      assert.equal(sameValueUpgrade?.milestoneTarget, 20);
+      assert.equal(sameValueUpgrade?.challengeSequence, 2);
+      assert.equal(sameValueUpgrade?.amount, 500);
 
       await dbCol.orders().insertMany(
-        delayedOrderIds.slice(15).map((orderId, index) => ({
+        delayedOrderIds.slice(1, 3).map((orderId, index) => ({
           _id: orderId,
           riderId,
           status: "Delivered",
@@ -1137,18 +1164,18 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
       const upgradedDailyEntry = await dbCol.riderWalletEntries().findOne({
         challengeKey: dailySettlementKey,
       });
-      assert.equal(upgradedDailyEntry?.milestoneTarget, 20);
-      assert.equal(upgradedDailyEntry?.challengeSequence, 2);
-      assert.equal(upgradedDailyEntry?.amount, 500);
+      assert.equal(upgradedDailyEntry?.milestoneTarget, 25);
+      assert.equal(upgradedDailyEntry?.challengeSequence, 3);
+      assert.equal(upgradedDailyEntry?.amount, 800);
 
       await dbCol.orders().deleteMany({ _id: { $in: delayedOrderIds } });
       await fetchSettlementWallet();
       const permanentDailyEntry = await dbCol.riderWalletEntries().findOne({
         challengeKey: dailySettlementKey,
       });
-      assert.equal(permanentDailyEntry?.milestoneTarget, 20);
-      assert.equal(permanentDailyEntry?.challengeSequence, 2);
-      assert.equal(permanentDailyEntry?.amount, 500);
+      assert.equal(permanentDailyEntry?.milestoneTarget, 25);
+      assert.equal(permanentDailyEntry?.challengeSequence, 3);
+      assert.equal(permanentDailyEntry?.amount, 800);
       assert.equal(
         await dbCol.riderWalletEntries().countDocuments({
           riderId,

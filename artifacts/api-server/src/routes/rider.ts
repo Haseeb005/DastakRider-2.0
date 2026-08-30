@@ -324,7 +324,14 @@ function sequentialTierLabel(kind: ChallengeKind, sequence: number): string {
 }
 
 function cumulativeTargetForSequence(kind: ChallengeKind, sequence: number): number {
-  return CHALLENGE_MILESTONES[kind]
+  const milestones = CHALLENGE_MILESTONES[kind];
+  if (kind === "daily") {
+    // Daily tier numbers are total deliveries for the period: 23 deliveries
+    // reaches the 20-delivery tier. Weekly challenges retain their sequential
+    // additional-delivery thresholds.
+    return milestones[sequence]?.target || 0;
+  }
+  return milestones
     .slice(0, sequence + 1)
     .reduce((total, milestone) => total + milestone.target, 0);
 }
