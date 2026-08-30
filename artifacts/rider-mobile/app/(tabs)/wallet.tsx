@@ -288,7 +288,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
   const nextMilestone = milestones.find(
     (milestone) => cumulativeProgress < getMilestoneThreshold(milestone),
   );
-  const currentMilestone = nextMilestone ?? milestones[milestones.length - 1];
+  const currentMilestone = nextMilestone;
   const highestReached = [...milestones]
     .reverse()
     .find((milestone) => cumulativeProgress >= getMilestoneThreshold(milestone));

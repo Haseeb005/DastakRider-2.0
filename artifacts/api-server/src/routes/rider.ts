@@ -231,6 +231,8 @@ const CHALLENGE_MILESTONES: Record<ChallengeKind, ChallengeMilestone[]> = {
     { target: 50, reward: 500 },
     { target: 75, reward: 1000 },
     { target: 100, reward: 1500 },
+    { target: 125, reward: 1800 },
+    { target: 150, reward: 2000 },
   ],
 };
 
@@ -325,15 +327,9 @@ function sequentialTierLabel(kind: ChallengeKind, sequence: number): string {
 
 function cumulativeTargetForSequence(kind: ChallengeKind, sequence: number): number {
   const milestones = CHALLENGE_MILESTONES[kind];
-  if (kind === "daily") {
-    // Daily tier numbers are total deliveries for the period: 23 deliveries
-    // reaches the 20-delivery tier. Weekly challenges retain their sequential
-    // additional-delivery thresholds.
-    return milestones[sequence]?.target || 0;
-  }
-  return milestones
-    .slice(0, sequence + 1)
-    .reduce((total, milestone) => total + milestone.target, 0);
+  // Daily and weekly tier numbers are total deliveries for their period:
+  // 23 daily deliveries reaches 20, and 80 weekly deliveries reaches 75.
+  return milestones[sequence]?.target || 0;
 }
 
 function highestCompletedSequence(kind: ChallengeKind, deliveredCount: number): number {
@@ -458,9 +454,15 @@ function walletChallengeResponse(
           settledTargets.has(milestone.target) ||
           Number(challenge.progress) >= milestone.target,
       }));
+  const requiredProgress = sequential
+    ? Math.max(
+        0,
+        finalMilestone.target - (Number(challenge.deliveryBaseline) || 0),
+      )
+    : finalMilestone.target;
   const targetReached =
     challenge.status === "completed" ||
-    Number(challenge.progress) >= finalMilestone.target;
+    Number(challenge.progress) >= requiredProgress;
   const normalizedPayoutAmount = Math.max(0, Number(payoutAmount) || 0);
   const payoutStatus: ChallengePayoutStatus =
     normalizedPayoutAmount > 0
@@ -819,7 +821,7 @@ async function advanceSequentialChallenge(
       kind,
       period,
       sequence + 1,
-      (Number(synced.deliveryBaseline) || 0) + Number(synced.target),
+      cumulativeTargetForSequence(kind, sequence),
       now,
     );
   }
@@ -1259,8 +1261,7 @@ async function ensureChallenge(
       kind,
       period,
       sequence + 1,
-      (Number(latestCompletedSequential.deliveryBaseline) || 0) +
-        Number(latestCompletedSequential.target),
+      cumulativeTargetForSequence(kind, sequence),
       now,
     );
   }
@@ -1310,6 +1311,12 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
     if (!finalMilestone) throw new Error("Rider challenge has no valid milestone");
 
     const deliveredCount = await countChallengeDeliveries(currentBeforeCount);
+    const requiredProgress = isSequentialChallenge(currentBeforeCount)
+      ? Math.max(
+          0,
+          finalMilestone.target - (Number(currentBeforeCount.deliveryBaseline) || 0),
+        )
+      : finalMilestone.target;
     const challengeProgress = isSequentialChallenge(currentBeforeCount)
       ? Math.max(0, deliveredCount - (Number(currentBeforeCount.deliveryBaseline) || 0))
       : deliveredCount;
@@ -1334,13 +1341,13 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
     // but never regresses from completed or receives a duplicate entry.
     if (
       current.status !== "completed" &&
-      Number(current.progress) >= finalMilestone.target
+      Number(current.progress) >= requiredProgress
     ) {
       await challenges.updateOne(
         {
           ...ownershipFilter,
           status: { $in: ["active", "expired"] },
-          progress: { $gte: finalMilestone.target },
+          progress: { $gte: requiredProgress },
         },
         { $set: { status: "completed", completedAt: now, updatedAt: now } },
       );
@@ -1349,7 +1356,7 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
         {
           ...ownershipFilter,
           status: "active",
-          progress: { $lt: finalMilestone.target },
+          progress: { $lt: requiredProgress },
         },
         {
           $set: {
