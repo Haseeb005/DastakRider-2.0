@@ -28,7 +28,15 @@ export interface Challenge {
     target: number;
     reward: number;
     earned: boolean;
+    cumulativeTarget?: number;
   }>;
+  milestoneScale?: Array<{
+    target: number;
+    reward: number;
+    earned: boolean;
+    cumulativeTarget?: number;
+  }>;
+  cumulativeProgress?: number;
   status: ChallengeStatus;
   payoutStatus: ChallengePayoutStatus;
   bonusAmount: number;
@@ -157,19 +165,145 @@ const WalletError = ({ error, onRetry }: { error: any, onRetry?: () => void }) =
   </div>
 );
 
+type DisplayMilestone = {
+  target: number;
+  reward: number;
+  earned: boolean;
+  cumulativeTarget?: number;
+};
+
+const getMilestoneThreshold = (milestone: DisplayMilestone) =>
+  Number.isFinite(milestone.cumulativeTarget) && milestone.cumulativeTarget! > 0
+    ? milestone.cumulativeTarget!
+    : milestone.target;
+
+const getDisplayMilestones = (challenge: Challenge): DisplayMilestone[] => {
+  const milestones = challenge.milestoneScale?.length
+    ? challenge.milestoneScale
+    : challenge.milestones?.length
+      ? challenge.milestones
+      : [{
+          target: challenge.target,
+          reward: challenge.reward,
+          earned: challenge.progress >= challenge.target,
+        }];
+
+  return milestones.map((milestone) => ({
+    ...milestone,
+    cumulativeTarget: getMilestoneThreshold(milestone),
+  }));
+};
+
+const getCumulativeProgress = (challenge: Challenge) => {
+  if (Number.isFinite(challenge.cumulativeProgress)) {
+    return Math.max(0, challenge.cumulativeProgress!);
+  }
+  if (Number.isFinite(challenge.periodDeliveries)) {
+    return Math.max(0, challenge.periodDeliveries);
+  }
+  return Math.max(0, challenge.progress);
+};
+
+const ChallengeMilestoneBar = ({
+  milestones,
+  progress,
+  colorClass,
+  reachedColorClass,
+  label,
+}: {
+  milestones: DisplayMilestone[];
+  progress: number;
+  colorClass: string;
+  reachedColorClass: string;
+  label: string;
+}) => {
+  const finalTarget = getMilestoneThreshold(
+    milestones.at(-1) ?? { target: 0, reward: 0, earned: false },
+  );
+  const percent = finalTarget > 0
+    ? Math.min(100, Math.max(0, (progress / finalTarget) * 100))
+    : 0;
+  const currentMilestoneIndex = milestones.findIndex(
+    (milestone) => progress < getMilestoneThreshold(milestone),
+  );
+
+  return (
+    <div className="pt-8 pb-10" aria-label={label}>
+      <div
+        className="relative h-3 w-full rounded-full bg-secondary"
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={finalTarget}
+        aria-valuenow={Math.min(progress, finalTarget)}
+      >
+        <div
+          className={`h-full rounded-full transition-all ${colorClass}`}
+          style={{ width: `${percent}%` }}
+        />
+        {milestones.map((milestone, index) => {
+          const threshold = getMilestoneThreshold(milestone);
+          const position = finalTarget > 0
+            ? Math.min(92, Math.max(8, (threshold / finalTarget) * 100))
+            : 8;
+          const reached = progress >= threshold;
+          const current = index === currentMilestoneIndex;
+
+          return (
+            <div
+              key={`${milestone.target}-${milestone.reward}-${index}`}
+              className="absolute top-1/2 flex w-16 -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+              style={{ left: `${position}%` }}
+              aria-label={`${milestone.target}-delivery stage at ${threshold} cumulative deliveries, reward Rs. ${milestone.reward.toLocaleString()}, ${reached ? 'reached' : 'upcoming'}`}
+            >
+              <span
+                className={`flex h-6 w-6 items-center justify-center rounded-full border-2 ${
+                  reached
+                    ? `border-card ${reachedColorClass}`
+                    : current
+                      ? 'border-primary bg-card text-primary'
+                      : 'border-card bg-muted text-muted-foreground'
+                }`}
+              >
+                {reached ? <CheckCircle2 className="h-4 w-4" /> : <Target className="h-3.5 w-3.5" />}
+              </span>
+              <span className="mt-1 whitespace-nowrap text-[10px] font-bold leading-none text-foreground">
+                {milestone.target}
+              </span>
+              {threshold !== milestone.target && (
+                <span className="mt-0.5 whitespace-nowrap text-[9px] font-medium leading-none text-muted-foreground">
+                  at {threshold} total
+                </span>
+              )}
+              <span className={`mt-0.5 whitespace-nowrap text-[10px] font-semibold leading-none ${
+                reached ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
+              }`}>
+                +Rs. {milestone.reward.toLocaleString()}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge, title: string, icon: any }) => {
   const isExpired = challenge.status === 'expired';
   const isPaid = challenge.payoutStatus === 'paid';
   const isPending = challenge.payoutStatus === 'pending';
   const periodInProgress = new Date(challenge.periodEnd).getTime() > Date.now();
-  const milestones = challenge.milestones?.length
-    ? challenge.milestones
-    : [{
-        target: challenge.target,
-        reward: challenge.reward,
-        earned: challenge.progress >= challenge.target,
-      }];
-  const currentMilestone = milestones.find((milestone) => challenge.progress < milestone.target);
+  const milestones = getDisplayMilestones(challenge);
+  const cumulativeProgress = getCumulativeProgress(challenge);
+  const finalTarget = getMilestoneThreshold(
+    milestones.at(-1) ?? { target: challenge.target, reward: challenge.reward, earned: false },
+  );
+  const currentMilestone = milestones.find(
+    (milestone) => cumulativeProgress < getMilestoneThreshold(milestone),
+  );
+  const highestReached = [...milestones]
+    .reverse()
+    .find((milestone) => cumulativeProgress >= getMilestoneThreshold(milestone));
   const availableReward = Math.max(...milestones.map((milestone) => milestone.reward), challenge.reward);
   const payoutLabel = isPaid
     ? `Bonus paid: Rs. ${challenge.bonusAmount.toLocaleString()}`
@@ -204,7 +338,7 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
                 {periodInProgress ? 'In progress' : isPaid ? 'Paid' : isPending ? 'Bonus pending' : 'Ended'}
               </span>
             </div>
-             <h3 className="font-semibold text-base leading-tight">{challenge.target}-delivery challenge</h3>
+             <h3 className="font-semibold text-base leading-tight">{finalTarget}-delivery challenge</h3>
           </div>
         </div>
       </div>
@@ -213,70 +347,33 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
          <div className="flex items-center justify-between gap-3 text-sm">
             <div>
               <span className="block font-semibold text-foreground">
-                Current stage: {challenge.progress} / {currentMilestone?.target ?? challenge.target}
+                 Progress: {cumulativeProgress} / {finalTarget} deliveries
               </span>
               <span className="text-xs text-muted-foreground">
-                {challenge.periodDeliveries} eligible deliveries this period
+                 {highestReached
+                   ? `Highest reached: ${highestReached.target}-delivery tier · Rs. ${highestReached.reward.toLocaleString()}`
+                   : 'No milestone reached yet'}
               </span>
             </div>
              {currentMilestone ? (
              <span className="text-primary font-medium text-right">
-                {Math.max(currentMilestone.target - challenge.progress, 0)} rides to go
+                 {Math.max(getMilestoneThreshold(currentMilestone) - cumulativeProgress, 0)} rides to next milestone
              </span>
            ) : (
                <span className={isPending ? 'text-primary font-medium text-right' : 'text-green-600 dark:text-green-400 font-medium'}>
-                 {isPending ? 'Bonus pending' : isPaid ? 'Bonus paid' : 'Target reached'}
+                  {isPending ? 'Bonus pending' : isPaid ? 'Bonus paid' : 'Highest milestone reached'}
                </span>
            )}
         </div>
       </div>
 
-       <div className="space-y-2">
-         {milestones.map((milestone, index) => {
-            const stageReached = challenge.progress >= milestone.target;
-            const isCurrent = milestone === currentMilestone;
-
-           return (
-             <div
-               key={`${milestone.target}-${milestone.reward}-${index}`}
-               className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-3 ${
-                  stageReached
-                   ? 'border-green-500/20 bg-green-500/5'
-                    : isCurrent
-                     ? 'border-primary/25 bg-primary/5'
-                     : 'border-border bg-muted/30'
-               }`}
-             >
-               <div className="flex items-center gap-2.5 min-w-0">
-                 <div className={`shrink-0 p-1.5 rounded-full ${
-                    stageReached
-                     ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-                      : isCurrent
-                       ? 'bg-primary/10 text-primary'
-                       : 'bg-muted text-muted-foreground'
-                 }`}>
-                    {stageReached ? <CheckCircle2 className="w-4 h-4" /> : <Target className="w-4 h-4" />}
-                 </div>
-                 <div>
-                   <p className="text-sm font-semibold text-foreground">{milestone.target} deliveries</p>
-                   <p className={`text-[11px] font-medium ${
-                      stageReached ? 'text-green-600 dark:text-green-400' : isCurrent ? 'text-primary' : 'text-muted-foreground'
-                   }`}>
-                       {stageReached
-                          ? periodInProgress
-                            ? 'Stage reached · in progress'
-                            : isPending ? 'Reached — bonus pending' : 'Stage reached'
-                         : isCurrent
-                            ? 'Current challenge'
-                            : 'Upcoming'}
-                   </p>
-                 </div>
-               </div>
-               <span className="shrink-0 text-sm font-bold text-foreground">+Rs. {milestone.reward.toLocaleString()}</span>
-             </div>
-           );
-         })}
-       </div>
+        <ChallengeMilestoneBar
+          milestones={milestones}
+          progress={cumulativeProgress}
+          colorClass={isPaid ? 'bg-green-500' : 'bg-primary'}
+          reachedColorClass={isPaid ? 'bg-green-500 text-white' : 'bg-primary text-primary-foreground'}
+          label={`${title}: ${cumulativeProgress} of ${finalTarget} eligible deliveries`}
+        />
       
       <div className="flex items-center justify-between text-xs text-muted-foreground pt-3 border-t mt-2">
         <div className="flex items-center gap-1.5">
@@ -303,8 +400,13 @@ const ChallengeCard = ({ challenge, title, icon: Icon }: { challenge: Challenge,
 const RecentChallengeCard = ({ challenge }: { challenge: Challenge }) => {
   const isPaid = challenge.payoutStatus === 'paid';
   const isNotEarned = challenge.payoutStatus === 'not_earned';
-  const progressPercent = challenge.target > 0
-    ? Math.min(100, Math.max(0, (challenge.progress / challenge.target) * 100))
+  const milestones = getDisplayMilestones(challenge);
+  const cumulativeProgress = getCumulativeProgress(challenge);
+  const finalTarget = getMilestoneThreshold(
+    milestones.at(-1) ?? { target: challenge.target, reward: challenge.reward, earned: false },
+  );
+  const progressPercent = finalTarget > 0
+    ? Math.min(100, Math.max(0, (cumulativeProgress / finalTarget) * 100))
     : 0;
   const statusLabel = isPaid ? 'Paid' : isNotEarned ? 'No bonus' : challenge.payoutStatus === 'pending' ? 'Pending' : 'In progress';
   const statusClass = isPaid
@@ -328,7 +430,7 @@ const RecentChallengeCard = ({ challenge }: { challenge: Challenge }) => {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-               {formatChallengePeriod(challenge)} · {challenge.tier} · Target: {challenge.target}
+                {formatChallengePeriod(challenge)} · {challenge.tier} · Target: {finalTarget}
             </p>
           </div>
         </div>
@@ -345,16 +447,17 @@ const RecentChallengeCard = ({ challenge }: { challenge: Challenge }) => {
       <div className="mt-4 space-y-2">
         <div className="flex items-center justify-between text-xs">
           <span className="font-semibold text-foreground">
-             {challenge.periodDeliveries} eligible deliveries
+              {cumulativeProgress} eligible deliveries
           </span>
           <span className="text-muted-foreground">{Math.round(progressPercent)}%</span>
         </div>
-        <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-          <div
-             className={`h-full rounded-full ${isPaid ? 'bg-green-500' : 'bg-muted-foreground'}`}
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
+        <ChallengeMilestoneBar
+          milestones={milestones}
+          progress={cumulativeProgress}
+          colorClass={isPaid ? 'bg-green-500' : 'bg-muted-foreground'}
+          reachedColorClass={isPaid ? 'bg-green-500 text-white' : 'bg-muted-foreground text-white'}
+          label={`${challenge.kind === 'daily' ? 'Daily' : 'Weekly'} challenge: ${cumulativeProgress} of ${finalTarget} eligible deliveries`}
+        />
       </div>
     </div>
   );

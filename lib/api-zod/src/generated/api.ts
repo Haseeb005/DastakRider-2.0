@@ -590,8 +590,16 @@ export const GetRiderWalletResponse = zod.object({
   "milestones": zod.array(zod.object({
   "target": zod.number(),
   "reward": zod.number(),
-  "earned": zod.boolean()
+  "earned": zod.boolean(),
+  "cumulativeTarget": zod.number().optional().describe('Cumulative period-delivery threshold used by sequential challenge progress displays.')
 })),
+  "milestoneScale": zod.array(zod.object({
+  "target": zod.number(),
+  "reward": zod.number(),
+  "earned": zod.boolean(),
+  "cumulativeTarget": zod.number().optional().describe('Cumulative period-delivery threshold used by sequential challenge progress displays.')
+})).optional().describe('Full display scale for all configured challenge milestones.'),
+  "cumulativeProgress": zod.number().optional().describe('Cumulative eligible deliveries completed during this challenge period.'),
   "status": zod.enum(['active', 'completed', 'expired']),
   "payoutStatus": zod.enum(['in_progress', 'pending', 'paid', 'not_earned']).describe('Whether the challenge bonus is still being worked toward, awaiting period-end settlement, paid, or not earned.'),
   "bonusAmount": zod.number().describe('Actual challenge bonus credited to the rider wallet. Zero until a payout is made.'),
@@ -609,8 +617,16 @@ export const GetRiderWalletResponse = zod.object({
   "milestones": zod.array(zod.object({
   "target": zod.number(),
   "reward": zod.number(),
-  "earned": zod.boolean()
+  "earned": zod.boolean(),
+  "cumulativeTarget": zod.number().optional().describe('Cumulative period-delivery threshold used by sequential challenge progress displays.')
 })),
+  "milestoneScale": zod.array(zod.object({
+  "target": zod.number(),
+  "reward": zod.number(),
+  "earned": zod.boolean(),
+  "cumulativeTarget": zod.number().optional().describe('Cumulative period-delivery threshold used by sequential challenge progress displays.')
+})).optional().describe('Full display scale for all configured challenge milestones.'),
+  "cumulativeProgress": zod.number().optional().describe('Cumulative eligible deliveries completed during this challenge period.'),
   "status": zod.enum(['active', 'completed', 'expired']),
   "payoutStatus": zod.enum(['in_progress', 'pending', 'paid', 'not_earned']).describe('Whether the challenge bonus is still being worked toward, awaiting period-end settlement, paid, or not earned.'),
   "bonusAmount": zod.number().describe('Actual challenge bonus credited to the rider wallet. Zero until a payout is made.'),
@@ -628,8 +644,16 @@ export const GetRiderWalletResponse = zod.object({
   "milestones": zod.array(zod.object({
   "target": zod.number(),
   "reward": zod.number(),
-  "earned": zod.boolean()
+  "earned": zod.boolean(),
+  "cumulativeTarget": zod.number().optional().describe('Cumulative period-delivery threshold used by sequential challenge progress displays.')
 })),
+  "milestoneScale": zod.array(zod.object({
+  "target": zod.number(),
+  "reward": zod.number(),
+  "earned": zod.boolean(),
+  "cumulativeTarget": zod.number().optional().describe('Cumulative period-delivery threshold used by sequential challenge progress displays.')
+})).optional().describe('Full display scale for all configured challenge milestones.'),
+  "cumulativeProgress": zod.number().optional().describe('Cumulative eligible deliveries completed during this challenge period.'),
   "status": zod.enum(['active', 'completed', 'expired']),
   "payoutStatus": zod.enum(['in_progress', 'pending', 'paid', 'not_earned']).describe('Whether the challenge bonus is still being worked toward, awaiting period-end settlement, paid, or not earned.'),
   "bonusAmount": zod.number().describe('Actual challenge bonus credited to the rider wallet. Zero until a payout is made.'),

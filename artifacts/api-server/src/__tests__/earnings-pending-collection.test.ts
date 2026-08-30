@@ -413,6 +413,19 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
       })),
       [{ target: 50, reward: 500 }],
     );
+    assert.deepEqual(
+      (firstDaily.milestoneScale as Array<Record<string, unknown>>).map(
+        ({ target, reward, cumulativeTarget }) => ({ target, reward, cumulativeTarget }),
+      ),
+      [
+        { target: 10, reward: 200, cumulativeTarget: 10 },
+        { target: 15, reward: 200, cumulativeTarget: 25 },
+        { target: 20, reward: 500, cumulativeTarget: 45 },
+        { target: 25, reward: 800, cumulativeTarget: 70 },
+        { target: 30, reward: 1000, cumulativeTarget: 100 },
+      ],
+    );
+    assert.equal(firstDaily.cumulativeProgress, 3);
     assert.equal(firstDaily.tier, "Challenge 1 of 5");
     assert.equal(firstDaily.status, "active");
 
@@ -442,6 +455,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     assert.equal(dailyAfterTen.target, 15);
     assert.equal(dailyAfterTen.progress, 0, "the 15-ride challenge starts from zero");
     assert.equal(dailyAfterTen.periodDeliveries, 10);
+    assert.equal(dailyAfterTen.cumulativeProgress, 10);
     assert.equal(dailyAfterTen.payoutStatus, "in_progress");
     assert.equal(dailyAfterTen.bonusAmount, 0);
     assert.equal(dailyAfterTen.tier, "Challenge 2 of 5");

@@ -197,6 +197,8 @@ export interface RiderChallengeMilestone {
   target: number;
   reward: number;
   earned: boolean;
+  /** Cumulative period-delivery threshold used by sequential challenge progress displays. */
+  cumulativeTarget?: number;
 }
 
 export type RiderChallengeKind = typeof RiderChallengeKind[keyof typeof RiderChallengeKind];
@@ -238,6 +240,10 @@ export interface RiderChallenge {
   /** Reward amount for the final milestone. */
   reward: number;
   milestones: RiderChallengeMilestone[];
+  /** Full display scale for all configured challenge milestones. */
+  milestoneScale?: RiderChallengeMilestone[];
+  /** Cumulative eligible deliveries completed during this challenge period. */
+  cumulativeProgress?: number;
   status: RiderChallengeStatus;
   /** Whether the challenge bonus is still being worked toward, awaiting period-end settlement, paid, or not earned. */
   payoutStatus: RiderChallengePayoutStatus;

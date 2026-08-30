@@ -43,9 +43,13 @@ function formatChallengePeriod(challenge: RiderChallenge) {
 function getChallengeMilestones(challenge: RiderChallenge): RiderChallengeMilestone[] {
   // Older API responses did not include milestones. Keep those challenges useful
   // while clients and the API roll out independently.
-  const milestones = (challenge as RiderChallenge & {
+  const challengeWithScale = challenge as RiderChallenge & {
+    milestoneScale?: RiderChallengeMilestone[];
     milestones?: RiderChallengeMilestone[];
-  }).milestones;
+  };
+  const milestones = challengeWithScale.milestoneScale?.length
+    ? challengeWithScale.milestoneScale
+    : challengeWithScale.milestones;
 
   if (milestones?.length) {
     return milestones;
@@ -58,6 +62,128 @@ function getChallengeMilestones(challenge: RiderChallenge): RiderChallengeMilest
   }];
 }
 
+function getMilestoneThreshold(milestone: RiderChallengeMilestone) {
+  return Number.isFinite(milestone.cumulativeTarget) && (milestone.cumulativeTarget ?? 0) > 0
+    ? milestone.cumulativeTarget!
+    : milestone.target;
+}
+
+function getCumulativeProgress(challenge: RiderChallenge) {
+  if (Number.isFinite(challenge.cumulativeProgress)) {
+    return Math.max(0, challenge.cumulativeProgress!);
+  }
+  if (Number.isFinite(challenge.periodDeliveries)) {
+    return Math.max(0, challenge.periodDeliveries);
+  }
+  return Math.max(0, challenge.progress);
+}
+
+function ChallengeMilestoneBar({
+  milestones,
+  progress,
+  tone,
+}: {
+  milestones: RiderChallengeMilestone[];
+  progress: number;
+  tone: string;
+}) {
+  const c = useColors();
+  const finalTarget = getMilestoneThreshold(
+    milestones[milestones.length - 1] ?? { target: 0, reward: 0, earned: false },
+  );
+  const progressPercent = finalTarget > 0
+    ? Math.min(100, Math.max(0, (progress / finalTarget) * 100))
+    : 0;
+  const currentMilestoneIndex = milestones.findIndex(
+    (milestone) => progress < getMilestoneThreshold(milestone),
+  );
+
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel={`Challenge progress: ${progress} of ${finalTarget} eligible deliveries`}
+      accessibilityValue={{
+        min: 0,
+        max: finalTarget,
+        now: Math.min(progress, finalTarget),
+      }}
+      style={{ paddingTop: 24, paddingBottom: 38 }}
+    >
+      <View style={{ height: 8, borderRadius: 999, backgroundColor: c.muted }}>
+        <View
+          style={{
+            width: `${progressPercent}%`,
+            height: "100%",
+            borderRadius: 999,
+            backgroundColor: tone,
+          }}
+        />
+        {milestones.map((milestone, index) => {
+          const threshold = getMilestoneThreshold(milestone);
+          const position = finalTarget > 0
+            ? Math.min(93, Math.max(7, (threshold / finalTarget) * 100))
+            : 7;
+          const reached = progress >= threshold;
+          const current = index === currentMilestoneIndex;
+
+          return (
+            <View
+              key={`${milestone.target}-${milestone.reward}-${index}`}
+              accessibilityLabel={`${milestone.target}-delivery stage at ${threshold} cumulative deliveries, ${rupees(milestone.reward)} reward, ${reached ? "reached" : "upcoming"}`}
+              style={{
+                position: "absolute",
+                left: `${position}%`,
+                top: 13,
+                width: 50,
+                marginLeft: -25,
+                alignItems: "center",
+              }}
+            >
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 11,
+                  borderWidth: 2,
+                  borderColor: current ? tone : c.card,
+                  backgroundColor: reached ? tone : current ? c.card : c.muted,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Icon
+                  name={reached ? "check" : "target"}
+                  size={reached ? 13 : 11}
+                  color={reached ? "#fff" : current ? tone : c.mutedForeground}
+                />
+              </View>
+              <Text style={{ marginTop: 3, color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 9 }}>
+                {milestone.target}
+              </Text>
+              {threshold !== milestone.target ? (
+                <Text style={{ marginTop: 1, color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 7 }}>
+                  at {threshold}
+                </Text>
+              ) : null}
+              <Text
+                numberOfLines={1}
+                style={{
+                  marginTop: 1,
+                  color: reached ? c.successForeground : c.mutedForeground,
+                  fontFamily: "Inter_600SemiBold",
+                  fontSize: 8,
+                }}
+              >
+                +{rupees(milestone.reward)}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
   const c = useColors();
   const milestones = getChallengeMilestones(challenge);
@@ -66,13 +192,27 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
   const notEarned = challenge.payoutStatus === "not_earned";
   const expired = challenge.status === "expired";
   const periodInProgress = new Date(challenge.periodEnd).getTime() > Date.now();
-  const nextMilestone = milestones.find((milestone) => !milestone.earned);
+  const cumulativeProgress = getCumulativeProgress(challenge);
+  const nextMilestone = milestones.find(
+    (milestone) => cumulativeProgress < getMilestoneThreshold(milestone),
+  );
   const currentMilestone = nextMilestone ?? milestones[milestones.length - 1];
-  const stageTarget = currentMilestone?.target ?? challenge.target;
-  const progress = stageTarget > 0
-    ? Math.min(100, Math.round((challenge.progress / stageTarget) * 100))
+  const highestReached = [...milestones]
+    .reverse()
+    .find((milestone) => cumulativeProgress >= getMilestoneThreshold(milestone));
+  const finalTarget = getMilestoneThreshold(
+    milestones[milestones.length - 1] ?? { target: challenge.target, reward: challenge.reward, earned: false },
+  );
+  const progress = finalTarget > 0
+    ? Math.min(100, Math.round((cumulativeProgress / finalTarget) * 100))
     : 0;
-  const remaining = currentMilestone ? Math.max(currentMilestone.target - challenge.progress, 0) : 0;
+  const remaining = currentMilestone
+    ? Math.max(getMilestoneThreshold(currentMilestone) - cumulativeProgress, 0)
+    : 0;
+  const availableReward = Math.max(
+    challenge.reward,
+    ...milestones.map((milestone) => milestone.reward),
+  );
   const tone = payoutPaid ? c.successForeground : expired || notEarned ? c.mutedForeground : c.primary;
   const label = challenge.kind === "daily" ? "Today's challenge" : "Weekly challenge";
   const periodLabel = challenge.kind === "daily" ? "day" : "week";
@@ -119,7 +259,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
               {label}
             </Text>
             <Text style={{ marginTop: 2, fontFamily: "Inter_500Medium", fontSize: 12, color: c.mutedForeground }}>
-              {challenge.tier} · {challenge.target}-delivery target
+              {challenge.tier} · {finalTarget}-delivery target
             </Text>
           </View>
         </View>
@@ -140,13 +280,16 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
       <View>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 7 }}>
           <Text style={{ fontFamily: "Inter_700Bold", fontSize: 13, color: c.foreground }}>
-            Stage: {challenge.progress} / {stageTarget} deliveries
+            Progress: {cumulativeProgress} / {finalTarget} deliveries
           </Text>
           <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: tone }}>{progress}%</Text>
         </View>
-        <View style={{ height: 8, borderRadius: 999, overflow: "hidden", backgroundColor: c.muted }}>
-          <View style={{ width: `${progress}%`, height: "100%", borderRadius: 999, backgroundColor: tone }} />
-        </View>
+        <ChallengeMilestoneBar milestones={milestones} progress={cumulativeProgress} tone={tone} />
+        <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 10 }}>
+          {highestReached
+            ? `Highest reached: ${highestReached.target}-delivery tier · ${rupees(highestReached.reward)}`
+            : "No milestone reached yet"}
+        </Text>
       </View>
 
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
@@ -172,52 +315,11 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
 
       <View style={{ gap: 8 }}>
         <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 13 }}>
-          Up to {rupees(challenge.reward)} extra bonus available
+          Up to {rupees(availableReward)} extra bonus available
         </Text>
         <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 11, lineHeight: 16 }}>
           {challenge.periodDeliveries} eligible deliveries this {periodLabel} · only your highest reached tier is paid at period end.
         </Text>
-        {milestones.map((milestone, index) => {
-          const earned = milestone.earned;
-          const milestonePaid = payoutPaid && milestone.reward === challenge.bonusAmount;
-          return (
-            <View
-              key={`${milestone.target}-${milestone.reward}-${index}`}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                padding: 11,
-                borderRadius: 12,
-                backgroundColor: milestonePaid ? c.successBg : c.muted,
-              }}
-            >
-              <Icon name={milestonePaid ? "check-circle" : "target"} size={18} color={milestonePaid ? c.successForeground : c.mutedForeground} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
-                  {milestone.target} deliveries
-                </Text>
-                <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 2 }}>
-                  {milestonePaid
-                    ? "Paid"
-                    : earned
-                      ? periodInProgress ? "Target reached · in progress" : payoutPending ? "Target reached · bonus pending" : "Target reached"
-                      : milestone === currentMilestone ? "Current stage" : "Next tier"}
-                </Text>
-              </View>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={{ color: earned ? c.successForeground : c.foreground, fontFamily: "Inter_700Bold", fontSize: 13 }}>
-                  +{rupees(milestone.reward)}
-                </Text>
-                  {!earned && milestone === currentMilestone && !notEarned ? (
-                  <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 10, marginTop: 2 }}>
-                    {remaining} to go
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-          );
-        })}
       </View>
 
       {!payoutPaid && !notEarned ? (
@@ -234,8 +336,13 @@ function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
   const payoutPaid = challenge.payoutStatus === "paid";
   const payoutPending = challenge.payoutStatus === "pending";
   const notEarned = challenge.payoutStatus === "not_earned";
-  const progress = challenge.target > 0
-    ? Math.min(100, Math.round((challenge.progress / challenge.target) * 100))
+  const milestones = getChallengeMilestones(challenge);
+  const cumulativeProgress = getCumulativeProgress(challenge);
+  const finalTarget = getMilestoneThreshold(
+    milestones[milestones.length - 1] ?? { target: challenge.target, reward: challenge.reward, earned: false },
+  );
+  const progress = finalTarget > 0
+    ? Math.min(100, Math.round((cumulativeProgress / finalTarget) * 100))
     : 0;
   const tone = payoutPaid ? "#15803d" : c.mutedForeground;
   const status = payoutPaid ? "Paid" : payoutPending ? "Bonus pending" : notEarned ? "No bonus" : "In progress";
@@ -275,7 +382,7 @@ function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
               </View>
             </View>
             <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 4 }}>
-              {formatChallengePeriod(challenge)} · {challenge.tier} · {challenge.target}-delivery target
+              {formatChallengePeriod(challenge)} · {challenge.tier} · {finalTarget}-delivery target
             </Text>
           </View>
         </View>
@@ -292,13 +399,11 @@ function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
       <View>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 7 }}>
           <Text style={{ fontFamily: "Inter_700Bold", fontSize: 13, color: c.foreground }}>
-            {challenge.periodDeliveries} eligible deliveries
+            {cumulativeProgress} eligible deliveries
           </Text>
           <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: c.mutedForeground }}>{progress}%</Text>
         </View>
-        <View style={{ height: 8, borderRadius: 999, overflow: "hidden", backgroundColor: c.muted }}>
-          <View style={{ width: `${progress}%`, height: "100%", borderRadius: 999, backgroundColor: tone }} />
-        </View>
+        <ChallengeMilestoneBar milestones={milestones} progress={cumulativeProgress} tone={tone} />
       </View>
     </View>
   );

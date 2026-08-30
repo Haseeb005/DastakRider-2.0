@@ -676,6 +676,9 @@ components:
           type: number
         earned:
           type: boolean
+        cumulativeTarget:
+          type: number
+          description: Cumulative period-delivery threshold used by sequential challenge progress displays.
       required:
         - target
         - reward
@@ -702,6 +705,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RiderChallengeMilestone"
+        milestoneScale:
+          type: array
+          description: Full display scale for all configured challenge milestones.
+          items:
+            $ref: "#/components/schemas/RiderChallengeMilestone"
+        cumulativeProgress:
+          type: number
+          description: Cumulative eligible deliveries completed during this challenge period.
         status:
           type: string
           enum: [active, completed, expired]

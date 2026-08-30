@@ -10,4 +10,6 @@ export interface RiderChallengeMilestone {
   target: number;
   reward: number;
   earned: boolean;
+  /** Cumulative period-delivery threshold used by sequential challenge progress displays. */
+  cumulativeTarget?: number;
 }

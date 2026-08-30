@@ -7,6 +7,8 @@ Daily and weekly reward levels are independent sequential challenges: completing
 
 Keep the original period uniqueness strategy and deterministic stage/payout identities. Previous results expose one representative per ended period with explicit pending/paid/not-earned payout truth and a canonical period delivery snapshot. Concurrent readers must wait for in-flight settlement to become durable before reporting payout state. Legacy cumulative records keep their original per-milestone semantics and stored schedules so rollout cannot pay them twice or hide a valid old payout.
 
+Full-period Wallet progress bars must use cumulative eligible deliveries and cumulative stage thresholds. Never scale a full milestone bar from a sequential record's `progress`, because that value resets to zero each time the next stage starts; stage labels can still show the configured additional-delivery targets.
+
 **Why:** Shared order writes can become visible just after a rider's first Wallet read at a daily or weekly boundary, and eligible orders may be deleted before initial settlement. Locked migration and stable legacy keys prevent retired cumulative records from being overpaid during rollout.
 
 **How to apply:** Preserve the timestamp fallback, grace bound, settlement lock/read consistency, final delivery recount, one-result history normalization, monotonic settled stage, delivery baseline, period uniqueness, stored legacy schedules, and idempotent payouts whenever changing challenge periods or Wallet refresh behavior. Never rescan unbounded history.

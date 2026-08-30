@@ -414,6 +414,7 @@ function walletChallengeResponse(
   reference = new Date(),
 ) {
   const milestones = milestonesForChallenge(challenge);
+  const sequential = isSequentialChallenge(challenge);
   const settledTargets = new Set(
     Array.isArray(challenge.earnedMilestoneTargets)
       ? challenge.earnedMilestoneTargets.map((target: unknown) => Number(target))
@@ -422,6 +423,34 @@ function walletChallengeResponse(
   const isLegacyCompleted = !hasMilestoneDefinition(challenge) && challenge.status === "completed";
   const finalMilestone = milestones.at(-1) ?? { target: 0, reward: 0 };
   const periodEnded = new Date(challenge.periodEnd) <= reference;
+  const periodDeliveries = Math.max(
+    0,
+    Number.isFinite(Number(challenge.periodDeliveries))
+      ? Number(challenge.periodDeliveries)
+      : sequential
+        ? (Number(challenge.deliveryBaseline) || 0) + (Number(challenge.progress) || 0)
+        : Number(challenge.progress) || 0,
+  );
+  // Sequential challenges store each stage's additional-delivery target and
+  // reset stage progress after advancing. Keep that storage contract intact,
+  // while exposing a stable cumulative scale for wallet progress displays.
+  const milestoneScale = sequential
+    ? CHALLENGE_MILESTONES[challenge.kind as ChallengeKind].map((milestone, index) => ({
+        target: milestone.target,
+        reward: milestone.reward,
+        cumulativeTarget: cumulativeTargetForSequence(challenge.kind as ChallengeKind, index),
+        earned:
+          periodDeliveries >=
+          cumulativeTargetForSequence(challenge.kind as ChallengeKind, index),
+      }))
+    : milestones.map((milestone) => ({
+        ...milestone,
+        cumulativeTarget: milestone.target,
+        earned:
+          isLegacyCompleted ||
+          settledTargets.has(milestone.target) ||
+          Number(challenge.progress) >= milestone.target,
+      }));
   const targetReached =
     challenge.status === "completed" ||
     Number(challenge.progress) >= finalMilestone.target;
@@ -434,15 +463,6 @@ function walletChallengeResponse(
           ? "pending"
           : "in_progress"
         : "not_earned";
-  const periodDeliveries = Math.max(
-    0,
-    Number.isFinite(Number(challenge.periodDeliveries))
-      ? Number(challenge.periodDeliveries)
-      : isSequentialChallenge(challenge)
-        ? (Number(challenge.deliveryBaseline) || 0) + (Number(challenge.progress) || 0)
-        : Number(challenge.progress) || 0,
-  );
-
   return {
     id: String(challenge._id),
     kind: challenge.kind,
@@ -460,6 +480,8 @@ function walletChallengeResponse(
           challenge.status === "completed" &&
           milestone.target === finalMilestone.target),
     })),
+    milestoneScale,
+    cumulativeProgress: periodDeliveries,
     status: challenge.status,
     payoutStatus,
     bonusAmount: payoutStatus === "paid" ? normalizedPayoutAmount : 0,
