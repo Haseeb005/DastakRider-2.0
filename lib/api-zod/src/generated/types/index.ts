@@ -32,5 +32,6 @@ export * from './riderRegisterInput';
 export * from './riderReview';
 export * from './riderReviewsResponse';
 export * from './riderWallet';
+export * from './riderWeeklyEarnings';
 export * from './walletTransaction';
 export * from './walletTransactionType';

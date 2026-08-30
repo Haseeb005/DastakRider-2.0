@@ -1657,6 +1657,7 @@ function RiderWallet() {
       deliveries={wallet?.deliveries}
       weekStart={wallet?.weekStart}
       weekEnd={displayWeekEnd}
+      previousWeek={wallet?.previousWeek}
       dailyChallenge={wallet?.todayChallenge}
       weeklyChallenge={wallet?.weeklyChallenge}
       recentChallenges={wallet?.recentChallenges}

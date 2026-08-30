@@ -268,9 +268,20 @@ export interface WalletTransaction {
   challengeId?: string;
 }
 
+export interface RiderWeeklyEarnings {
+  weekStart: string;
+  weekEnd: string;
+  deliveryEarnings: number;
+  challengeBonuses: number;
+  fastDeliveryBonuses: number;
+  totalEarnings: number;
+  deliveries: number;
+}
+
 export interface RiderWallet {
   weekStart: string;
   weekEnd: string;
+  previousWeek: RiderWeeklyEarnings;
   deliveryEarnings: number;
   challengeBonuses: number;
   fastDeliveryBonuses: number;

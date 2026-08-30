@@ -557,6 +557,15 @@ export const GetRiderEarningsResponse = zod.object({
 export const GetRiderWalletResponse = zod.object({
   "weekStart": zod.coerce.date(),
   "weekEnd": zod.coerce.date(),
+  "previousWeek": zod.object({
+  "weekStart": zod.coerce.date(),
+  "weekEnd": zod.coerce.date(),
+  "deliveryEarnings": zod.number(),
+  "challengeBonuses": zod.number(),
+  "fastDeliveryBonuses": zod.number(),
+  "totalEarnings": zod.number(),
+  "deliveries": zod.number()
+}),
   "deliveryEarnings": zod.number(),
   "challengeBonuses": zod.number(),
   "fastDeliveryBonuses": zod.number(),

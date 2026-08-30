@@ -142,6 +142,12 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
     EXPO_PUBLIC_DOMAIN: expoPublicDomain,
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
   };
+  const expoToken = process.env.EXPO_TOKEN_Rider?.trim();
+  if (expoToken) {
+    env.EXPO_TOKEN = expoToken;
+    delete env.EXPO_TOKEN_Rider;
+    console.log("Using EXPO_TOKEN_Rider for Expo authentication: configured");
+  }
   if (liveApiBaseUrl) {
     env.EXPO_PUBLIC_API_URL = liveApiBaseUrl;
     console.log("Using LIVE_API_BASE_URL for the mobile API: configured");

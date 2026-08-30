@@ -3,6 +3,7 @@ import {
   useGetRiderWallet,
   type RiderChallenge,
   type RiderChallengeMilestone,
+  type RiderWeeklyEarnings,
   type WalletTransaction,
 } from "@workspace/api-client-react";
 import React from "react";
@@ -303,6 +304,80 @@ function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
   );
 }
 
+function PreviousWeekEarningsCard({ summary }: { summary: RiderWeeklyEarnings }) {
+  const c = useColors();
+  const weekEndLabel = formatDate(
+    new Date(new Date(summary.weekEnd).getTime() - 1).toISOString(),
+    { day: "numeric", month: "short" },
+  );
+
+  return (
+    <View
+      style={{
+        backgroundColor: c.card,
+        borderRadius: 20,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: c.border,
+        gap: 14,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 14,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: c.accent,
+            }}
+          >
+            <Icon name="clock" size={20} color={c.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 15 }}>
+              Previous week's earnings
+            </Text>
+            <Text style={{ marginTop: 3, color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12 }}>
+              {formatDate(summary.weekStart, { day: "numeric", month: "short" })} – {weekEndLabel}
+            </Text>
+          </View>
+        </View>
+        <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 20 }}>
+          {rupees(summary.totalEarnings)}
+        </Text>
+      </View>
+
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1, padding: 11, borderRadius: 14, backgroundColor: c.muted }}>
+          <Text style={{ color: c.mutedForeground, fontFamily: "Inter_600SemiBold", fontSize: 10 }}>
+            Deliveries
+          </Text>
+          <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 14, marginTop: 4 }}>
+            {rupees(summary.deliveryEarnings)}
+          </Text>
+          <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 2 }}>
+            {summary.deliveries} completed
+          </Text>
+        </View>
+        <View style={{ flex: 1, padding: 11, borderRadius: 14, backgroundColor: c.muted }}>
+          <Text style={{ color: c.mutedForeground, fontFamily: "Inter_600SemiBold", fontSize: 10 }}>
+            Bonuses
+          </Text>
+          <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 14, marginTop: 4 }}>
+            {rupees(summary.challengeBonuses + summary.fastDeliveryBonuses)}
+          </Text>
+          <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 2 }}>
+            Challenges + fast delivery
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
   const c = useColors();
   const bonus = transaction.type !== "delivery";
@@ -415,6 +490,8 @@ export default function WalletScreen() {
               </View>
             </View>
           </View>
+
+          <PreviousWeekEarningsCard summary={data.previousWeek} />
 
           <View style={{ gap: 10 }}>
             <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 18 }}>Active challenges</Text>

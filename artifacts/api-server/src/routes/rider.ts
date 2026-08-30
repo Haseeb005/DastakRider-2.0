@@ -2287,7 +2287,9 @@ router.get("/rider/wallet", async (req: any, res: any) => {
     const now = new Date();
     const weekStart = pktPeriodStart("week");
     const weekEnd = new Date(weekStart.getTime() + 7 * PKT_DAY_MS);
+    const previousWeekStart = new Date(weekStart.getTime() - 7 * PKT_DAY_MS);
     const weekKey = pktDateKey(weekStart);
+    const previousWeekKey = pktDateKey(previousWeekStart);
     const tillNoonFare = Number(rider.tillNoonFare) || 0;
 
     const [dailyChallenge, weeklyChallenge] = await Promise.all([
@@ -2299,35 +2301,48 @@ router.get("/rider/wallet", async (req: any, res: any) => {
       advanceSequentialChallenge(weeklyChallenge, now),
     ]);
 
-    const orders = await ordersCol()
-      .find(
-        {
-          riderId,
-          status: DELIVERED_STATUS,
-          createdAt: { $gte: weekStart, $lt: weekEnd },
-        },
-        {
-          projection: {
-            _id: 1,
-            orderNum: 1,
-            createdAt: 1,
-            riderFare: 1,
-            tip: 1,
+    const orderProjection = {
+      projection: {
+        _id: 1,
+        orderNum: 1,
+        createdAt: 1,
+        riderFare: 1,
+        tip: 1,
+      },
+    };
+    const loadWeekOrders = (start: Date, end: Date) =>
+      ordersCol()
+        .find(
+          {
+            riderId,
+            status: DELIVERED_STATUS,
+            createdAt: { $gte: start, $lt: end },
           },
-        },
-      )
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    const [bonusEntries, recentChallengeDocs] = await Promise.all([
+          orderProjection,
+        )
+        .sort({ createdAt: -1 })
+        .toArray();
+    const loadWeekBonuses = (key: string) =>
       riderWalletEntriesCol()
         .find({
           riderId,
-          weekKey,
+          weekKey: key,
           type: { $in: ["challenge_bonus", "fast_delivery_bonus"] },
         })
         .sort({ createdAt: -1 })
-        .toArray(),
+        .toArray();
+
+    const [
+      orders,
+      previousWeekOrders,
+      bonusEntries,
+      previousWeekBonusEntries,
+      recentChallengeDocs,
+    ] = await Promise.all([
+      loadWeekOrders(weekStart, weekEnd),
+      loadWeekOrders(previousWeekStart, weekStart),
+      loadWeekBonuses(weekKey),
+      loadWeekBonuses(previousWeekKey),
       riderChallengesCol()
         .find({
           riderId,
@@ -2388,22 +2403,33 @@ router.get("/rider/wallet", async (req: any, res: any) => {
         now,
       );
 
-    const deliveryEarnings = Math.round(
-      orders.reduce(
-        (sum: number, order: any) => sum + riderEarningForOrder(order, tillNoonFare),
-        0,
-      ),
-    );
-    const challengeBonuses = Math.round(
-      bonusEntries
-        .filter((entry: any) => entry.type === "challenge_bonus")
-        .reduce((sum: number, entry: any) => sum + (Number(entry.amount) || 0), 0),
-    );
-    const fastDeliveryBonuses = Math.round(
-      bonusEntries
-        .filter((entry: any) => entry.type === "fast_delivery_bonus")
-        .reduce((sum: number, entry: any) => sum + (Number(entry.amount) || 0), 0),
-    );
+    const summarizeWeek = (weekOrders: any[], weekBonusEntries: any[]) => {
+      const deliveryEarnings = Math.round(
+        weekOrders.reduce(
+          (sum: number, order: any) => sum + riderEarningForOrder(order, tillNoonFare),
+          0,
+        ),
+      );
+      const challengeBonuses = Math.round(
+        weekBonusEntries
+          .filter((entry: any) => entry.type === "challenge_bonus")
+          .reduce((sum: number, entry: any) => sum + (Number(entry.amount) || 0), 0),
+      );
+      const fastDeliveryBonuses = Math.round(
+        weekBonusEntries
+          .filter((entry: any) => entry.type === "fast_delivery_bonus")
+          .reduce((sum: number, entry: any) => sum + (Number(entry.amount) || 0), 0),
+      );
+      return {
+        deliveryEarnings,
+        challengeBonuses,
+        fastDeliveryBonuses,
+        totalEarnings: deliveryEarnings + challengeBonuses + fastDeliveryBonuses,
+        deliveries: weekOrders.length,
+      };
+    };
+    const currentWeekSummary = summarizeWeek(orders, bonusEntries);
+    const previousWeekSummary = summarizeWeek(previousWeekOrders, previousWeekBonusEntries);
     const transactions = [
       ...orders.map((order: any) => ({
         id: `delivery:${String(order._id)}`,
@@ -2427,11 +2453,12 @@ router.get("/rider/wallet", async (req: any, res: any) => {
     res.json({
       weekStart: weekStart.toISOString(),
       weekEnd: weekEnd.toISOString(),
-      deliveryEarnings,
-      challengeBonuses,
-      fastDeliveryBonuses,
-      totalEarnings: deliveryEarnings + challengeBonuses + fastDeliveryBonuses,
-      deliveries: orders.length,
+      previousWeek: {
+        weekStart: previousWeekStart.toISOString(),
+        weekEnd: weekStart.toISOString(),
+        ...previousWeekSummary,
+      },
+      ...currentWeekSummary,
       transactions,
       todayChallenge: challengeResponse(syncedDaily),
       weeklyChallenge: challengeResponse(syncedWeekly),

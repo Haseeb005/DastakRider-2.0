@@ -6,11 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RiderChallenge } from './riderChallenge';
+import type { RiderWeeklyEarnings } from './riderWeeklyEarnings';
 import type { WalletTransaction } from './walletTransaction';
 
 export interface RiderWallet {
   weekStart: Date;
   weekEnd: Date;
+  previousWeek: RiderWeeklyEarnings;
   deliveryEarnings: number;
   challengeBonuses: number;
   fastDeliveryBonuses: number;

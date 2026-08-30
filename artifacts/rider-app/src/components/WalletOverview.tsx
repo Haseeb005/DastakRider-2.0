@@ -46,6 +46,16 @@ export interface Transaction {
   orderId?: string;
 }
 
+export interface WeeklyEarningsSummary {
+  weekStart: string | Date;
+  weekEnd: string | Date;
+  deliveryEarnings: number;
+  challengeBonuses: number;
+  fastDeliveryBonuses: number;
+  totalEarnings: number;
+  deliveries: number;
+}
+
 export interface WalletOverviewProps {
   loading?: boolean;
   error?: string | boolean;
@@ -56,6 +66,7 @@ export interface WalletOverviewProps {
   deliveries?: number;
   weekStart?: string | Date;
   weekEnd?: string | Date;
+  previousWeek?: WeeklyEarningsSummary;
   dailyChallenge?: Challenge | null;
   weeklyChallenge?: Challenge | null;
   recentChallenges?: Challenge[];
@@ -88,6 +99,11 @@ const formatChallengePeriod = (challenge: Challenge) => {
   const endLabel = formatter.format(end);
 
   return startLabel === endLabel ? startLabel : `${startLabel} – ${endLabel}`;
+};
+
+const formatWeekRange = (summary: WeeklyEarningsSummary) => {
+  const end = new Date(new Date(summary.weekEnd).getTime() - 1);
+  return `${formatDate(summary.weekStart)} - ${formatDate(end)}`;
 };
 
 const WalletSkeleton = () => (
@@ -377,6 +393,44 @@ const TransactionItem = ({ tx }: { tx: Transaction }) => {
   );
 };
 
+const PreviousWeekEarningsCard = ({ summary }: { summary: WeeklyEarningsSummary }) => {
+  const totalBonuses = summary.challengeBonuses + summary.fastDeliveryBonuses;
+
+  return (
+    <section className="px-4">
+      <div className="rounded-2xl border bg-card p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="shrink-0 rounded-xl bg-primary/10 p-2.5 text-primary">
+              <History className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-bold text-sm">Previous week's earnings</h3>
+              <p className="mt-1 text-xs text-muted-foreground">{formatWeekRange(summary)}</p>
+            </div>
+          </div>
+          <p className="shrink-0 text-xl font-bold text-foreground">
+            Rs. {summary.totalEarnings.toLocaleString()}
+          </p>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-xl bg-muted/60 p-3">
+            <p className="text-[11px] font-semibold text-muted-foreground">Deliveries</p>
+            <p className="mt-1 text-sm font-bold">Rs. {summary.deliveryEarnings.toLocaleString()}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{summary.deliveries} completed</p>
+          </div>
+          <div className="rounded-xl bg-muted/60 p-3">
+            <p className="text-[11px] font-semibold text-muted-foreground">Bonuses</p>
+            <p className="mt-1 text-sm font-bold">Rs. {totalBonuses.toLocaleString()}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">Challenges + fast delivery</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
 export function WalletOverview({
   loading,
   error,
@@ -387,6 +441,7 @@ export function WalletOverview({
   deliveries = 0,
   weekStart,
   weekEnd,
+  previousWeek,
   dailyChallenge,
   weeklyChallenge,
   recentChallenges = [],
@@ -450,6 +505,8 @@ export function WalletOverview({
           </div>
         </div>
       </section>
+
+      {previousWeek && <PreviousWeekEarningsCard summary={previousWeek} />}
 
       {/* Active Challenges */}
       <section className="px-4 flex flex-col gap-4">

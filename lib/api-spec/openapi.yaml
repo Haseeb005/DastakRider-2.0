@@ -762,6 +762,34 @@ components:
         - title
         - createdAt
 
+    RiderWeeklyEarnings:
+      type: object
+      properties:
+        weekStart:
+          type: string
+          format: date-time
+        weekEnd:
+          type: string
+          format: date-time
+        deliveryEarnings:
+          type: number
+        challengeBonuses:
+          type: number
+        fastDeliveryBonuses:
+          type: number
+        totalEarnings:
+          type: number
+        deliveries:
+          type: number
+      required:
+        - weekStart
+        - weekEnd
+        - deliveryEarnings
+        - challengeBonuses
+        - fastDeliveryBonuses
+        - totalEarnings
+        - deliveries
+
     RiderWallet:
       type: object
       properties:
@@ -771,6 +799,8 @@ components:
         weekEnd:
           type: string
           format: date-time
+        previousWeek:
+          $ref: "#/components/schemas/RiderWeeklyEarnings"
         deliveryEarnings:
           type: number
         challengeBonuses:
@@ -796,6 +826,7 @@ components:
       required:
         - weekStart
         - weekEnd
+        - previousWeek
         - deliveryEarnings
         - challengeBonuses
         - fastDeliveryBonuses
