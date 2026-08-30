@@ -222,15 +222,15 @@ type ChallengePayoutStatus = "in_progress" | "pending" | "paid" | "not_earned";
 const CHALLENGE_MILESTONES: Record<ChallengeKind, ChallengeMilestone[]> = {
   daily: [
     { target: 10, reward: 200 },
-    { target: 15, reward: 200 },
-    { target: 20, reward: 500 },
-    { target: 25, reward: 800 },
-    { target: 30, reward: 1000 },
+    { target: 15, reward: 300 },
+    { target: 20, reward: 400 },
+    { target: 25, reward: 500 },
+    { target: 30, reward: 600 },
   ],
   weekly: [
     { target: 50, reward: 500 },
     { target: 75, reward: 1000 },
-    { target: 100, reward: 2000 },
+    { target: 100, reward: 1500 },
   ],
 };
 

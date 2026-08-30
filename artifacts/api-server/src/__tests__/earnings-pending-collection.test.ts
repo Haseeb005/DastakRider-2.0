@@ -419,10 +419,20 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
       ),
       [
         { target: 10, reward: 200, cumulativeTarget: 10 },
-        { target: 15, reward: 200, cumulativeTarget: 15 },
-        { target: 20, reward: 500, cumulativeTarget: 20 },
-        { target: 25, reward: 800, cumulativeTarget: 25 },
-        { target: 30, reward: 1000, cumulativeTarget: 30 },
+        { target: 15, reward: 300, cumulativeTarget: 15 },
+        { target: 20, reward: 400, cumulativeTarget: 20 },
+        { target: 25, reward: 500, cumulativeTarget: 25 },
+        { target: 30, reward: 600, cumulativeTarget: 30 },
+      ],
+    );
+    assert.deepEqual(
+      (firstWeekly.milestoneScale as Array<Record<string, unknown>>).map(
+        ({ target, reward, cumulativeTarget }) => ({ target, reward, cumulativeTarget }),
+      ),
+      [
+        { target: 50, reward: 500, cumulativeTarget: 50 },
+        { target: 75, reward: 1000, cumulativeTarget: 125 },
+        { target: 100, reward: 1500, cumulativeTarget: 225 },
       ],
     );
     assert.equal(firstDaily.cumulativeProgress, 3);
@@ -544,8 +554,8 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
         .map(({ target, reward }) => ({ target, reward })),
       [
         { target: 10, reward: 200 },
-        { target: 15, reward: 200 },
-        { target: 20, reward: 500 },
+        { target: 15, reward: 300 },
+        { target: 20, reward: 400 },
       ],
       "23 deliveries reaches the 20-delivery tier without paying before period end",
     );
@@ -563,8 +573,8 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
         .map(({ target, reward }) => ({ target, reward })),
       [
         { target: 10, reward: 200 },
-        { target: 15, reward: 200 },
-        { target: 20, reward: 500 },
+        { target: 15, reward: 300 },
+        { target: 20, reward: 400 },
       ],
     );
     assert.equal(afterDeletion.challengeBonuses, 0);
@@ -577,7 +587,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     assert.ok(weekly, "the generated weekly challenge should remain active");
 
     await dbCol.orders().insertMany(
-      walletOrderOids.slice(22, 48).map((oid, index) => ({
+      walletOrderOids.slice(20, 48).map((oid, index) => ({
         _id: oid,
         riderId,
         status: "Delivered",
@@ -1060,7 +1070,7 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
         challengeKey: weeklySettlementKey,
       });
       assert.equal(dailyEntry?.milestoneTarget, 20);
-      assert.equal(dailyEntry?.amount, 500);
+      assert.equal(dailyEntry?.amount, 400);
       assert.equal(weeklyEntry?.milestoneTarget, 75);
       assert.equal(weeklyEntry?.amount, 1000);
       assert.equal(
@@ -1110,7 +1120,7 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
           challenge.periodStart === weeklyStart.toISOString(),
       );
       assert.equal(dailyResult?.payoutStatus, "paid");
-      assert.equal(dailyResult?.bonusAmount, 500);
+      assert.equal(dailyResult?.bonusAmount, 400);
       assert.equal(dailyResult?.periodDeliveries, 23);
       assert.equal(weeklyResult?.payoutStatus, "paid");
       assert.equal(weeklyResult?.bonusAmount, 1000);
@@ -1149,7 +1159,7 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
       });
       assert.equal(sameValueUpgrade?.milestoneTarget, 20);
       assert.equal(sameValueUpgrade?.challengeSequence, 2);
-      assert.equal(sameValueUpgrade?.amount, 500);
+      assert.equal(sameValueUpgrade?.amount, 400);
 
       await dbCol.orders().insertMany(
         delayedOrderIds.slice(1, 3).map((orderId, index) => ({
@@ -1166,7 +1176,7 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
       });
       assert.equal(upgradedDailyEntry?.milestoneTarget, 25);
       assert.equal(upgradedDailyEntry?.challengeSequence, 3);
-      assert.equal(upgradedDailyEntry?.amount, 800);
+      assert.equal(upgradedDailyEntry?.amount, 500);
 
       await dbCol.orders().deleteMany({ _id: { $in: delayedOrderIds } });
       await fetchSettlementWallet();
@@ -1175,7 +1185,7 @@ describe("GET /api/rider/wallet — missed period settlement", () => {
       });
       assert.equal(permanentDailyEntry?.milestoneTarget, 25);
       assert.equal(permanentDailyEntry?.challengeSequence, 3);
-      assert.equal(permanentDailyEntry?.amount, 800);
+      assert.equal(permanentDailyEntry?.amount, 500);
       assert.equal(
         await dbCol.riderWalletEntries().countDocuments({
           riderId,
