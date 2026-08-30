@@ -393,7 +393,9 @@ const TransactionItem = ({ tx }: { tx: Transaction }) => {
   );
 };
 
-const PreviousWeekEarningsCard = ({ summary }: { summary: WeeklyEarningsSummary }) => {
+const PreviousWeekEarningsCard = ({ summary }: { summary?: WeeklyEarningsSummary }) => {
+  if (!summary) return null;
+
   const totalBonuses = summary.challengeBonuses + summary.fastDeliveryBonuses;
 
   return (

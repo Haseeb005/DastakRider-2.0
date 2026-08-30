@@ -304,8 +304,10 @@ function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
   );
 }
 
-function PreviousWeekEarningsCard({ summary }: { summary: RiderWeeklyEarnings }) {
+function PreviousWeekEarningsCard({ summary }: { summary?: RiderWeeklyEarnings }) {
   const c = useColors();
+  if (!summary) return null;
+
   const weekEndLabel = formatDate(
     new Date(new Date(summary.weekEnd).getTime() - 1).toISOString(),
     { day: "numeric", month: "short" },
@@ -491,7 +493,7 @@ export default function WalletScreen() {
             </View>
           </View>
 
-          <PreviousWeekEarningsCard summary={data.previousWeek} />
+          {data.previousWeek ? <PreviousWeekEarningsCard summary={data.previousWeek} /> : null}
 
           <View style={{ gap: 10 }}>
             <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 18 }}>Active challenges</Text>
