@@ -546,6 +546,7 @@ async function createSequentialChallenge(
   sequence: number,
   deliveryBaseline: number,
   now: Date,
+  deliveryCountOffset = 0,
 ): Promise<any> {
   const milestone = CHALLENGE_MILESTONES[kind][sequence];
   if (!milestone) throw new Error(`No ${kind} challenge exists at sequence ${sequence}`);
@@ -567,6 +568,7 @@ async function createSequentialChallenge(
       period.end.getTime() + CHALLENGE_SETTLEMENT_GRACE_MS,
     ),
     deliveryBaseline: Math.max(0, deliveryBaseline),
+    deliveryCountOffset: Math.max(0, deliveryCountOffset),
     tier: sequentialTierLabel(kind, sequence),
     target: milestone.target,
     reward: milestone.reward,
@@ -729,6 +731,9 @@ async function migrateCurrentChallenge(
       }
 
       const milestone = schedule[completedSequence];
+      const deliveryBaseline =
+        completedSequence > 0 ? schedule[completedSequence - 1].target : 0;
+      const deliveryCountOffset = Math.max(0, deliveredCount - milestone.target);
       const matchingEntry = existingEntries.find(
         (entry) => Number(entry.milestoneTarget) === milestone.target,
       );
@@ -746,13 +751,17 @@ async function migrateCurrentChallenge(
             basePeriodKey: String(lockedChallenge.basePeriodKey || lockedChallenge.periodKey),
             // Old cumulative rewards are preserved, then the next challenge
             // starts at migration time rather than granting surplus thresholds.
-            deliveryBaseline: Math.max(0, deliveredCount - milestone.target),
+            deliveryBaseline,
+            // Rides above the migrated milestone belong to the retired
+            // schedule. Carry this period-wide offset into every later stage
+            // so those rides cannot unlock or settle a new tier.
+            deliveryCountOffset,
             tier: sequentialTierLabel(kind, completedSequence),
             target: milestone.target,
             reward: milestone.reward,
             milestones: [{ ...milestone }],
             earnedMilestoneTargets: [milestone.target],
-            progress: milestone.target,
+            progress: Math.max(0, milestone.target - deliveryBaseline),
             status: "completed",
             completedAt: lockedChallenge.completedAt || now,
             payoutKey,
@@ -771,6 +780,7 @@ async function migrateCurrentChallenge(
             sequence: 0,
             basePeriodKey: String(lockedChallenge.basePeriodKey || lockedChallenge.periodKey),
             deliveryBaseline: 0,
+            deliveryCountOffset: 0,
             tier: sequentialTierLabel(kind, 0),
             target: firstMilestone.target,
             reward: firstMilestone.reward,
@@ -823,6 +833,7 @@ async function advanceSequentialChallenge(
       sequence + 1,
       cumulativeTargetForSequence(kind, sequence),
       now,
+      Number(synced.deliveryCountOffset) || 0,
     );
   }
 
@@ -898,7 +909,11 @@ async function settleSequentialChallengePeriod(
       .sort({ sequence: 1, createdAt: 1 })
       .toArray();
     const deliveredCount = await countChallengeDeliveries(rootChallenge);
-    const completedSequence = highestCompletedSequence(kind, deliveredCount);
+    const eligibleDeliveredCount = Math.max(
+      0,
+      deliveredCount - (Number(rootChallenge.deliveryCountOffset) || 0),
+    );
+    const completedSequence = highestCompletedSequence(kind, eligibleDeliveredCount);
     const settlementKey = `${challenge.riderId}:${kind}:${basePeriodKey}:highest`;
     const existingSettlementEntry = await riderWalletEntriesCol().findOne({
       challengeKey: settlementKey,
@@ -941,8 +956,8 @@ async function settleSequentialChallengePeriod(
         {
           $set: {
             status: "expired",
-            progress: Math.max(0, deliveredCount),
-            periodDeliveries: Math.max(0, deliveredCount),
+            progress: eligibleDeliveredCount,
+            periodDeliveries: eligibleDeliveredCount,
             settlementSkipped: false,
             updatedAt: now,
           },
@@ -1041,7 +1056,7 @@ async function settleSequentialChallengePeriod(
           reward: milestone.reward,
           milestones: [{ ...milestone }],
           progress: milestone.target,
-          periodDeliveries: Math.max(0, deliveredCount),
+          periodDeliveries: eligibleDeliveredCount,
           status: "completed",
           completedAt: now,
           payoutKey: settlementKey,
@@ -1263,6 +1278,7 @@ async function ensureChallenge(
       sequence + 1,
       cumulativeTargetForSequence(kind, sequence),
       now,
+      Number(latestCompletedSequential.deliveryCountOffset) || 0,
     );
   }
 
@@ -1311,6 +1327,10 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
     if (!finalMilestone) throw new Error("Rider challenge has no valid milestone");
 
     const deliveredCount = await countChallengeDeliveries(currentBeforeCount);
+    const eligibleDeliveredCount = Math.max(
+      0,
+      deliveredCount - (Number(currentBeforeCount.deliveryCountOffset) || 0),
+    );
     const requiredProgress = isSequentialChallenge(currentBeforeCount)
       ? Math.max(
           0,
@@ -1318,8 +1338,11 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
         )
       : finalMilestone.target;
     const challengeProgress = isSequentialChallenge(currentBeforeCount)
-      ? Math.max(0, deliveredCount - (Number(currentBeforeCount.deliveryBaseline) || 0))
-      : deliveredCount;
+      ? Math.max(
+          0,
+          eligibleDeliveredCount - (Number(currentBeforeCount.deliveryBaseline) || 0),
+        )
+      : eligibleDeliveredCount;
     const ownershipFilter = { _id: challenge._id, "settlementLock.token": lockToken };
 
     // Sequential progress counts only rides completed after the previous

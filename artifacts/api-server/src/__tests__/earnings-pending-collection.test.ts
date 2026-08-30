@@ -942,6 +942,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
       assert.equal(migratedCompleted?.status, "completed");
       assert.equal(migratedCompleted?.target, 10);
       assert.equal(migratedCompleted?.sequence, 0);
+      assert.equal(migratedCompleted?.deliveryCountOffset, 10);
     } finally {
       await dbCol.orders().deleteMany({ _id: { $in: migrationOrderOids } });
       await dbCol.riderChallenges().deleteMany({ riderId });

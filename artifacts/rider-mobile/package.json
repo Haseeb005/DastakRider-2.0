@@ -8,6 +8,7 @@
     "local": "pnpm exec expo start",
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
+    "test:wallet-milestones": "playwright test e2e/wallet-milestones.spec.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "android": "expo run:android",
     "ios": "expo run:ios"
@@ -17,6 +18,7 @@
     "@expo-google-fonts/inter": "^0.4.0",
     "@expo/cli": "54.0.23",
     "@expo/ngrok": "^4.1.0",
+    "@playwright/test": "^1.55.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@stardazed/streams-text-encoding": "^1.0.2",
     "@tanstack/react-query": "catalog:",

@@ -3,10 +3,12 @@ import {
   useGetRiderWallet,
   type RiderChallenge,
   type RiderChallengeMilestone,
+  type RiderWallet,
   type RiderWeeklyEarnings,
   type WalletTransaction,
 } from "@workspace/api-client-react";
 import React from "react";
+import { useLocalSearchParams } from "expo-router";
 import {
   ActivityIndicator,
   Pressable,
@@ -78,14 +80,17 @@ function getCumulativeProgress(challenge: RiderChallenge) {
   return Math.max(0, challenge.progress);
 }
 
+type WalletMilestoneFixtureScenario = "before" | "between" | "after";
 function ChallengeMilestoneBar({
   milestones,
   progress,
   tone,
+  kind,
 }: {
   milestones: RiderChallengeMilestone[];
   progress: number;
   tone: string;
+  kind: RiderChallenge["kind"];
 }) {
   const c = useColors();
   const finalTarget = getMilestoneThreshold(
@@ -130,6 +135,7 @@ function ChallengeMilestoneBar({
         now: Math.min(progress, finalTarget),
       }}
       style={{ paddingTop: 24, paddingBottom: 2 }}
+      testID={`wallet-milestone-bar-${kind}`}
     >
       <View
         style={{
@@ -209,6 +215,7 @@ function ChallengeMilestoneBar({
             <View
               key={`milestone-label-${milestone.target}-${milestone.reward}-${index}`}
               pointerEvents="none"
+              testID={`wallet-milestone-label-${kind}-${index}`}
               style={{
                 position: "absolute",
                 left: `${position}%`,
@@ -220,6 +227,7 @@ function ChallengeMilestoneBar({
               }}
             >
               <Text
+                testID={`wallet-milestone-text-${kind}-${index}-target`}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.8}
@@ -236,6 +244,7 @@ function ChallengeMilestoneBar({
               </Text>
               {threshold !== milestone.target ? (
                 <Text
+                  testID={`wallet-milestone-text-${kind}-${index}-threshold`}
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.8}
@@ -253,6 +262,7 @@ function ChallengeMilestoneBar({
                 </Text>
               ) : null}
               <Text
+                testID={`wallet-milestone-text-${kind}-${index}-reward`}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.75}
@@ -323,6 +333,7 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
 
   return (
     <View
+      testID={`wallet-challenge-card-${challenge.kind}`}
       style={{
         backgroundColor: c.card,
         borderRadius: 20,
@@ -376,7 +387,12 @@ function WalletChallengeCard({ challenge }: { challenge: RiderChallenge }) {
           </Text>
           <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: tone }}>{progress}%</Text>
         </View>
-        <ChallengeMilestoneBar milestones={milestones} progress={cumulativeProgress} tone={tone} />
+        <ChallengeMilestoneBar
+          milestones={milestones}
+          progress={cumulativeProgress}
+          tone={tone}
+          kind={challenge.kind}
+        />
         <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 10 }}>
           {highestReached
             ? `Current reward tier: ${rupees(highestReached.reward)} at ${highestReached.target} deliveries`
@@ -501,7 +517,12 @@ function RecentChallengeCard({ challenge }: { challenge: RiderChallenge }) {
           </Text>
           <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color: c.mutedForeground }}>{progress}%</Text>
         </View>
-        <ChallengeMilestoneBar milestones={milestones} progress={cumulativeProgress} tone={tone} />
+        <ChallengeMilestoneBar
+          milestones={milestones}
+          progress={cumulativeProgress}
+          tone={tone}
+          kind={challenge.kind}
+        />
       </View>
     </View>
   );
@@ -627,10 +648,23 @@ function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
 
 export default function WalletScreen() {
   const c = useColors();
+  const { fixture } = useLocalSearchParams<{ fixture?: string }>();
+  const fixtureScenario =
+    __DEV__ && (fixture === "wallet-milestones" || fixture === "wallet-milestones-before")
+      ? "before"
+      : __DEV__ && fixture === "wallet-milestones-between"
+        ? "between"
+        : __DEV__ && fixture === "wallet-milestones-after"
+          ? "after"
+          : null;
   const wallet = useGetRiderWallet({
-    query: { queryKey: getGetRiderWalletQueryKey(), refetchInterval: 30_000 },
+    query: {
+      queryKey: getGetRiderWalletQueryKey(),
+      refetchInterval: 30_000,
+      enabled: !fixtureScenario,
+    },
   });
-  const data = wallet.data;
+  const data = fixtureScenario ? makeWalletMilestoneFixture(fixtureScenario) : wallet.data;
   const weekEndLabel = data
     ? new Date(new Date(data.weekEnd).getTime() - 1).toISOString()
     : undefined;
@@ -745,3 +779,92 @@ export default function WalletScreen() {
     </View>
   );
 }
+
+function makeFixtureChallenge(
+  kind: RiderChallenge["kind"],
+  scenario: WalletMilestoneFixtureScenario,
+): RiderChallenge {
+  const milestones = WALLET_FIXTURE_MILESTONES[kind];
+  const progress = fixtureProgress(kind, scenario);
+  const finalMilestone = milestones[milestones.length - 1];
+  return {
+    id: `fixture-${kind}`,
+    kind,
+    tier: kind === "daily" ? "Gold" : "Platinum",
+    target: finalMilestone.target,
+    progress,
+    reward: finalMilestone.reward,
+    milestones,
+    milestoneScale: milestones,
+    cumulativeProgress: progress,
+    status: "active",
+    payoutStatus: "in_progress",
+    bonusAmount: 0,
+    periodDeliveries: progress,
+    periodStart: WALLET_FIXTURE_PERIOD_START,
+    periodEnd: WALLET_FIXTURE_PERIOD_END,
+  };
+}
+
+const WALLET_FIXTURE_MILESTONES: Record<
+  RiderChallenge["kind"],
+  RiderChallengeMilestone[]
+> = {
+  daily: [
+    { target: 10, cumulativeTarget: 10, reward: 200, earned: false },
+    { target: 15, cumulativeTarget: 15, reward: 300, earned: false },
+    { target: 20, cumulativeTarget: 20, reward: 400, earned: false },
+    { target: 25, cumulativeTarget: 25, reward: 500, earned: false },
+    { target: 30, cumulativeTarget: 30, reward: 600, earned: false },
+  ],
+  weekly: [
+    { target: 50, cumulativeTarget: 50, reward: 500, earned: false },
+    { target: 75, cumulativeTarget: 75, reward: 1000, earned: false },
+    { target: 100, cumulativeTarget: 100, reward: 1500, earned: false },
+    { target: 125, cumulativeTarget: 125, reward: 1800, earned: false },
+    { target: 150, cumulativeTarget: 150, reward: 2000, earned: false },
+  ],
+};
+
+function fixtureProgress(
+  kind: RiderChallenge["kind"],
+  scenario: WalletMilestoneFixtureScenario,
+) {
+  if (kind === "daily") {
+    if (scenario === "before") return 4;
+    if (scenario === "between") return 17;
+    return 27;
+  }
+  if (scenario === "before") return 20;
+  if (scenario === "between") return 90;
+  return 135;
+}
+
+function makeWalletMilestoneFixture(scenario: WalletMilestoneFixtureScenario): RiderWallet {
+  return {
+    weekStart: WALLET_FIXTURE_PERIOD_START,
+    weekEnd: WALLET_FIXTURE_PERIOD_END,
+    previousWeek: {
+      weekStart: "2098-12-25T00:00:00.000Z",
+      weekEnd: WALLET_FIXTURE_PERIOD_START,
+      deliveryEarnings: 0,
+      challengeBonuses: 0,
+      fastDeliveryBonuses: 0,
+      totalEarnings: 0,
+      deliveries: 0,
+    },
+    deliveryEarnings: 0,
+    challengeBonuses: 0,
+    fastDeliveryBonuses: 0,
+    totalEarnings: 0,
+    deliveries: 0,
+    transactions: [],
+    todayChallenge: makeFixtureChallenge("daily", scenario),
+    weeklyChallenge: makeFixtureChallenge("weekly", scenario),
+    recentChallenges: [],
+  };
+}
+
+const WALLET_FIXTURE_PERIOD_START = "2099-01-01T00:00:00.000Z";
+
+const WALLET_FIXTURE_PERIOD_END = "2099-01-08T00:00:00.000Z";

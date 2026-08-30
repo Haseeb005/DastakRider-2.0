@@ -106,6 +106,7 @@ function RootLayoutNav() {
   const { token, isReady } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const isWalletFixture = __DEV__ && segments[0] === "wallet-milestone-fixture";
 
   // Keep order screens current as soon as the authenticated live feed reports
   // a change. Polling remains the fallback for missed events and brief drops.
@@ -203,12 +204,12 @@ function RootLayoutNav() {
   useEffect(() => {
     if (!isReady) return;
     const inAuth = segments[0] === "login";
-    if (!token && !inAuth) {
+    if (!token && !inAuth && !isWalletFixture) {
       router.replace("/login");
     } else if (token && inAuth) {
       router.replace("/(tabs)");
     }
-  }, [token, isReady, segments, router]);
+  }, [token, isReady, segments, router, isWalletFixture]);
 
   if (!isReady) return <Loading />;
 
@@ -216,6 +217,7 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="login" />
+      <Stack.Screen name="wallet-milestone-fixture" />
     </Stack>
   );
 }
