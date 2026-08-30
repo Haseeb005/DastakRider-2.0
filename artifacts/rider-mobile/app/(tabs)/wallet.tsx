@@ -97,6 +97,28 @@ function ChallengeMilestoneBar({
   const currentMilestoneIndex = milestones.findIndex(
     (milestone) => progress < getMilestoneThreshold(milestone),
   );
+  const milestonePositions = milestones.map((milestone) => {
+    const threshold = getMilestoneThreshold(milestone);
+    return finalTarget > 0
+      ? Math.min(100, Math.max(0, (threshold / finalTarget) * 100))
+      : 0;
+  });
+  const labelLanes: number[] = [];
+  milestonePositions.forEach((position, index) => {
+    let lane = 0;
+    while (
+      milestonePositions
+        .slice(0, index)
+        .some((previousPosition, previousIndex) =>
+          labelLanes[previousIndex] === lane &&
+          Math.abs(position - previousPosition) < 22,
+        )
+    ) {
+      lane += 1;
+    }
+    labelLanes.push(lane);
+  });
+  const labelLaneCount = Math.max(1, ...labelLanes.map((lane) => lane + 1));
 
   return (
     <View
@@ -107,9 +129,17 @@ function ChallengeMilestoneBar({
         max: finalTarget,
         now: Math.min(progress, finalTarget),
       }}
-      style={{ paddingTop: 24, paddingBottom: 38 }}
+      style={{ paddingTop: 24, paddingBottom: 2 }}
     >
-      <View style={{ height: 8, borderRadius: 999, backgroundColor: c.muted }}>
+      <View
+        style={{
+          height: 8,
+          borderRadius: 999,
+          backgroundColor: c.muted,
+          marginHorizontal: 11,
+          overflow: "visible",
+        }}
+      >
         <View
           style={{
             width: `${progressPercent}%`,
@@ -120,9 +150,7 @@ function ChallengeMilestoneBar({
         />
         {milestones.map((milestone, index) => {
           const threshold = getMilestoneThreshold(milestone);
-          const position = finalTarget > 0
-            ? Math.min(93, Math.max(7, (threshold / finalTarget) * 100))
-            : 7;
+          const position = milestonePositions[index];
           const reached = progress >= threshold;
           const current = index === currentMilestoneIndex;
 
@@ -133,10 +161,12 @@ function ChallengeMilestoneBar({
               style={{
                 position: "absolute",
                 left: `${position}%`,
-                top: 13,
-                width: 50,
-                marginLeft: -25,
+                top: -7,
+                width: 22,
+                height: 22,
+                marginLeft: -11,
                 alignItems: "center",
+                justifyContent: "center",
               }}
             >
               <View
@@ -157,21 +187,83 @@ function ChallengeMilestoneBar({
                   color={reached ? "#fff" : current ? tone : c.mutedForeground}
                 />
               </View>
-              <Text style={{ marginTop: 3, color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 9 }}>
+            </View>
+          );
+        })}
+      </View>
+      <View
+        style={{
+          position: "relative",
+          height: labelLaneCount * 38,
+          marginTop: 8,
+          marginHorizontal: 11,
+          overflow: "visible",
+        }}
+      >
+        {milestones.map((milestone, index) => {
+          const threshold = getMilestoneThreshold(milestone);
+          const position = milestonePositions[index];
+          const reached = progress >= threshold;
+
+          return (
+            <View
+              key={`milestone-label-${milestone.target}-${milestone.reward}-${index}`}
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: `${position}%`,
+                top: labelLanes[index] * 38,
+                width: 50,
+                height: 36,
+                marginLeft: -25,
+                alignItems: "center",
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                style={{
+                  width: "100%",
+                  color: c.foreground,
+                  fontFamily: "Inter_700Bold",
+                  fontSize: 11,
+                  lineHeight: 12,
+                  textAlign: "center",
+                }}
+              >
                 {milestone.target}
               </Text>
               {threshold !== milestone.target ? (
-                <Text style={{ marginTop: 1, color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 7 }}>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                  style={{
+                    width: "100%",
+                    marginTop: 1,
+                    color: c.mutedForeground,
+                    fontFamily: "Inter_500Medium",
+                    fontSize: 8,
+                    lineHeight: 10,
+                    textAlign: "center",
+                  }}
+                >
                   at {threshold}
                 </Text>
               ) : null}
               <Text
                 numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
                 style={{
+                  width: "100%",
                   marginTop: 1,
                   color: reached ? c.successForeground : c.mutedForeground,
                   fontFamily: "Inter_600SemiBold",
-                  fontSize: 8,
+                  fontSize: 9,
+                  lineHeight: 11,
+                  textAlign: "center",
                 }}
               >
                 {rupees(milestone.reward)}
