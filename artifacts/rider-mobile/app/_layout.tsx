@@ -85,6 +85,32 @@ const queryClient = new QueryClient({
     },
   },
 });
+const PLAYER_ID_SAVE_RETRY_DELAYS_MS = [0, 1_000, 3_000, 7_000];
+
+async function savePlayerIdToServer(playerId: string): Promise<void> {
+  for (const delayMs of PLAYER_ID_SAVE_RETRY_DELAYS_MS) {
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+    if (!storedToken) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/rider/player-id`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${storedToken}`,
+        },
+        body: JSON.stringify({ playerId }),
+      });
+      if (response.ok) return;
+    } catch {
+      // Retry transient connectivity failures while the app finishes login.
+    }
+  }
+}
 
 /**
  * Decode the rider's MongoDB _id from the bearer token.
@@ -151,25 +177,15 @@ function RootLayoutNav() {
     if (token) {
       requestNotificationPermission().catch(() => {});
       const riderId = riderIdFromToken(token);
-      if (riderId) oneSignalLogin(riderId);
 
       // Save the OneSignal subscription (player) ID to the server so the API
       // can target this device via include_subscription_ids instead of external_id.
       setPlayerIdSaver((playerId) => {
-        AsyncStorage.getItem(TOKEN_KEY)
-          .then((storedToken) => {
-            if (!storedToken) return;
-            return fetch(`${API_BASE}/api/rider/player-id`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${storedToken}`,
-              },
-              body: JSON.stringify({ playerId }),
-            });
-          })
-          .catch(() => {});
+        savePlayerIdToServer(playerId).catch(() => {});
       });
+      if (riderId) {
+        oneSignalLogin(riderId).catch(() => {});
+      }
     } else {
       oneSignalLogout();
     }

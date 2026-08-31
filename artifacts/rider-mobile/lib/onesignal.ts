@@ -14,7 +14,7 @@ export interface PushTapEvent {
 
 export function initOneSignal(_onTap: (e: PushTapEvent) => void) {}
 
-export function oneSignalLogin(_riderId: string) {}
+export async function oneSignalLogin(_riderId: string): Promise<void> {}
 
 export function oneSignalLogout() {}
 

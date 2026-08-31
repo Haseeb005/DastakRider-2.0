@@ -28,6 +28,7 @@ const APP_ID: string =
   "";
 
 let initialized = false;
+const SUBSCRIPTION_RETRY_DELAYS_MS = [0, 1_000, 3_000, 7_000];
 
 /** Callback registered by the app to persist the subscription ID to the server. */
 let _savePlayerId: ((id: string) => void) | null = null;
@@ -48,6 +49,17 @@ export function setPlayerIdSaver(fn: (id: string) => void): void {
     .catch(() => {
       // SDK not initialised yet — listener below will fire when ready.
     });
+}
+
+async function saveCurrentSubscriptionId(): Promise<boolean> {
+  try {
+    const id = await OneSignal.User.pushSubscription.getIdAsync();
+    if (!id || !_savePlayerId) return false;
+    _savePlayerId(id);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export type PushScreen = "chat" | "newOrder";
@@ -112,9 +124,30 @@ export function initOneSignal(onTap: (e: PushTapEvent) => void) {
  * Associate the current device with this rider in OneSignal.
  * Call this immediately after the rider authenticates.
  */
-export function oneSignalLogin(riderId: string) {
+export async function oneSignalLogin(riderId: string): Promise<void> {
   if (!APP_ID || !riderId) return;
   OneSignal.login(riderId);
+
+  try {
+    await OneSignal.Notifications.requestPermission(true);
+  } catch {
+    // The OS may already have a permanent permission decision. Continue so an
+    // existing valid subscription can still be recovered and persisted.
+  }
+
+  try {
+    OneSignal.User.pushSubscription.optIn();
+  } catch {
+    // Subscription creation can lag behind SDK initialization. The observer
+    // registered in initOneSignal and the retries below handle that state.
+  }
+
+  for (const delayMs of SUBSCRIPTION_RETRY_DELAYS_MS) {
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    }
+    if (await saveCurrentSubscriptionId()) return;
+  }
 }
 
 /**
@@ -122,5 +155,6 @@ export function oneSignalLogin(riderId: string) {
  */
 export function oneSignalLogout() {
   if (!APP_ID) return;
+  _savePlayerId = null;
   OneSignal.logout();
 }
