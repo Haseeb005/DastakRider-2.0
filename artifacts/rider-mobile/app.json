@@ -2,7 +2,7 @@
   "expo": {
     "name": "Dastak Rider",
     "slug": "rider-mobile",
-    "version": "4.6.4",
+    "version": "4.6.5",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -25,11 +25,11 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.ios.DastakRiders",
-      "buildNumber": "39"
+      "buildNumber": "41"
     },
     "android": {
       "package": "com.dastakriders",
-      "versionCode": 40,
+      "versionCode": 41,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#E6ECEA"

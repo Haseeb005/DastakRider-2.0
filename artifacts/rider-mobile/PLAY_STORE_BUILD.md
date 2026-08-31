@@ -97,7 +97,7 @@ using the `submit.production` config from `eas.json`.
 - [ ] `google-service-account.json` present at `artifacts/rider-mobile/google-service-account.json`
 - [ ] Service account granted **Release Manager** permission in Play Console
 - [ ] `app.json` `android.versionCode` is higher than any previously uploaded build
-      (currently `28`; `autoIncrement: true` handles this automatically)
+      (currently `41`; `autoIncrement: true` handles this automatically)
 - [ ] At least one screenshot and store listing filled in Play Console before
       promoting from internal → production
 
@@ -108,6 +108,6 @@ using the `submit.production` config from `eas.json`.
 | Field           | Value                          |
 |-----------------|--------------------------------|
 | Package name    | `com.dastakriders`             |
-| Current version | `4.6.4` (versionCode `39`)    |
+| Current version | `4.6.5` (versionCode `41`)    |
 | EAS project ID  | `fc7bfa99-d113-4c75-878d-7b1ddb1c630c` |
 | Expo owner      | `haseeb0042-2`                 |
