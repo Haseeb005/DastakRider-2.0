@@ -233,6 +233,7 @@ function RootLayout() {
     Inter_700Bold,
     Inter_800ExtraBold,
   });
+  const isWeb = Platform.OS === "web";
 
   // Version check — runs once on launch before any screen is shown.
   useEffect(() => {
@@ -259,12 +260,15 @@ function RootLayout() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if (isWeb || fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, isWeb]);
 
-  if (!fontsLoaded && !fontError) return null;
+  // Expo web can render with the browser's fallback font while the bundled
+  // Inter faces load. Returning null here leaves a fresh hosted deep link on a
+  // blank frame until the font request completes.
+  if (!isWeb && !fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>
