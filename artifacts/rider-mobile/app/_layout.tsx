@@ -114,15 +114,17 @@ async function savePlayerIdToServer(playerId: string): Promise<void> {
 
 /**
  * Decode the rider's MongoDB _id from the bearer token.
- * Token format: <header_b64url>.<riderId_b64url>.<sig_b64url>
+ * Token format: <riderId_b64url>.<sig_b64url>
  */
 function riderIdFromToken(token: string): string | null {
   try {
-    const part = token.split(".")[1];
-    if (!part) return null;
+    const parts = token.split(".");
+    if (parts.length !== 2) return null;
+    const part = parts[0];
     const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
     const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
-    return atob(padded) || null;
+    const riderId = atob(padded);
+    return /^[0-9a-f]{24}$/i.test(riderId) ? riderId : null;
   } catch {
     return null;
   }
