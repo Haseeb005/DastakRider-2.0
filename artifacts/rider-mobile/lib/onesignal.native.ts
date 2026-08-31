@@ -32,6 +32,7 @@ const SUBSCRIPTION_RETRY_DELAYS_MS = [0, 1_000, 3_000, 7_000];
 
 /** Callback registered by the app to persist the subscription ID to the server. */
 let _savePlayerId: ((id: string) => void) | null = null;
+let _expectedRiderId: string | null = null;
 
 /**
  * Register a function that will be called whenever a valid OneSignal
@@ -40,21 +41,20 @@ let _savePlayerId: ((id: string) => void) | null = null;
  */
 export function setPlayerIdSaver(fn: (id: string) => void): void {
   _savePlayerId = fn;
-  // If a subscription ID already exists (e.g. rider re-opens app), fire now.
-  OneSignal.User.pushSubscription
-    .getIdAsync()
-    .then((id) => {
-      if (id) fn(id);
-    })
-    .catch(() => {
-      // SDK not initialised yet — listener below will fire when ready.
-    });
+  // The existing ID is only persisted after OneSignal confirms that it belongs
+  // to the currently authenticated rider.
+  saveCurrentSubscriptionId().catch(() => {});
 }
 
 async function saveCurrentSubscriptionId(): Promise<boolean> {
   try {
-    const id = await OneSignal.User.pushSubscription.getIdAsync();
-    if (!id || !_savePlayerId) return false;
+    const [id, externalId] = await Promise.all([
+      OneSignal.User.pushSubscription.getIdAsync(),
+      OneSignal.User.getExternalId(),
+    ]);
+    if (!id || !_savePlayerId || !externalId || externalId !== _expectedRiderId) {
+      return false;
+    }
     _savePlayerId(id);
     return true;
   } catch {
@@ -85,9 +85,14 @@ export function initOneSignal(onTap: (e: PushTapEvent) => void) {
   // Capture the subscription ID (player ID) whenever it is assigned or changes.
   // This fires after the SDK links the device to a push subscription, which may
   // happen slightly after initialize() returns.
-  OneSignal.User.pushSubscription.addEventListener("change", (event: any) => {
-    const id: string | undefined = event?.current?.id;
-    if (id && _savePlayerId) _savePlayerId(id);
+  OneSignal.User.pushSubscription.addEventListener("change", () => {
+    saveCurrentSubscriptionId().catch(() => {});
+  });
+
+  // Login can move an existing subscription to another OneSignal user without
+  // changing the subscription ID. Save again when that user association changes.
+  OneSignal.User.addEventListener("change", () => {
+    saveCurrentSubscriptionId().catch(() => {});
   });
 
   // Suppress the system notification banner when the rider is already reading
@@ -126,6 +131,7 @@ export function initOneSignal(onTap: (e: PushTapEvent) => void) {
  */
 export async function oneSignalLogin(riderId: string): Promise<void> {
   if (!APP_ID || !riderId) return;
+  _expectedRiderId = riderId;
   OneSignal.login(riderId);
 
   try {
@@ -155,6 +161,7 @@ export async function oneSignalLogin(riderId: string): Promise<void> {
  */
 export function oneSignalLogout() {
   if (!APP_ID) return;
+  _expectedRiderId = null;
   _savePlayerId = null;
   OneSignal.logout();
 }
