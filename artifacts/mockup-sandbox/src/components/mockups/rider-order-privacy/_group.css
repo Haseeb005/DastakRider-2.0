@@ -1,0 +1,32 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+:root {
+  --dastak-bg: #f6f7f9;
+  --dastak-card: #ffffff;
+  --dastak-ink: #18212f;
+  --dastak-muted: #6f7b8c;
+  --dastak-border: #e5e8ee;
+  --dastak-crimson: #db143c;
+  --dastak-crimson-dark: #bd1033;
+  --dastak-crimson-soft: #fde7ec;
+  --dastak-green: #15946a;
+  --dastak-green-soft: #e8f7f1;
+  --dastak-amber: #a96900;
+  --dastak-amber-soft: #fff4dc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--dastak-bg);
+  color: var(--dastak-ink);
+  font-family: Inter, sans-serif;
+}
+
+button {
+  font: inherit;
+}
