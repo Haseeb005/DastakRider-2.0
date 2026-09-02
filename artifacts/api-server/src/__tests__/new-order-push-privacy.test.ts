@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildNewOrderNotificationContent } from "../lib/onesignal.js";
+import {
+  buildNewOrderNotificationContent,
+  sendNewOrderPush,
+  type OneSignalTransport,
+} from "../lib/onesignal.js";
 
 describe("new-order push privacy boundary", () => {
   it("includes restaurant pickup context but no customer or order metadata", () => {
@@ -38,5 +42,69 @@ describe("new-order push privacy boundary", () => {
         `new-order push leaked ${privateValue}`,
       );
     }
+  });
+
+  it("passes the privacy-safe content unchanged to OneSignal", async () => {
+    let sentNotification: any;
+    const transport: OneSignalTransport = {
+      appId: "test-rider-app",
+      client: {
+        createNotification: async (notification) => {
+          sentNotification = notification;
+          return { id: "test-notification-id" };
+        },
+      },
+    };
+
+    const sent = await sendNewOrderPush(
+      {
+        playerIds: ["subscription-1"],
+        restaurantName: "Push Test Restaurant",
+        martAddress: "12 Restaurant Pickup Road",
+      },
+      transport,
+    );
+
+    assert.equal(sent, true);
+    assert.deepEqual(sentNotification.headings, {
+      en: "New Order Available",
+    });
+    assert.deepEqual(sentNotification.contents, {
+      en: "Push Test Restaurant · 12 Restaurant Pickup Road",
+    });
+    assert.deepEqual(sentNotification.data, {
+      screen: "newOrder",
+    });
+  });
+
+  it("keeps subscription and external rider targeting in the SDK payload", async () => {
+    let sentNotification: any;
+    const transport: OneSignalTransport = {
+      appId: "test-rider-app",
+      client: {
+        createNotification: async (notification) => {
+          sentNotification = notification;
+          return { id: "test-notification-id" };
+        },
+      },
+    };
+
+    const sent = await sendNewOrderPush(
+      {
+        playerIds: ["subscription-1", "subscription-2"],
+        riderIds: ["rider-without-subscription"],
+        restaurantName: "Targeting Test Restaurant",
+      },
+      transport,
+    );
+
+    assert.equal(sent, true);
+    assert.deepEqual(sentNotification.include_subscription_ids, [
+      "subscription-1",
+      "subscription-2",
+    ]);
+    assert.deepEqual(sentNotification.include_aliases, {
+      external_id: ["rider-without-subscription"],
+    });
   });
 });

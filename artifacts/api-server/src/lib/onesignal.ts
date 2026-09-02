@@ -62,6 +62,21 @@ export interface NewOrderNotificationContent {
   };
 }
 
+/** Minimal OneSignal client contract used by the notification sender. */
+export interface OneSignalClient {
+  createNotification(notification: Notification): Promise<unknown>;
+}
+
+/**
+ * Injectable transport for tests. Production callers use the configured
+ * client automatically; tests can provide a client and app ID without
+ * credentials or a network request.
+ */
+export interface OneSignalTransport {
+  appId: string;
+  client: OneSignalClient;
+}
+
 /**
  * Build the intentionally minimal notification content for an available order.
  * Customer, basket, payment, fare, destination, notes, and order-number data
@@ -96,17 +111,22 @@ interface RiderNotificationPayload {
 }
 
 /** Send one rider notification through the official OneSignal Node SDK. */
-async function notifyRiders(payload: RiderNotificationPayload): Promise<boolean> {
+async function notifyRiders(
+  payload: RiderNotificationPayload,
+  transport?: OneSignalTransport,
+): Promise<boolean> {
   const subscriptionIds = payload.subscriptionIds ?? [];
   const riderIds = payload.riderIds ?? [];
-  if (!riderClient || !APP_ID || !REST_KEY) {
+  const client = transport?.client ?? riderClient;
+  const appId = transport?.appId ?? APP_ID;
+  if (!client || !appId || (!transport && !REST_KEY)) {
     logger.warn("notifyRiders: OneSignal env vars not set — skipping");
     return false;
   }
   if (subscriptionIds.length === 0 && riderIds.length === 0) return false;
 
   const notification = new Notification();
-  notification.app_id = APP_ID;
+  notification.app_id = appId;
   if (subscriptionIds.length > 0) {
     notification.include_subscription_ids = subscriptionIds;
   }
@@ -124,10 +144,10 @@ async function notifyRiders(payload: RiderNotificationPayload): Promise<boolean>
   notification.contents = { en: payload.message };
 
   try {
-    const result = await riderClient.createNotification(notification);
+    const result = await client.createNotification(notification);
     logger.info(
       {
-        notificationId: result.id,
+        notificationId: (result as { id?: string }).id,
         subscriptionCount: subscriptionIds.length,
         riderCount: riderIds.length,
       },
@@ -172,7 +192,10 @@ export async function sendChatPush(payload: ChatPushPayload): Promise<boolean> {
  * Send a new-order push to multiple riders simultaneously.
  * OneSignal accepts up to 2 000 external_ids per request.
  */
-export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<boolean> {
+export async function sendNewOrderPush(
+  payload: NewOrderPushPayload,
+  transport?: OneSignalTransport,
+): Promise<boolean> {
   const { playerIds, riderIds = [] } = payload;
   const { heading, message, data } = buildNewOrderNotificationContent(payload);
   return notifyRiders({
@@ -181,5 +204,5 @@ export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<bo
     subscriptionIds: playerIds,
     riderIds,
     data,
-  });
+  }, transport);
 }
