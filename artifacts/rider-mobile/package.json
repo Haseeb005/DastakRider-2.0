@@ -9,6 +9,7 @@
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "test:wallet-milestones": "playwright test e2e/wallet-milestones.spec.ts",
+    "test:available-order": "node --experimental-strip-types --test __tests__/available-order-card.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "android": "expo run:android",
     "ios": "expo run:ios"

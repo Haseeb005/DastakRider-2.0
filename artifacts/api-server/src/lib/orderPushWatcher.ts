@@ -90,7 +90,6 @@ async function handleOrderChange(rawId: string): Promise<void> {
     const sent = await sendNewOrderPush({
       playerIds,
       riderIds,
-      orderId,
       restaurantName,
       martAddress,
     });

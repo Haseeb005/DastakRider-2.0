@@ -50,9 +50,41 @@ export interface NewOrderPushPayload {
   playerIds: string[];
   /** Rider MongoDB _ids for devices that have no playerId yet — uses external_id alias. */
   riderIds?: string[];
-  orderId: string;
   restaurantName?: string;
   martAddress?: string;
+}
+
+export interface NewOrderNotificationContent {
+  heading: string;
+  message: string;
+  data: {
+    screen: "newOrder";
+  };
+}
+
+/**
+ * Build the intentionally minimal notification content for an available order.
+ * Customer, basket, payment, fare, destination, notes, and order-number data
+ * must stay behind the accept-order boundary.
+ */
+export function buildNewOrderNotificationContent(
+  payload: Pick<NewOrderPushPayload, "restaurantName" | "martAddress">,
+): NewOrderNotificationContent {
+  const heading = "New Order Available";
+  const message = [
+    payload.restaurantName || "A restaurant has a pickup ready",
+    payload.martAddress ? `· ${payload.martAddress}` : "",
+  ]
+    .join(" ")
+    .trim();
+
+  return {
+    heading,
+    message,
+    data: {
+      screen: "newOrder",
+    },
+  };
 }
 
 interface RiderNotificationPayload {
@@ -141,22 +173,10 @@ export async function sendChatPush(payload: ChatPushPayload): Promise<boolean> {
  * OneSignal accepts up to 2 000 external_ids per request.
  */
 export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<boolean> {
-  const { playerIds, riderIds = [], orderId, restaurantName, martAddress } = payload;
-
-  const heading = "New Order Available";
-  const body = [
-    restaurantName || "A restaurant has a pickup ready",
-    martAddress ? `· ${martAddress}` : "",
-  ]
-    .join(" ")
-    .trim();
-
-  const data = {
-    screen: "newOrder",
-    orderId,
-  };
+  const { playerIds, riderIds = [] } = payload;
+  const { heading, message, data } = buildNewOrderNotificationContent(payload);
   return notifyRiders({
-    message: body,
+    message,
     heading,
     subscriptionIds: playerIds,
     riderIds,
