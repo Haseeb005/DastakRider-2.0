@@ -1926,8 +1926,7 @@ router.get("/rider/orders/available", async (req: any, res: any) => {
       .sort({ createdAt: -1 })
       .limit(100)
       .toArray();
-    const tnf = Number(rider.tillNoonFare) || 0;
-    res.json(docs.map((d: any) => normalizeOrder(d, tnf)));
+    res.json(docs.map(normalizeAvailableOrder));
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
@@ -2709,6 +2708,17 @@ function fmtTime(v: any): string | null {
 }
 
 // Parse a deal item name like "Burger Deal (Coleslaw, Drink)" handled on the client.
+function normalizeAvailableOrder(doc: any) {
+  return {
+    id: String(doc._id),
+    restaurantName: doc.martName || null,
+    martAddress: doc.martAddress || null,
+    martPhone: doc.martPhone || null,
+    martLatitude: toNumOrNull(doc.martLatitude),
+    martLongitude: toNumOrNull(doc.martLongitude),
+  };
+}
+
 function normalizeOrder(doc: any, riderFareOverride?: number) {
   const items = Array.isArray(doc.products)
     ? doc.products.map((p: any) => ({

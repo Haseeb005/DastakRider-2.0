@@ -22,6 +22,7 @@ import {
   useGetRiderReviews,
   getGetRiderReviewsQueryKey,
   usePushRiderLocation,
+  type AvailableRiderOrder,
   type Rider,
   type RiderOrder,
 } from "@workspace/api-client-react";
@@ -238,7 +239,7 @@ const ALERT_AUTO_HIDE_MS = 12000;
 // Tracks seen order IDs; alerts (sound + notification) when genuinely new ones
 // appear. The banner auto-hides after a timeout, when the rider accepts
 // (stopAlert), or when the new orders leave the available list.
-function useOrderAlert(orders: RiderOrder[], isOnline: boolean) {
+function useOrderAlert(orders: AvailableRiderOrder[], isOnline: boolean) {
   const seen = useRef<Set<string>>(new Set());
   const seeded = useRef(false);
   const stopFn = useRef<(() => void) | null>(null);
@@ -1038,10 +1039,83 @@ function OrderCard({
 
 // ── Available Orders Tab ──────────────────────────────────────────────────────
 
+function AvailableOrderCard({
+  order,
+  busy,
+  onAccept,
+}: {
+  order: AvailableRiderOrder;
+  busy: boolean;
+  onAccept: () => void;
+}) {
+  const hasCoordinates =
+    typeof order.martLatitude === "number" &&
+    typeof order.martLongitude === "number";
+  const mapTarget = hasCoordinates
+    ? `${order.martLatitude},${order.martLongitude}`
+    : [order.restaurantName, order.martAddress].filter(Boolean).join(" ");
+  const mapHref = mapTarget
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapTarget)}`
+    : "";
+
+  return (
+    <Card className="overflow-hidden border-gray-200 shadow-sm">
+      <div className="flex items-center gap-3 border-b border-brand-100 bg-gradient-to-r from-brand-50 to-white p-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white">
+          <Store className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Restaurant pickup
+          </p>
+          <h3 className="truncate text-base font-bold text-gray-900">
+            {order.restaurantName || "Restaurant"}
+          </h3>
+        </div>
+      </div>
+      <CardContent className="space-y-3 p-4">
+        {order.martAddress && (
+          <div className="flex items-start gap-2 text-sm text-gray-600">
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
+            <span>{order.martAddress}</span>
+          </div>
+        )}
+        {order.martPhone && (
+          <a
+            href={`tel:${order.martPhone}`}
+            className="flex items-center gap-2 text-sm font-semibold text-brand-600"
+          >
+            <Phone className="h-4 w-4" />
+            {order.martPhone}
+          </a>
+        )}
+        {mapHref && (
+          <a
+            href={mapHref}
+            target="_blank"
+            rel="noreferrer"
+            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 text-sm font-semibold text-brand-700"
+          >
+            <Navigation className="h-4 w-4" />
+            Navigate to restaurant
+          </a>
+        )}
+        <Button
+          onClick={onAccept}
+          disabled={busy}
+          className="w-full bg-brand-600 text-white hover:bg-brand-700"
+        >
+          <CheckCircle className="mr-2 h-4 w-4" />
+          {busy ? "Accepting..." : "Accept Order"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function AvailableOrders({ rider }: { rider: Rider }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [selected, setSelected] = useState<RiderOrder | null>(null);
 
   const {
     data: orders = [],
@@ -1152,20 +1226,14 @@ function AvailableOrders({ rider }: { rider: Rider }) {
             {orders.length} order{orders.length !== 1 ? "s" : ""} waiting
           </p>
           {orders.map((order) => (
-            <OrderCard
+            <AvailableOrderCard
               key={order.id}
               order={order}
-              showAccept
               busy={acceptMutation.isPending}
               onAccept={() => handleAccept(order.id)}
-              onClick={() => setSelected(order)}
             />
           ))}
         </>
-      )}
-
-      {selected && (
-        <RiderOrderDetailModal order={selected} onClose={() => setSelected(null)} />
       )}
     </div>
   );

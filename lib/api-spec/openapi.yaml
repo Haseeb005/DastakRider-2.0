@@ -164,7 +164,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/RiderOrder"
+                  $ref: "#/components/schemas/AvailableRiderOrder"
 
   /rider/orders/active:
     get:
@@ -469,6 +469,25 @@ components:
         - totalDeliveries
         - rating
         - ratingCount
+
+    AvailableRiderOrder:
+      type: object
+      description: Restaurant pickup information visible before a rider accepts the order.
+      properties:
+        id:
+          type: string
+        restaurantName:
+          type: ["string", "null"]
+        martAddress:
+          type: ["string", "null"]
+        martPhone:
+          type: ["string", "null"]
+        martLatitude:
+          type: ["number", "null"]
+        martLongitude:
+          type: ["number", "null"]
+      required:
+        - id
 
     RiderOrder:
       type: object

@@ -15,3 +15,4 @@
 - [Rider live-update feed](rider-live-update-feed.md) — Replit live updates route through `/api/ws/live`; authenticate sockets and scope every event to the assigned rider.
 - [Expo socket regression tests](expo-socket-regression-tests.md) — keep reusable socket state machines platform-neutral so Node tests do not cross-load Expo TypeScript through another package.
 - [Expo API hostname separation](expo-api-hostname-separation.md) — `EXPO_PUBLIC_DOMAIN` can be a temporary workspace bundle host; native API traffic must use the permanent API URL.
+- [Available-order privacy](available-order-privacy.md) — before acceptance, riders receive only restaurant pickup data; customer, basket, payment, fare, and order metadata remain server-hidden.

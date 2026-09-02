@@ -1,7 +1,10 @@
 import { Icon } from "@/components/Icon";
-import type { RiderOrder } from "@workspace/api-client-react";
+import type {
+  AvailableRiderOrder,
+  RiderOrder,
+} from "@workspace/api-client-react";
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Linking, Pressable, Text, View } from "react-native";
 
 import { Badge } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
@@ -23,6 +26,146 @@ function initials(name?: string | null): string {
     .map((w) => w[0])
     .join("")
     .toUpperCase();
+}
+
+export function AvailableOrderCard({
+  order,
+  children,
+}: {
+  order: AvailableRiderOrder;
+  children?: React.ReactNode;
+}) {
+  const c = useColors();
+  const hasCoordinates =
+    typeof order.martLatitude === "number" &&
+    typeof order.martLongitude === "number";
+  const mapTarget = hasCoordinates
+    ? `${order.martLatitude},${order.martLongitude}`
+    : [order.restaurantName, order.martAddress].filter(Boolean).join(" ");
+
+  return (
+    <View
+      style={{
+        borderRadius: c.radius,
+        backgroundColor: c.card,
+        borderWidth: 1,
+        borderColor: c.border,
+        overflow: "hidden",
+        marginBottom: 12,
+        shadowColor: "#000",
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 2,
+      }}
+    >
+      <View
+        style={{
+          padding: 14,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          backgroundColor: "#FFF1F4",
+          borderBottomWidth: 1,
+          borderBottomColor: c.border,
+        }}
+      >
+        <View
+          style={{
+            width: 46,
+            height: 46,
+            borderRadius: 14,
+            backgroundColor: c.primary,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" }}>
+            {initials(order.restaurantName)}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text
+            style={{
+              fontSize: 11,
+              color: c.mutedForeground,
+              fontFamily: "Inter_600SemiBold",
+              textTransform: "uppercase",
+            }}
+          >
+            Restaurant pickup
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={{
+              fontSize: 17,
+              color: c.foreground,
+              fontFamily: "Inter_700Bold",
+              marginTop: 2,
+            }}
+          >
+            {order.restaurantName || "Restaurant"}
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ padding: 14, gap: 12 }}>
+        {order.martAddress ? (
+          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+            <Icon name="map-pin" size={17} color={c.primary} />
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 13,
+                lineHeight: 19,
+                color: c.mutedForeground,
+                fontFamily: "Inter_400Regular",
+              }}
+            >
+              {order.martAddress}
+            </Text>
+          </View>
+        ) : null}
+        {order.martPhone ? (
+          <Pressable
+            onPress={() => Linking.openURL(`tel:${order.martPhone}`)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+          >
+            <Icon name="phone" size={17} color={c.primary} />
+            <Text style={{ color: c.primary, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+              {order.martPhone}
+            </Text>
+          </Pressable>
+        ) : null}
+        {mapTarget ? (
+          <Pressable
+            onPress={() =>
+              Linking.openURL(
+                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapTarget)}`,
+              )
+            }
+            style={{
+              minHeight: 42,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: c.border,
+              backgroundColor: "#FFF7F8",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 7,
+            }}
+          >
+            <Icon name="navigation" size={17} color={c.primary} />
+            <Text style={{ color: c.primary, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+              Navigate to restaurant
+            </Text>
+          </Pressable>
+        ) : null}
+        {children}
+      </View>
+    </View>
+  );
 }
 
 export function OrderCard({

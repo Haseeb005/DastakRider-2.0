@@ -7,7 +7,7 @@ import {
   useGetAvailableOrders,
   useGetRiderMe,
   useUpdateRiderAvailability,
-  type RiderOrder,
+  type AvailableRiderOrder,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -26,14 +26,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { OrderCard } from "@/components/OrderCard";
-import { OrderDetailModal } from "@/components/OrderDetailModal";
+import { AvailableOrderCard } from "@/components/OrderCard";
 import { Button, EmptyState, Loading } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useOrderAlert } from "@/lib/alert";
 import { clearOrderBadge } from "@/lib/orderBadgeStore";
 
-const EMPTY_ORDERS: RiderOrder[] = [];
+const EMPTY_ORDERS: AvailableRiderOrder[] = [];
 
 function StatusDot({
   online,
@@ -111,8 +110,6 @@ export default function AvailableScreen() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
-  const [selected, setSelected] = useState<RiderOrder | null>(null);
-
   const meQ = useGetRiderMe({
     query: {
       queryKey: getGetRiderMeQueryKey(),
@@ -168,7 +165,7 @@ export default function AvailableScreen() {
     );
   };
 
-  const accept = (order: RiderOrder) => {
+  const accept = (order: AvailableRiderOrder) => {
     // Accepting within the alert window must silence the beep and hide the
     // new-order banner immediately.
     clearNew();
@@ -532,7 +529,7 @@ export default function AvailableScreen() {
             ) : null
           }
           renderItem={({ item }) => (
-            <OrderCard order={item} onPress={() => setSelected(item)}>
+            <AvailableOrderCard order={item}>
               <Button
                 label="Accept order"
                 icon="check"
@@ -540,7 +537,7 @@ export default function AvailableScreen() {
                 loading={acceptM.isPending && acceptM.variables?.orderId === item.id}
                 style={{ alignSelf: "stretch" }}
               />
-            </OrderCard>
+            </AvailableOrderCard>
           )}
           ListEmptyComponent={
             <EmptyState
@@ -552,11 +549,6 @@ export default function AvailableScreen() {
         />
       )}
 
-      <OrderDetailModal
-        order={selected}
-        visible={!!selected}
-        onClose={() => setSelected(null)}
-      />
     </View>
   );
 }

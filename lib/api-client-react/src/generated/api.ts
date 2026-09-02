@@ -22,6 +22,7 @@ import type {
 import type {
   AvailabilityInput,
   AvailabilityResponse,
+  AvailableRiderOrder,
   EarningsSummary,
   GetOrderHistoryParams,
   GetRiderEarningsParams,
@@ -652,9 +653,9 @@ export const getGetAvailableOrdersUrl = () => {
 /**
  * @summary Get available (unassigned) orders
  */
-export const getAvailableOrders = async ( options?: RequestInit): Promise<RiderOrder[]> => {
+export const getAvailableOrders = async ( options?: RequestInit): Promise<AvailableRiderOrder[]> => {
 
-  return customFetch<RiderOrder[]>(getGetAvailableOrdersUrl(),
+  return customFetch<AvailableRiderOrder[]>(getGetAvailableOrdersUrl(),
   {
     ...options,
     method: 'GET'

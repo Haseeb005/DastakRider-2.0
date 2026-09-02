@@ -129,60 +129,11 @@ export const UpdateRiderAvailabilityResponse = zod.object({
 export const GetAvailableOrdersResponseItem = zod.object({
   "id": zod.string(),
   "restaurantName": zod.string().nullish(),
-  "address": zod.string().nullish(),
-  "latitude": zod.number().nullish(),
-  "longitude": zod.number().nullish(),
-  "martLatitude": zod.number().nullish(),
-  "martLongitude": zod.number().nullish(),
-  "phone": zod.string().nullish(),
-  "status": zod.string(),
-  "total": zod.number(),
-  "deliveryFee": zod.number().describe('Customer-facing delivery charge on the bill. NOT the rider\'s pay — use riderFare for the rider\'s earnings.'),
-  "subtotal": zod.number(),
-  "items": zod.array(zod.object({
-  "name": zod.string(),
-  "quantity": zod.number(),
-  "price": zod.number(),
-  "actualPrice": zod.number().optional().describe('Original price before any discount. When actualPrice > price the item is discounted.'),
-  "size": zod.string().nullish().describe('For single products, the size\/variation descriptor (e.g. \"Half\", \"Regular\").'),
-  "description": zod.string().nullish().describe('For deal products, the deal variant description from the order (e.g. \"1 Small Pizza\").'),
-  "type": zod.string().nullish().describe('Product type from the order, e.g. \"single\" or \"deal\".'),
-  "dealItems": zod.array(zod.object({
-  "flavour": zod.string().nullish().describe('The selected flavour name (e.g. \"Chicken BBQ\").'),
-  "size": zod.string().nullish().describe('The size for this flavour (e.g. \"Small\").')
-})).optional().describe('For deal products, the selected flavours\/choices.')
-})).optional(),
-  "userName": zod.string().nullish(),
-  "city": zod.string().nullish(),
-  "zone": zod.string().nullish(),
-  "distance": zod.string().nullish(),
   "martAddress": zod.string().nullish(),
   "martPhone": zod.string().nullish(),
-  "paymentType": zod.string().nullish(),
-  "billingMode": zod.string().nullish().describe('Billing mode from the admin system (\"prepaid\" or \"postpaid\"). Prepaid COD orders show collectAmount instead of total as the amount to collect.'),
-  "collectAmount": zod.number().optional().describe('The amount the rider physically collects from the customer. For prepaid+COD orders this is orderTotal minus the sum of (actualPrice × quantity) per product. For non-prepaid COD it equals total. For non-COD it is 0.'),
-  "orderNum": zod.string().nullish(),
-  "comment": zod.string().nullish(),
-  "riderFare": zod.number().optional().describe('The rider\'s payout for this order = the rider\'s current tillNoonFare (from their users-collection doc), falling back to the per-order snapshot when unset. The rider\'s earnings, distinct from deliveryFee (customer charge).'),
-  "tip": zod.number().optional(),
-  "discount": zod.number().optional(),
-  "platformFee": zod.number().optional(),
-  "vatAmount": zod.number().optional(),
-  "paidToRider": zod.boolean().optional(),
-  "actions": zod.array(zod.object({
-  "action": zod.string().optional(),
-  "time": zod.string().optional(),
-  "name": zod.string().optional()
-})).optional(),
-  "acceptedTime": zod.string().nullish(),
-  "pickUpTime": zod.string().nullish(),
-  "timeWhenDelivered": zod.string().nullish(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string().nullish(),
-  "riderId": zod.string().nullish(),
-  "riderName": zod.string().nullish(),
-  "riderArrived": zod.boolean().optional()
-})
+  "martLatitude": zod.number().nullish(),
+  "martLongitude": zod.number().nullish()
+}).describe('Restaurant pickup information visible before a rider accepts the order.')
 export const GetAvailableOrdersResponse = zod.array(GetAvailableOrdersResponseItem)
 
 

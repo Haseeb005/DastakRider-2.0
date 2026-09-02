@@ -72,6 +72,23 @@ export interface Rider {
   token?: string;
 }
 
+/**
+ * Restaurant pickup information visible before a rider accepts the order.
+ */
+export interface AvailableRiderOrder {
+  id: string;
+  /** @nullable */
+  restaurantName?: string | null;
+  /** @nullable */
+  martAddress?: string | null;
+  /** @nullable */
+  martPhone?: string | null;
+  /** @nullable */
+  martLatitude?: number | null;
+  /** @nullable */
+  martLongitude?: number | null;
+}
+
 export interface OrderAction {
   action?: string;
   time?: string;

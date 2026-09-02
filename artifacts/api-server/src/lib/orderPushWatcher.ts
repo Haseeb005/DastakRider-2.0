@@ -48,8 +48,8 @@ async function handleOrderChange(rawId: string): Promise<void> {
     const city: string = order.city ?? "";
     const zone: string = order.zone ?? "";
     const orderId = String(order._id);
-    const orderNum = order.orderNum ? String(order.orderNum) : undefined;
-    const area: string | undefined = zone || order.area || undefined;
+    const restaurantName: string | undefined = order.martName || undefined;
+    const martAddress: string | undefined = order.martAddress || undefined;
 
     // Find all online riders eligible for this order (same city + zone match).
     const riderQuery: Record<string, any> = {
@@ -91,8 +91,8 @@ async function handleOrderChange(rawId: string): Promise<void> {
       playerIds,
       riderIds,
       orderId,
-      orderNum,
-      area,
+      restaurantName,
+      martAddress,
     });
     if (!sent) return;
 

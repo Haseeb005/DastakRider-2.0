@@ -51,8 +51,8 @@ export interface NewOrderPushPayload {
   /** Rider MongoDB _ids for devices that have no playerId yet — uses external_id alias. */
   riderIds?: string[];
   orderId: string;
-  orderNum?: string;
-  area?: string;
+  restaurantName?: string;
+  martAddress?: string;
 }
 
 interface RiderNotificationPayload {
@@ -141,12 +141,12 @@ export async function sendChatPush(payload: ChatPushPayload): Promise<boolean> {
  * OneSignal accepts up to 2 000 external_ids per request.
  */
 export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<boolean> {
-  const { playerIds, riderIds = [], orderId, orderNum, area } = payload;
+  const { playerIds, riderIds = [], orderId, restaurantName, martAddress } = payload;
 
   const heading = "New Order Available";
   const body = [
-    orderNum ? `Order #${orderNum}` : "A new order is waiting",
-    area ? `· ${area}` : "",
+    restaurantName || "A restaurant has a pickup ready",
+    martAddress ? `· ${martAddress}` : "",
   ]
     .join(" ")
     .trim();
@@ -154,7 +154,6 @@ export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<bo
   const data = {
     screen: "newOrder",
     orderId,
-    ...(orderNum ? { orderNum } : {}),
   };
   return notifyRiders({
     message: body,
