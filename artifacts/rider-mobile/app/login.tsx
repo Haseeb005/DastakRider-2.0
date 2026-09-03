@@ -83,8 +83,8 @@ export default function LoginScreen() {
     loginM.mutate(
       { data: { phone: phone.trim(), password } },
       {
-        onSuccess: (rider) => {
-          if (rider.token) signIn(rider.token);
+        onSuccess: async (rider) => {
+          if (rider.token) await signIn(rider.token);
           else setError("No token received. Please try again.");
         },
         onError: () => setError("Incorrect phone or password."),

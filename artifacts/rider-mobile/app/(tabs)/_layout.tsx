@@ -292,7 +292,7 @@ function ClassicTabLayout({ unreadMessages }: { unreadMessages: number }) {
 }
 
 export default function TabLayout() {
-  const { token } = useAuth();
+  const { token, signOut } = useAuth();
   const activeQ = useGetActiveOrders({
     query: {
       queryKey: getGetActiveOrdersQueryKey(),
@@ -306,6 +306,15 @@ export default function TabLayout() {
   // inside index.tsx (only mounted after first visit to Orders tab).
   const meQ = useGetRiderMe({ query: { queryKey: getGetRiderMeQueryKey(), enabled: !!token } });
   const isOnline = !!meQ.data?.isOnline;
+
+  // A token can remain in storage after the server secret changes, the rider
+  // is deleted, or the session is otherwise invalidated. Do not leave the
+  // rider stranded on screens that only say they could not load.
+  useEffect(() => {
+    if ((meQ.error as { status?: number } | null)?.status === 401) {
+      void signOut();
+    }
+  }, [meQ.error, signOut]);
   const availableQ = useGetAvailableOrders({
     query: {
       queryKey: getGetAvailableOrdersQueryKey(),
