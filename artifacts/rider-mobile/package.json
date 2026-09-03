@@ -1,6 +1,6 @@
 {
   "name": "@workspace/rider-mobile",
-  "version": "4.6.5",
+  "version": "4.6.6",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
