@@ -359,6 +359,14 @@ export async function customFetch<T = unknown>(
 
   const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
 
+  if (method === "GET" || method === "HEAD") {
+    // React Native may ignore RequestInit.cache, so also send explicit cache
+    // directives. This prevents conditional 304 responses from the published
+    // API when running the Expo app locally against the permanent backend.
+    if (!headers.has("cache-control")) headers.set("cache-control", "no-cache");
+    if (!headers.has("pragma")) headers.set("pragma", "no-cache");
+  }
+
   if (
     typeof init.body === "string" &&
     !headers.has("content-type") &&
@@ -406,6 +414,10 @@ export async function customFetch<T = unknown>(
       ...init,
       method,
       headers,
+      // API responses must include their JSON body. Without this, browsers
+      // may revalidate against the proxy and return 304; a 304 has no body
+      // for customFetch to parse, which makes a valid profile look missing.
+      cache: init.cache ?? "no-store",
       signal: requestController.signal,
     });
   } catch (error) {

@@ -10,6 +10,15 @@ const Store = MemoryStore(session);
 
 const app: Express = express();
 
+// Rider API responses are live operational data and must always include their
+// JSON body. Express ETags can turn authenticated polling responses into 304
+// responses, which have no body and leave native/web clients with missing data.
+app.disable("etag");
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
+
 app.use(
   session({
     secret: process.env["SESSION_SECRET"] || "dastak-rider-fallback-secret",

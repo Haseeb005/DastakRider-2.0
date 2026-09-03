@@ -16,3 +16,4 @@
 - [Expo socket regression tests](expo-socket-regression-tests.md) — keep reusable socket state machines platform-neutral so Node tests do not cross-load Expo TypeScript through another package.
 - [Expo API hostname separation](expo-api-hostname-separation.md) — `EXPO_PUBLIC_DOMAIN` can be a temporary workspace bundle host; native API traffic must use the permanent API URL.
 - [Available-order privacy](available-order-privacy.md) — before acceptance, riders receive only restaurant pickup data; customer, basket, payment, fare, and order metadata remain server-hidden.
+- [Rider API response caching](rider-api-response-caching.md) — API polling must never return bodyless 304s; clients interpret them as missing profile/order data.
