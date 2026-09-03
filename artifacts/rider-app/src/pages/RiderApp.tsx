@@ -26,7 +26,6 @@ import {
   type Rider,
   type RiderOrder,
 } from "@workspace/api-client-react";
-import { getAvailableOrderCardData } from "@/lib/availableOrderCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -1049,8 +1048,12 @@ function AvailableOrderCard({
   busy: boolean;
   onAccept: () => void;
 }) {
-  const { restaurantName, martAddress, martPhone, mapTarget } =
-    getAvailableOrderCardData(order);
+  const hasCoordinates =
+    typeof order.martLatitude === "number" &&
+    typeof order.martLongitude === "number";
+  const mapTarget = hasCoordinates
+    ? `${order.martLatitude},${order.martLongitude}`
+    : [order.restaurantName, order.martAddress].filter(Boolean).join(" ");
   const mapHref = mapTarget
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapTarget)}`
     : "";
@@ -1066,24 +1069,24 @@ function AvailableOrderCard({
             Restaurant pickup
           </p>
           <h3 className="truncate text-base font-bold text-gray-900">
-            {restaurantName || "Restaurant"}
+            {order.restaurantName || "Restaurant"}
           </h3>
         </div>
       </div>
       <CardContent className="space-y-3 p-4">
-        {martAddress && (
+        {order.martAddress && (
           <div className="flex items-start gap-2 text-sm text-gray-600">
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
-            <span>{martAddress}</span>
+            <span>{order.martAddress}</span>
           </div>
         )}
-        {martPhone && (
+        {order.martPhone && (
           <a
-            href={`tel:${martPhone}`}
+            href={`tel:${order.martPhone}`}
             className="flex items-center gap-2 text-sm font-semibold text-brand-600"
           >
             <Phone className="h-4 w-4" />
-            {martPhone}
+            {order.martPhone}
           </a>
         )}
         {mapHref && (

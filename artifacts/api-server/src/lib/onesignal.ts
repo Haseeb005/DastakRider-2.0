@@ -50,56 +50,9 @@ export interface NewOrderPushPayload {
   playerIds: string[];
   /** Rider MongoDB _ids for devices that have no playerId yet — uses external_id alias. */
   riderIds?: string[];
+  orderId: string;
   restaurantName?: string;
   martAddress?: string;
-}
-
-export interface NewOrderNotificationContent {
-  heading: string;
-  message: string;
-  data: {
-    screen: "newOrder";
-  };
-}
-
-/** Minimal OneSignal client contract used by the notification sender. */
-export interface OneSignalClient {
-  createNotification(notification: Notification): Promise<unknown>;
-}
-
-/**
- * Injectable transport for tests. Production callers use the configured
- * client automatically; tests can provide a client and app ID without
- * credentials or a network request.
- */
-export interface OneSignalTransport {
-  appId: string;
-  client: OneSignalClient;
-}
-
-/**
- * Build the intentionally minimal notification content for an available order.
- * Customer, basket, payment, fare, destination, notes, and order-number data
- * must stay behind the accept-order boundary.
- */
-export function buildNewOrderNotificationContent(
-  payload: Pick<NewOrderPushPayload, "restaurantName" | "martAddress">,
-): NewOrderNotificationContent {
-  const heading = "New Order Available";
-  const message = [
-    payload.restaurantName || "A restaurant has a pickup ready",
-    payload.martAddress ? `· ${payload.martAddress}` : "",
-  ]
-    .join(" ")
-    .trim();
-
-  return {
-    heading,
-    message,
-    data: {
-      screen: "newOrder",
-    },
-  };
 }
 
 interface RiderNotificationPayload {
@@ -111,22 +64,17 @@ interface RiderNotificationPayload {
 }
 
 /** Send one rider notification through the official OneSignal Node SDK. */
-async function notifyRiders(
-  payload: RiderNotificationPayload,
-  transport?: OneSignalTransport,
-): Promise<boolean> {
+async function notifyRiders(payload: RiderNotificationPayload): Promise<boolean> {
   const subscriptionIds = payload.subscriptionIds ?? [];
   const riderIds = payload.riderIds ?? [];
-  const client = transport?.client ?? riderClient;
-  const appId = transport?.appId ?? APP_ID;
-  if (!client || !appId || (!transport && !REST_KEY)) {
+  if (!riderClient || !APP_ID || !REST_KEY) {
     logger.warn("notifyRiders: OneSignal env vars not set — skipping");
     return false;
   }
   if (subscriptionIds.length === 0 && riderIds.length === 0) return false;
 
   const notification = new Notification();
-  notification.app_id = appId;
+  notification.app_id = APP_ID;
   if (subscriptionIds.length > 0) {
     notification.include_subscription_ids = subscriptionIds;
   }
@@ -144,10 +92,10 @@ async function notifyRiders(
   notification.contents = { en: payload.message };
 
   try {
-    const result = await client.createNotification(notification);
+    const result = await riderClient.createNotification(notification);
     logger.info(
       {
-        notificationId: (result as { id?: string }).id,
+        notificationId: result.id,
         subscriptionCount: subscriptionIds.length,
         riderCount: riderIds.length,
       },
@@ -192,17 +140,26 @@ export async function sendChatPush(payload: ChatPushPayload): Promise<boolean> {
  * Send a new-order push to multiple riders simultaneously.
  * OneSignal accepts up to 2 000 external_ids per request.
  */
-export async function sendNewOrderPush(
-  payload: NewOrderPushPayload,
-  transport?: OneSignalTransport,
-): Promise<boolean> {
-  const { playerIds, riderIds = [] } = payload;
-  const { heading, message, data } = buildNewOrderNotificationContent(payload);
+export async function sendNewOrderPush(payload: NewOrderPushPayload): Promise<boolean> {
+  const { playerIds, riderIds = [], orderId, restaurantName, martAddress } = payload;
+
+  const heading = "New Order Available";
+  const body = [
+    restaurantName || "A restaurant has a pickup ready",
+    martAddress ? `· ${martAddress}` : "",
+  ]
+    .join(" ")
+    .trim();
+
+  const data = {
+    screen: "newOrder",
+    orderId,
+  };
   return notifyRiders({
-    message,
+    message: body,
     heading,
     subscriptionIds: playerIds,
     riderIds,
     data,
-  }, transport);
+  });
 }

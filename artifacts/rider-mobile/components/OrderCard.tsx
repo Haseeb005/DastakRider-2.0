@@ -1,5 +1,4 @@
 import { Icon } from "@/components/Icon";
-import { getAvailableOrderCardData } from "@/lib/availableOrderCard";
 import type {
   AvailableRiderOrder,
   RiderOrder,
@@ -37,8 +36,12 @@ export function AvailableOrderCard({
   children?: React.ReactNode;
 }) {
   const c = useColors();
-  const { restaurantName, martAddress, martPhone, mapTarget } =
-    getAvailableOrderCardData(order);
+  const hasCoordinates =
+    typeof order.martLatitude === "number" &&
+    typeof order.martLongitude === "number";
+  const mapTarget = hasCoordinates
+    ? `${order.martLatitude},${order.martLongitude}`
+    : [order.restaurantName, order.martAddress].filter(Boolean).join(" ");
 
   return (
     <View
@@ -78,7 +81,7 @@ export function AvailableOrderCard({
           }}
         >
           <Text style={{ color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" }}>
-            {initials(restaurantName)}
+            {initials(order.restaurantName)}
           </Text>
         </View>
         <View style={{ flex: 1 }}>
@@ -101,13 +104,13 @@ export function AvailableOrderCard({
               marginTop: 2,
             }}
           >
-            {restaurantName || "Restaurant"}
+            {order.restaurantName || "Restaurant"}
           </Text>
         </View>
       </View>
 
       <View style={{ padding: 14, gap: 12 }}>
-        {martAddress ? (
+        {order.martAddress ? (
           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
             <Icon name="map-pin" size={17} color={c.primary} />
             <Text
@@ -119,18 +122,18 @@ export function AvailableOrderCard({
                 fontFamily: "Inter_400Regular",
               }}
             >
-              {martAddress}
+              {order.martAddress}
             </Text>
           </View>
         ) : null}
-        {martPhone ? (
+        {order.martPhone ? (
           <Pressable
-            onPress={() => Linking.openURL(`tel:${martPhone}`)}
+            onPress={() => Linking.openURL(`tel:${order.martPhone}`)}
             style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
           >
             <Icon name="phone" size={17} color={c.primary} />
             <Text style={{ color: c.primary, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
-              {martPhone}
+              {order.martPhone}
             </Text>
           </Pressable>
         ) : null}
