@@ -1114,10 +1114,15 @@ function AvailableOrderCard({
             Customer delivery
           </p>
           {order.deliveryAddress ? (
-            <div className="flex items-start gap-2 text-sm text-gray-600">
+            <a
+              href={deliveryMapHref}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-start gap-2 text-sm text-gray-600 hover:text-brand-700"
+            >
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
               <span>{order.deliveryAddress}</span>
-            </div>
+            </a>
           ) : (
             <p className="text-sm text-gray-500">Delivery address unavailable</p>
           )}

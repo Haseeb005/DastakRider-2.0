@@ -187,7 +187,16 @@ export function AvailableOrderCard({
             Customer delivery
           </Text>
           {order.deliveryAddress ? (
-            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+            <Pressable
+              onPress={() =>
+                deliveryMapTarget
+                  ? Linking.openURL(
+                      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryMapTarget)}`,
+                    )
+                  : undefined
+              }
+              style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}
+            >
               <Icon name="map-pin" size={17} color={c.primary} />
               <Text
                 style={{
@@ -200,7 +209,7 @@ export function AvailableOrderCard({
               >
                 {order.deliveryAddress}
               </Text>
-            </View>
+            </Pressable>
           ) : (
             <Text
               style={{
