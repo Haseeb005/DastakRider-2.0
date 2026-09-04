@@ -2716,6 +2716,9 @@ function normalizeAvailableOrder(doc: any) {
     martPhone: doc.martPhone || null,
     martLatitude: toNumOrNull(doc.martLatitude),
     martLongitude: toNumOrNull(doc.martLongitude),
+    deliveryAddress: doc.address || null,
+    deliveryLatitude: toNumOrNull(doc.latitude),
+    deliveryLongitude: toNumOrNull(doc.longitude),
   };
 }
 

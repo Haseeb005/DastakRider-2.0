@@ -7,7 +7,7 @@
  */
 
 /**
- * Restaurant pickup information visible before a rider accepts the order.
+ * Pickup and delivery locations visible before a rider accepts the order. Full order details remain restricted until acceptance.
  */
 export interface AvailableRiderOrder {
   id: string;
@@ -21,4 +21,10 @@ export interface AvailableRiderOrder {
   martLatitude?: number | null;
   /** @nullable */
   martLongitude?: number | null;
+  /** @nullable */
+  deliveryAddress?: string | null;
+  /** @nullable */
+  deliveryLatitude?: number | null;
+  /** @nullable */
+  deliveryLongitude?: number | null;
 }

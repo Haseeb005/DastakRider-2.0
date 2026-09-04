@@ -472,7 +472,7 @@ components:
 
     AvailableRiderOrder:
       type: object
-      description: Restaurant pickup information visible before a rider accepts the order.
+      description: Pickup and delivery locations visible before a rider accepts the order. Full order details remain restricted until acceptance.
       properties:
         id:
           type: string
@@ -485,6 +485,12 @@ components:
         martLatitude:
           type: ["number", "null"]
         martLongitude:
+          type: ["number", "null"]
+        deliveryAddress:
+          type: ["string", "null"]
+        deliveryLatitude:
+          type: ["number", "null"]
+        deliveryLongitude:
           type: ["number", "null"]
       required:
         - id

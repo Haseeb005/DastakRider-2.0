@@ -42,6 +42,12 @@ export function AvailableOrderCard({
   const mapTarget = hasCoordinates
     ? `${order.martLatitude},${order.martLongitude}`
     : [order.restaurantName, order.martAddress].filter(Boolean).join(" ");
+  const hasDeliveryCoordinates =
+    typeof order.deliveryLatitude === "number" &&
+    typeof order.deliveryLongitude === "number";
+  const deliveryMapTarget = hasDeliveryCoordinates
+    ? `${order.deliveryLatitude},${order.deliveryLongitude}`
+    : order.deliveryAddress ?? "";
 
   return (
     <View
@@ -162,6 +168,82 @@ export function AvailableOrderCard({
             </Text>
           </Pressable>
         ) : null}
+        <View
+          style={{
+            borderTopWidth: 1,
+            borderTopColor: c.border,
+            paddingTop: 12,
+            gap: 10,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 11,
+              color: c.mutedForeground,
+              fontFamily: "Inter_600SemiBold",
+              textTransform: "uppercase",
+            }}
+          >
+            Customer delivery
+          </Text>
+          {order.deliveryAddress ? (
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+              <Icon name="map-pin" size={17} color={c.primary} />
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 13,
+                  lineHeight: 19,
+                  color: c.mutedForeground,
+                  fontFamily: "Inter_400Regular",
+                }}
+              >
+                {order.deliveryAddress}
+              </Text>
+            </View>
+          ) : (
+            <Text
+              style={{
+                fontSize: 13,
+                color: c.mutedForeground,
+                fontFamily: "Inter_400Regular",
+              }}
+            >
+              Delivery address unavailable
+            </Text>
+          )}
+          {deliveryMapTarget ? (
+            <Pressable
+              onPress={() =>
+                Linking.openURL(
+                  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryMapTarget)}`,
+                )
+              }
+              style={{
+                minHeight: 42,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: c.border,
+                backgroundColor: "#FFF7F8",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 7,
+              }}
+            >
+              <Icon name="navigation" size={17} color={c.primary} />
+              <Text
+                style={{
+                  color: c.primary,
+                  fontSize: 13,
+                  fontFamily: "Inter_600SemiBold",
+                }}
+              >
+                Navigate to customer
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
         {children}
       </View>
     </View>

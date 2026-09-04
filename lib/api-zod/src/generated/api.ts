@@ -132,8 +132,11 @@ export const GetAvailableOrdersResponseItem = zod.object({
   "martAddress": zod.string().nullish(),
   "martPhone": zod.string().nullish(),
   "martLatitude": zod.number().nullish(),
-  "martLongitude": zod.number().nullish()
-}).describe('Restaurant pickup information visible before a rider accepts the order.')
+  "martLongitude": zod.number().nullish(),
+  "deliveryAddress": zod.string().nullish(),
+  "deliveryLatitude": zod.number().nullish(),
+  "deliveryLongitude": zod.number().nullish()
+}).describe('Pickup and delivery locations visible before a rider accepts the order. Full order details remain restricted until acceptance.')
 export const GetAvailableOrdersResponse = zod.array(GetAvailableOrdersResponseItem)
 
 

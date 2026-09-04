@@ -1057,6 +1057,15 @@ function AvailableOrderCard({
   const mapHref = mapTarget
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapTarget)}`
     : "";
+  const hasDeliveryCoordinates =
+    typeof order.deliveryLatitude === "number" &&
+    typeof order.deliveryLongitude === "number";
+  const deliveryMapTarget = hasDeliveryCoordinates
+    ? `${order.deliveryLatitude},${order.deliveryLongitude}`
+    : order.deliveryAddress ?? "";
+  const deliveryMapHref = deliveryMapTarget
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryMapTarget)}`
+    : "";
 
   return (
     <Card className="overflow-hidden border-gray-200 shadow-sm">
@@ -1100,6 +1109,30 @@ function AvailableOrderCard({
             Navigate to restaurant
           </a>
         )}
+        <div className="space-y-3 border-t border-gray-100 pt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Customer delivery
+          </p>
+          {order.deliveryAddress ? (
+            <div className="flex items-start gap-2 text-sm text-gray-600">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
+              <span>{order.deliveryAddress}</span>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">Delivery address unavailable</p>
+          )}
+          {deliveryMapHref && (
+            <a
+              href={deliveryMapHref}
+              target="_blank"
+              rel="noreferrer"
+              className="flex h-10 items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 text-sm font-semibold text-brand-700"
+            >
+              <Navigation className="h-4 w-4" />
+              Navigate to customer
+            </a>
+          )}
+        </div>
         <Button
           onClick={onAccept}
           disabled={busy}
