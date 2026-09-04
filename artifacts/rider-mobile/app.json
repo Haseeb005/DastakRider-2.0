@@ -29,7 +29,7 @@
     },
     "android": {
       "package": "com.dastakriders",
-      "versionCode": 43,
+      "versionCode": 44,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#E6ECEA"

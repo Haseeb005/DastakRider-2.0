@@ -28,6 +28,24 @@ function initials(name?: string | null): string {
     .toUpperCase();
 }
 
+type LegacyAvailableOrderLocation = {
+  address?: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  customerAddress?: string | null;
+  customerLatitude?: string | number | null;
+  customerLongitude?: string | number | null;
+};
+
+function nonBlankText(...values: Array<string | null | undefined>): string {
+  return values.find((value) => value?.trim())?.trim() ?? "";
+}
+
+function coordinate(value: string | number | null | undefined): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function AvailableOrderCard({
   order,
   children,
@@ -36,6 +54,18 @@ export function AvailableOrderCard({
   children?: React.ReactNode;
 }) {
   const c = useColors();
+  const legacyOrder = order as AvailableRiderOrder & LegacyAvailableOrderLocation;
+  const deliveryAddress = nonBlankText(
+    order.deliveryAddress,
+    legacyOrder.address,
+    legacyOrder.customerAddress,
+  );
+  const deliveryLatitude = coordinate(
+    order.deliveryLatitude ?? legacyOrder.latitude ?? legacyOrder.customerLatitude,
+  );
+  const deliveryLongitude = coordinate(
+    order.deliveryLongitude ?? legacyOrder.longitude ?? legacyOrder.customerLongitude,
+  );
   const hasCoordinates =
     typeof order.martLatitude === "number" &&
     typeof order.martLongitude === "number";
@@ -43,11 +73,10 @@ export function AvailableOrderCard({
     ? `${order.martLatitude},${order.martLongitude}`
     : [order.restaurantName, order.martAddress].filter(Boolean).join(" ");
   const hasDeliveryCoordinates =
-    typeof order.deliveryLatitude === "number" &&
-    typeof order.deliveryLongitude === "number";
+    deliveryLatitude !== null && deliveryLongitude !== null;
   const deliveryMapTarget = hasDeliveryCoordinates
-    ? `${order.deliveryLatitude},${order.deliveryLongitude}`
-    : order.deliveryAddress ?? "";
+    ? `${deliveryLatitude},${deliveryLongitude}`
+    : deliveryAddress;
 
   return (
     <View
@@ -186,7 +215,7 @@ export function AvailableOrderCard({
           >
             Customer delivery
           </Text>
-          {order.deliveryAddress ? (
+          {deliveryAddress ? (
             <Pressable
               onPress={() =>
                 deliveryMapTarget
@@ -207,7 +236,7 @@ export function AvailableOrderCard({
                   fontFamily: "Inter_400Regular",
                 }}
               >
-                {order.deliveryAddress}
+                {deliveryAddress}
               </Text>
             </Pressable>
           ) : (
