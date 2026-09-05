@@ -2709,6 +2709,10 @@ function fmtTime(v: any): string | null {
 
 // Parse a deal item name like "Burger Deal (Coleslaw, Drink)" handled on the client.
 function normalizeAvailableOrder(doc: any) {
+  const deliveryAddress = doc.address || null;
+  const deliveryLatitude = toNumOrNull(doc.latitude);
+  const deliveryLongitude = toNumOrNull(doc.longitude);
+
   return {
     id: String(doc._id),
     restaurantName: doc.martName || null,
@@ -2716,9 +2720,14 @@ function normalizeAvailableOrder(doc: any) {
     martPhone: doc.martPhone || null,
     martLatitude: toNumOrNull(doc.martLatitude),
     martLongitude: toNumOrNull(doc.martLongitude),
-    deliveryAddress: doc.address || null,
-    deliveryLatitude: toNumOrNull(doc.latitude),
-    deliveryLongitude: toNumOrNull(doc.longitude),
+    deliveryAddress,
+    deliveryLatitude,
+    deliveryLongitude,
+    // Backward compatibility for build 4.6.5, whose available-order card
+    // reads the destination from the full-order field names.
+    address: deliveryAddress,
+    latitude: deliveryLatitude,
+    longitude: deliveryLongitude,
   };
 }
 
