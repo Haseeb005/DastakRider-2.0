@@ -440,8 +440,6 @@ export function OrderDetailModal({
                   isDeal &&
                   Array.isArray(item.dealItems) &&
                   item.dealItems.length > 0;
-                const isDiscounted =
-                  (item.actualPrice ?? item.price) > item.price;
                 return (
                   <Pressable
                     key={idx}
@@ -535,30 +533,6 @@ export function OrderDetailModal({
                         </View>
                       ) : null}
                     </View>
-                    {/* Price column */}
-                    <View style={{ alignItems: "flex-end" }}>
-                      {isDiscounted ? (
-                        <Text
-                          style={{
-                            fontFamily: "Inter_400Regular",
-                            fontSize: 11,
-                            color: c.mutedForeground,
-                            textDecorationLine: "line-through",
-                          }}
-                        >
-                          {money((item.actualPrice ?? item.price) * item.quantity)}
-                        </Text>
-                      ) : null}
-                      <Text
-                        style={{
-                          fontFamily: "Inter_500Medium",
-                          fontSize: 13,
-                          color: c.foreground,
-                        }}
-                      >
-                        {money(item.price * item.quantity)}
-                      </Text>
-                    </View>
                   </Pressable>
                 );
               })}
@@ -566,33 +540,11 @@ export function OrderDetailModal({
           ) : null}
 
           <Section title="Payment">
-            <Row label="Subtotal" value={money(order.subtotal)} />
-            <Row label="Delivery fee" value={money(order.deliveryFee)} />
-            {order.platformFee ? (
-              <Row label="Platform fee" value={money(order.platformFee)} />
-            ) : null}
-            {order.discount ? (
-              <Row
-                label="Discount"
-                value={`- ${money(order.discount)}`}
-                color={c.success}
-              />
-            ) : null}
-            {order.tip ? <Row label="Tip" value={money(order.tip)} /> : null}
-            <View
-              style={{
-                height: 1,
-                backgroundColor: c.border,
-                marginVertical: 6,
-              }}
+            <Row
+              label="Order total"
+              value={money(order.total)}
+              strong
             />
-            {cod ? (
-              <Row
-                label="Order total"
-                value={money(order.total)}
-                strong
-              />
-            ) : null}
             <View
               style={{
                 marginTop: 10,
