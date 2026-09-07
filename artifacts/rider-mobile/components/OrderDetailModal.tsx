@@ -540,11 +540,13 @@ export function OrderDetailModal({
           ) : null}
 
           <Section title="Payment">
-            <Row
-              label="Order total"
-              value={money(order.total)}
-              strong
-            />
+            {cod ? (
+              <Row
+                label="Amount to collect"
+                value={money(order.total)}
+                strong
+              />
+            ) : null}
             <View
               style={{
                 marginTop: 10,
@@ -571,7 +573,7 @@ export function OrderDetailModal({
               >
                 {cod
                   ? "Collect cash on delivery"
-                  : order.paymentType || "Paid online"}
+                  : "Paid online — no cash to collect"}
               </Text>
             </View>
           </Section>
