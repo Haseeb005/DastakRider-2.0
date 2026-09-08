@@ -2096,11 +2096,26 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
         const effectiveCollect = isPrepaid
           ? Math.max(rawTotal - prepaidAmt, 0)
           : rawTotal;
-        if (effectiveCollect > remainingLimit)
+        if (effectiveCollect > remainingLimit) {
+          const projectedCash = pendingCollection + effectiveCollect;
+          const overLimit = projectedCash - paymentLimit;
+          const rupees = (amount: number) =>
+            `Rs. ${Math.round(amount).toLocaleString("en-PK")}`;
+          const resolution =
+            effectiveCollect > paymentLimit
+              ? `This order alone exceeds your limit by ${rupees(effectiveCollect - paymentLimit)}. Ask an admin to raise your limit to at least ${rupees(projectedCash)}, or assign this order to another rider.`
+              : `Clear at least ${rupees(overLimit)} from your cash in hand, or ask an admin to raise your limit to at least ${rupees(projectedCash)}.`;
           return res.status(400).json({
-            message:
-              "Accepting this order would put you over your cash collection limit. Please clear your pending payment with the company first.",
+            message: [
+              "Cannot accept this COD order.",
+              `Cash limit: ${rupees(paymentLimit)}`,
+              `Current cash in hand: ${rupees(pendingCollection)}`,
+              `Cash to collect for this order: ${rupees(effectiveCollect)}`,
+              `Total after acceptance: ${rupees(projectedCash)}`,
+              resolution,
+            ].join("\n"),
           });
+        }
       }
     }
 
