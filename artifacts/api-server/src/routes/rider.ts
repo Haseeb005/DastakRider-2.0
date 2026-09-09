@@ -529,13 +529,7 @@ async function countChallengeDeliveries(challenge: any): Promise<number> {
   return ordersCol().countDocuments({
     riderId: challenge.riderId,
     status: DELIVERED_STATUS,
-    $or: [
-      { riderDeliveredAt: periodRange },
-      {
-        riderDeliveredAt: null,
-        createdAt: periodRange,
-      },
-    ],
+    createdAt: periodRange,
   });
 }
 
@@ -1345,9 +1339,10 @@ async function refreshChallengeProgress(challenge: any, now = new Date()): Promi
       : eligibleDeliveredCount;
     const ownershipFilter = { _id: challenge._id, "settlementLock.token": lockToken };
 
-    // Sequential progress counts only rides completed after the previous
-    // challenge's baseline. Active challenges can decrease when a shared order
-    // is removed, while completed rewards remain terminal and monotonic.
+    // Sequential progress counts delivered orders created in this challenge
+    // period after the previous challenge's baseline. Active challenges can
+    // decrease when a shared order is removed, while completed rewards remain
+    // terminal and monotonic.
     const progressUpdate =
       currentBeforeCount.status === "completed"
         ? { $max: { progress: challengeProgress }, $set: { updatedAt: now } }

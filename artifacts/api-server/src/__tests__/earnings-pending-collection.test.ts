@@ -668,12 +668,13 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
     }
   });
 
-  it("uses rider delivery time for challenge periods with a legacy fallback", async () => {
+  it("attributes challenge progress to the order creation day and week", async () => {
     const deliveryTimeRiderOid = new ObjectId();
     const riderId = deliveryTimeRiderOid.toHexString();
     const phone = `03001112233__challenge_delivery_time_${riderId}`;
     const now = new Date();
     const dayMs = 24 * 60 * 60 * 1000;
+    const previousWeek = new Date(now.getTime() - 8 * dayMs);
     const countedOrderId = new ObjectId();
     const excludedOrderId = new ObjectId();
     const legacyOrderId = new ObjectId();
@@ -698,7 +699,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
           riderId,
           status: "Delivered",
           riderFare: 100,
-          createdAt: new Date(now.getTime() - 2 * dayMs),
+          createdAt: previousWeek,
           riderDeliveredAt: now,
         },
         {
@@ -707,7 +708,7 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
           status: "Delivered",
           riderFare: 100,
           createdAt: now,
-          riderDeliveredAt: new Date(now.getTime() - 2 * dayMs),
+          riderDeliveredAt: previousWeek,
         },
         {
           _id: legacyOrderId,
@@ -737,7 +738,12 @@ describe("GET /api/rider/wallet — automatic challenge bonuses", () => {
       assert.equal(
         (wallet.todayChallenge as Record<string, unknown>).periodDeliveries,
         2,
-        "delivery timestamp wins when present; createdAt is used only when it is missing",
+        "orders created today count today even when delivered in another period",
+      );
+      assert.equal(
+        (wallet.weeklyChallenge as Record<string, unknown>).periodDeliveries,
+        2,
+        "orders created in the current week count this week even when delivered in another period",
       );
     } finally {
       await dbCol.orders().deleteMany({
