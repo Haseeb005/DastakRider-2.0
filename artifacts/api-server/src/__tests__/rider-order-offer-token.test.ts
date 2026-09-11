@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  signOrderAcceptConfirmationToken,
   signOrderOfferToken,
+  verifyOrderAcceptConfirmationToken,
   verifyOrderOfferToken,
 } from "../lib/riderToken.js";
 
-describe("rider order offer tokens", () => {
+describe("rider order action tokens", () => {
   const payload = {
     orderId: "66f19d61f67b3b2a18a7e14d",
     riderId: "66f19d61f67b3b2a18a7e14e",
@@ -29,5 +31,14 @@ describe("rider order offer tokens", () => {
       expiresAt: Date.now() - 1,
     });
     assert.equal(verifyOrderOfferToken(expired), null);
+  });
+
+  it("keeps suspicious-activity confirmations separate from ordinary offers", () => {
+    const offer = signOrderOfferToken(payload);
+    const confirmation = signOrderAcceptConfirmationToken(payload);
+
+    assert.deepEqual(verifyOrderAcceptConfirmationToken(confirmation), payload);
+    assert.equal(verifyOrderAcceptConfirmationToken(offer), null);
+    assert.equal(verifyOrderOfferToken(confirmation), null);
   });
 });

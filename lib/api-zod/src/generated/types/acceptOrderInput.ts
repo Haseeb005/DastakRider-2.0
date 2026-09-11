@@ -9,4 +9,6 @@
 export interface AcceptOrderInput {
   /** @minLength 1 */
   offerToken: string;
+  /** Short-lived confirmation token requested only after suspicious acceptance activity. */
+  confirmationToken?: string;
 }

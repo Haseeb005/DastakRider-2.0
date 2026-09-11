@@ -284,7 +284,8 @@ export const AcceptOrderParams = zod.object({
 
 
 export const AcceptOrderBody = zod.object({
-  "offerToken": zod.string().min(1)
+  "offerToken": zod.string().min(1),
+  "confirmationToken": zod.string().optional().describe('Short-lived confirmation token requested only after suspicious acceptance activity.')
 })
 
 export const AcceptOrderResponse = zod.object({

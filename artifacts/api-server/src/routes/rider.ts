@@ -12,8 +12,10 @@ import {
 } from "../lib/mongo";
 import { getHeatmapSnapshot } from "../lib/heatmapService";
 import {
+  signOrderAcceptConfirmationToken,
   signOrderOfferToken,
   signRiderToken,
+  verifyOrderAcceptConfirmationToken,
   verifyOrderOfferToken,
   verifyRiderToken,
 } from "../lib/riderToken";
@@ -44,6 +46,7 @@ const AVAILABLE_STATUS = "Admin Accepted";
 const DELIVERED_STATUS = "Delivered";
 const COD_TYPES = ["COD", "Cash", "cash", "cod"];
 const ORDER_OFFER_TTL_MS = 90_000;
+const ACCEPT_CONFIRMATION_TTL_MS = 60_000;
 const ACCEPT_MIN_INTERVAL_MS = 1_200;
 const ACCEPT_ATTEMPT_WINDOW_MS = 60_000;
 const MAX_ACCEPT_ATTEMPTS_PER_WINDOW = 8;
@@ -2067,8 +2070,18 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       });
     }
 
-    const rateLimitMessage = checkAcceptAttemptRate(riderId, Date.now());
+    const confirmationToken = String(req.body?.confirmationToken || "");
+    const confirmation = verifyOrderAcceptConfirmationToken(confirmationToken);
+    const hasValidConfirmation =
+      !!confirmation &&
+      confirmation.orderId === orderObjectId.toHexString() &&
+      confirmation.riderId === riderId;
+
+    const rateLimitMessage = hasValidConfirmation
+      ? null
+      : checkAcceptAttemptRate(riderId, Date.now());
     if (rateLimitMessage) {
+      const confirmationExpiresAt = Date.now() + ACCEPT_CONFIRMATION_TTL_MS;
       req.log.warn(
         {
           riderId,
@@ -2077,7 +2090,17 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
         },
         "Rider order acceptance throttled",
       );
-      return res.status(429).json({ message: rateLimitMessage });
+      return res.status(429).json({
+        message:
+          "We noticed unusually rapid order-accept attempts. Please confirm that you want this order.",
+        requiresConfirmation: true,
+        confirmationToken: signOrderAcceptConfirmationToken({
+          orderId: orderObjectId.toHexString(),
+          riderId,
+          expiresAt: confirmationExpiresAt,
+          nonce: crypto.randomBytes(18).toString("base64url"),
+        }),
+      });
     }
 
     const rider = await findRiderById(riderId);

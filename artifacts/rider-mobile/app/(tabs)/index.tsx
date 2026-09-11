@@ -27,7 +27,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AvailableOrderCard } from "@/components/OrderCard";
-import { HoldToAcceptButton } from "@/components/HoldToAcceptButton";
 import { Button, EmptyState, Loading } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useOrderAlert } from "@/lib/alert";
@@ -166,7 +165,10 @@ export default function AvailableScreen() {
     );
   };
 
-  const accept = (order: AvailableRiderOrder) => {
+  const accept = (
+    order: AvailableRiderOrder,
+    confirmationToken?: string,
+  ) => {
     if (!order.offerToken) {
       ordersQ.refetch();
       Alert.alert(
@@ -179,7 +181,13 @@ export default function AvailableScreen() {
     // new-order banner immediately.
     clearNew();
     acceptM.mutate(
-      { orderId: order.id, data: { offerToken: order.offerToken } },
+      {
+        orderId: order.id,
+        data: {
+          offerToken: order.offerToken,
+          ...(confirmationToken ? { confirmationToken } : {}),
+        },
+      },
       {
         onSuccess: () => {
           Haptics.notificationAsync(
@@ -189,6 +197,25 @@ export default function AvailableScreen() {
           qc.invalidateQueries({ queryKey: getGetActiveOrdersQueryKey() });
         },
         onError: (e: any) => {
+          const response = e?.data;
+          if (
+            response?.requiresConfirmation === true &&
+            typeof response.confirmationToken === "string"
+          ) {
+            Alert.alert(
+              "Confirm order acceptance",
+              response.message ||
+                "Please confirm that you want to accept this order.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Confirm accept",
+                  onPress: () => accept(order, response.confirmationToken),
+                },
+              ],
+            );
+            return;
+          }
           Haptics.notificationAsync(
             Haptics.NotificationFeedbackType.Error,
           ).catch(() => {});
@@ -539,10 +566,13 @@ export default function AvailableScreen() {
           }
           renderItem={({ item }) => (
             <AvailableOrderCard order={item}>
-              <HoldToAcceptButton
-                onComplete={() => accept(item)}
+              <Button
+                label="Accept order"
+                icon="check"
+                onPress={() => accept(item)}
                 loading={acceptM.isPending && acceptM.variables?.orderId === item.id}
                 disabled={acceptM.isPending}
+                style={{ alignSelf: "stretch" }}
               />
             </AvailableOrderCard>
           )}

@@ -243,7 +243,7 @@ paths:
         "403":
           description: Offer has expired or does not belong to this rider
         "429":
-          description: Too many acceptance attempts
+          description: Unusually rapid acceptance attempts require confirmation
 
   /rider/orders/{orderId}/arrived:
     post:
@@ -520,6 +520,9 @@ components:
         offerToken:
           type: string
           minLength: 1
+        confirmationToken:
+          type: string
+          description: Short-lived confirmation token requested only after suspicious acceptance activity.
       required:
         - offerToken
 

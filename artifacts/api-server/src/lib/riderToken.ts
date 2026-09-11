@@ -115,3 +115,63 @@ export function verifyOrderOfferToken(token: string): OrderOfferPayload | null {
     return null;
   }
 }
+
+/**
+ * Short-lived second-step token issued only after the API observes an
+ * automated-looking acceptance pattern. It cannot be substituted for an
+ * ordinary offer token because it is signed with a separate purpose prefix.
+ */
+export function signOrderAcceptConfirmationToken(
+  payload: OrderOfferPayload,
+): string {
+  const encoded = b64url(
+    Buffer.from(JSON.stringify({ v: 1, ...payload }), "utf8"),
+  );
+  return `${encoded}.${hmac(`rider-accept-confirmation.${encoded}`)}`;
+}
+
+export function verifyOrderAcceptConfirmationToken(
+  token: string,
+): OrderOfferPayload | null {
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+
+  const [encoded, signature] = parts;
+  const expected = hmac(`rider-accept-confirmation.${encoded}`);
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (
+    actualBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(actualBuffer, expectedBuffer)
+  ) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(encoded.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString(
+        "utf8",
+      ),
+    );
+    if (
+      parsed?.v !== 1 ||
+      typeof parsed.orderId !== "string" ||
+      typeof parsed.riderId !== "string" ||
+      typeof parsed.expiresAt !== "number" ||
+      typeof parsed.nonce !== "string" ||
+      parsed.nonce.length < 16 ||
+      !Number.isSafeInteger(parsed.expiresAt) ||
+      parsed.expiresAt <= Date.now()
+    ) {
+      return null;
+    }
+    return {
+      orderId: parsed.orderId,
+      riderId: parsed.riderId,
+      expiresAt: parsed.expiresAt,
+      nonce: parsed.nonce,
+    };
+  } catch {
+    return null;
+  }
+}
