@@ -11,7 +11,12 @@ import {
   riderWalletEntriesCol,
 } from "../lib/mongo";
 import { getHeatmapSnapshot } from "../lib/heatmapService";
-import { signRiderToken, verifyRiderToken } from "../lib/riderToken";
+import {
+  signOrderOfferToken,
+  signRiderToken,
+  verifyOrderOfferToken,
+  verifyRiderToken,
+} from "../lib/riderToken";
 
 const router = Router();
 
@@ -38,6 +43,42 @@ const ACTIVE_STATUSES = ["Rider Accepted", "Rider Picked Up"];
 const AVAILABLE_STATUS = "Admin Accepted";
 const DELIVERED_STATUS = "Delivered";
 const COD_TYPES = ["COD", "Cash", "cash", "cod"];
+const ORDER_OFFER_TTL_MS = 90_000;
+const ACCEPT_MIN_INTERVAL_MS = 1_200;
+const ACCEPT_ATTEMPT_WINDOW_MS = 60_000;
+const MAX_ACCEPT_ATTEMPTS_PER_WINDOW = 8;
+
+type AcceptAttemptState = {
+  timestamps: number[];
+  lastAttemptAt: number;
+};
+
+const acceptAttemptsByRider = new Map<string, AcceptAttemptState>();
+
+function checkAcceptAttemptRate(riderId: string, nowMs: number): string | null {
+  const minTimestamp = nowMs - ACCEPT_ATTEMPT_WINDOW_MS;
+  for (const [id, state] of acceptAttemptsByRider) {
+    if (state.lastAttemptAt < minTimestamp) acceptAttemptsByRider.delete(id);
+  }
+
+  const state = acceptAttemptsByRider.get(riderId) ?? {
+    timestamps: [],
+    lastAttemptAt: 0,
+  };
+  state.timestamps = state.timestamps.filter((timestamp) => timestamp >= minTimestamp);
+
+  if (nowMs - state.lastAttemptAt < ACCEPT_MIN_INTERVAL_MS) {
+    return "Please wait a moment before trying to accept another order.";
+  }
+  if (state.timestamps.length >= MAX_ACCEPT_ATTEMPTS_PER_WINDOW) {
+    return "Too many order-accept attempts. Please wait one minute and try again.";
+  }
+
+  state.timestamps.push(nowMs);
+  state.lastAttemptAt = nowMs;
+  acceptAttemptsByRider.set(riderId, state);
+  return null;
+}
 
 function normPhone(phone: any): string {
   return String(phone).replace(/[\s\-()]/g, "");
@@ -1921,7 +1962,21 @@ router.get("/rider/orders/available", async (req: any, res: any) => {
       .sort({ createdAt: -1 })
       .limit(100)
       .toArray();
-    res.json(docs.map(normalizeAvailableOrder));
+    const offerExpiresAt = Date.now() + ORDER_OFFER_TTL_MS;
+    res.json(
+      docs.map((doc) =>
+        normalizeAvailableOrder(
+          doc,
+          signOrderOfferToken({
+            orderId: String(doc._id),
+            riderId,
+            expiresAt: offerExpiresAt,
+            nonce: crypto.randomBytes(18).toString("base64url"),
+          }),
+          offerExpiresAt,
+        ),
+      ),
+    );
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
@@ -1997,6 +2052,32 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       orderObjectId = new ObjectId(req.params.orderId);
     } catch {
       return res.status(400).json({ message: "Invalid order id" });
+    }
+
+    const offerToken = String(req.body?.offerToken || "");
+    const offer = verifyOrderOfferToken(offerToken);
+    if (
+      !offer ||
+      offer.orderId !== orderObjectId.toHexString() ||
+      offer.riderId !== riderId
+    ) {
+      return res.status(403).json({
+        message:
+          "This order offer has expired. Refresh available orders, then hold to accept it again.",
+      });
+    }
+
+    const rateLimitMessage = checkAcceptAttemptRate(riderId, Date.now());
+    if (rateLimitMessage) {
+      req.log.warn(
+        {
+          riderId,
+          orderId: orderObjectId.toHexString(),
+          reason: rateLimitMessage,
+        },
+        "Rider order acceptance throttled",
+      );
+      return res.status(429).json({ message: rateLimitMessage });
     }
 
     const rider = await findRiderById(riderId);
@@ -2718,7 +2799,11 @@ function fmtTime(v: any): string | null {
 }
 
 // Parse a deal item name like "Burger Deal (Coleslaw, Drink)" handled on the client.
-function normalizeAvailableOrder(doc: any) {
+function normalizeAvailableOrder(
+  doc: any,
+  offerToken?: string,
+  offerExpiresAt?: number,
+) {
   const deliveryAddress = doc.address || null;
   const deliveryLatitude = toNumOrNull(doc.latitude);
   const deliveryLongitude = toNumOrNull(doc.longitude);
@@ -2733,6 +2818,8 @@ function normalizeAvailableOrder(doc: any) {
     deliveryAddress,
     deliveryLatitude,
     deliveryLongitude,
+    offerToken: offerToken || null,
+    offerExpiresAt: offerExpiresAt ? new Date(offerExpiresAt).toISOString() : null,
     // Backward compatibility for build 4.6.5, whose available-order card
     // reads the destination from the full-order field names.
     address: deliveryAddress,

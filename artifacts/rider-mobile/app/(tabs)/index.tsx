@@ -27,6 +27,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AvailableOrderCard } from "@/components/OrderCard";
+import { HoldToAcceptButton } from "@/components/HoldToAcceptButton";
 import { Button, EmptyState, Loading } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useOrderAlert } from "@/lib/alert";
@@ -166,11 +167,19 @@ export default function AvailableScreen() {
   };
 
   const accept = (order: AvailableRiderOrder) => {
+    if (!order.offerToken) {
+      ordersQ.refetch();
+      Alert.alert(
+        "Order offer refreshed",
+        "Please hold the accept button again to confirm this order.",
+      );
+      return;
+    }
     // Accepting within the alert window must silence the beep and hide the
     // new-order banner immediately.
     clearNew();
     acceptM.mutate(
-      { orderId: order.id },
+      { orderId: order.id, data: { offerToken: order.offerToken } },
       {
         onSuccess: () => {
           Haptics.notificationAsync(
@@ -406,7 +415,7 @@ export default function AvailableScreen() {
                 marginTop: 1,
               }}
             >
-              Tap accept quickly to secure them.
+                  Hold accept to secure an order.
             </Text>
           </View>
           <Icon name="x" size={20} color="rgba(255,255,255,0.85)" />
@@ -530,12 +539,10 @@ export default function AvailableScreen() {
           }
           renderItem={({ item }) => (
             <AvailableOrderCard order={item}>
-              <Button
-                label="Accept order"
-                icon="check"
-                onPress={() => accept(item)}
+              <HoldToAcceptButton
+                onComplete={() => accept(item)}
                 loading={acceptM.isPending && acceptM.variables?.orderId === item.id}
-                style={{ alignSelf: "stretch" }}
+                disabled={acceptM.isPending}
               />
             </AvailableOrderCard>
           )}

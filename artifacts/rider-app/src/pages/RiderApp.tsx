@@ -1039,6 +1039,100 @@ function OrderCard({
 
 // ── Available Orders Tab ──────────────────────────────────────────────────────
 
+function HoldToAcceptButton({
+  onComplete,
+  busy,
+}: {
+  onComplete: () => void;
+  busy: boolean;
+}) {
+  const [holding, setHolding] = useState(false);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const completed = useRef(false);
+
+  const clearHold = () => {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return clearHold;
+  }, []);
+
+  useEffect(() => {
+    if (!busy && completed.current) {
+      completed.current = false;
+    }
+  }, [busy]);
+
+  const startHold = () => {
+    if (busy || completed.current) return;
+    completed.current = false;
+    setHolding(true);
+    holdTimer.current = setTimeout(() => {
+      holdTimer.current = null;
+      completed.current = true;
+      setHolding(false);
+      onComplete();
+    }, 1_200);
+  };
+
+  const endHold = () => {
+    if (!completed.current) {
+      clearHold();
+      setHolding(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onPointerDown={startHold}
+      onPointerUp={endHold}
+      onPointerCancel={endHold}
+      onPointerLeave={endHold}
+      onKeyDown={(event) => {
+        if ((event.key === "Enter" || event.key === " ") && !event.repeat) {
+          event.preventDefault();
+          startHold();
+        }
+      }}
+      onKeyUp={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          endHold();
+        }
+      }}
+      aria-label="Hold to accept order"
+      aria-describedby="hold-to-accept-help"
+      className="relative flex h-11 w-full items-center justify-center overflow-hidden rounded-md bg-brand-600 text-sm font-semibold text-white transition-opacity hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 bg-black/20"
+        style={{
+          width: holding ? "100%" : "0%",
+          transition: holding ? "width 1200ms linear" : "width 150ms ease-out",
+        }}
+      />
+      <span className="relative flex items-center">
+        <CheckCircle className="mr-2 h-4 w-4" />
+        {busy
+          ? "Accepting..."
+          : holding
+            ? "Keep holding to accept"
+            : "Hold to accept"}
+      </span>
+      <span id="hold-to-accept-help" className="sr-only">
+        Hold for a moment to accept this order.
+      </span>
+    </button>
+  );
+}
+
 function AvailableOrderCard({
   order,
   busy,
@@ -1138,14 +1232,7 @@ function AvailableOrderCard({
             </a>
           )}
         </div>
-        <Button
-          onClick={onAccept}
-          disabled={busy}
-          className="w-full bg-brand-600 text-white hover:bg-brand-700"
-        >
-          <CheckCircle className="mr-2 h-4 w-4" />
-          {busy ? "Accepting..." : "Accept Order"}
-        </Button>
+        <HoldToAcceptButton onComplete={onAccept} busy={busy} />
       </CardContent>
     </Card>
   );
@@ -1178,11 +1265,11 @@ function AvailableOrders({ rider }: { rider: Rider }) {
 
   const acceptMutation = useAcceptOrder();
 
-  const handleAccept = (orderId: string) => {
+  const handleAccept = (order: AvailableRiderOrder) => {
     // Accepting within the alert window must silence the beep immediately.
     stopAlert();
     acceptMutation.mutate(
-      { orderId },
+      { orderId: order.id, data: { offerToken: order.offerToken } },
       {
         onSuccess: () => {
           toast({ title: "Order accepted!", description: "Head to the restaurant now." });
@@ -1268,7 +1355,7 @@ function AvailableOrders({ rider }: { rider: Rider }) {
               key={order.id}
               order={order}
               busy={acceptMutation.isPending}
-              onAccept={() => handleAccept(order.id)}
+              onAccept={() => handleAccept(order)}
             />
           ))}
         </>

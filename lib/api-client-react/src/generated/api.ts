@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AcceptOrderInput,
   AvailabilityInput,
   AvailabilityResponse,
   AvailableRiderOrder,
@@ -891,14 +892,16 @@ export const getAcceptOrderUrl = (orderId: string,) => {
 /**
  * @summary Accept an available order
  */
-export const acceptOrder = async (orderId: string, options?: RequestInit): Promise<RiderOrder> => {
+export const acceptOrder = async (orderId: string,
+    acceptOrderInput: AcceptOrderInput, options?: RequestInit): Promise<RiderOrder> => {
 
   return customFetch<RiderOrder>(getAcceptOrderUrl(orderId),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      acceptOrderInput,)
   }
 );}
 
@@ -906,8 +909,8 @@ export const acceptOrder = async (orderId: string, options?: RequestInit): Promi
 
 
 export const getAcceptOrderMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptOrder>>, TError,{orderId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof acceptOrder>>, TError,{orderId: string}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptOrder>>, TError,{orderId: string;data: BodyType<AcceptOrderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acceptOrder>>, TError,{orderId: string;data: BodyType<AcceptOrderInput>}, TContext> => {
 
 const mutationKey = ['acceptOrder'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -919,10 +922,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acceptOrder>>, {orderId: string}> = (props) => {
-          const {orderId} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acceptOrder>>, {orderId: string;data: BodyType<AcceptOrderInput>}> = (props) => {
+          const {orderId,data} = props ?? {};
 
-          return  acceptOrder(orderId,requestOptions)
+          return  acceptOrder(orderId,data,requestOptions)
         }
 
 
@@ -933,18 +936,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type AcceptOrderMutationResult = NonNullable<Awaited<ReturnType<typeof acceptOrder>>>
-
+    export type AcceptOrderMutationBody = BodyType<AcceptOrderInput>
     export type AcceptOrderMutationError = ErrorType<void>
 
     /**
  * @summary Accept an available order
  */
 export const useAcceptOrder = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptOrder>>, TError,{orderId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptOrder>>, TError,{orderId: string;data: BodyType<AcceptOrderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof acceptOrder>>,
         TError,
-        {orderId: string},
+        {orderId: string;data: BodyType<AcceptOrderInput>},
         TContext
       > => {
       return useMutation(getAcceptOrderMutationOptions(options));

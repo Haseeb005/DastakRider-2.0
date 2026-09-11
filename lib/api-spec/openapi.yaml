@@ -223,6 +223,12 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptOrderInput"
       responses:
         "200":
           description: OK
@@ -234,6 +240,10 @@ paths:
           description: Already has active delivery
         "409":
           description: Order already taken
+        "403":
+          description: Offer has expired or does not belong to this rider
+        "429":
+          description: Too many acceptance attempts
 
   /rider/orders/{orderId}/arrived:
     post:
@@ -492,8 +502,26 @@ components:
           type: ["number", "null"]
         deliveryLongitude:
           type: ["number", "null"]
+        offerToken:
+          type: string
+          description: Short-lived offer token bound to this rider and order. Required when accepting.
+        offerExpiresAt:
+          type: string
+          format: date-time
+          description: Time at which this offer token expires.
       required:
         - id
+        - offerToken
+        - offerExpiresAt
+
+    AcceptOrderInput:
+      type: object
+      properties:
+        offerToken:
+          type: string
+          minLength: 1
+      required:
+        - offerToken
 
     RiderOrder:
       type: object

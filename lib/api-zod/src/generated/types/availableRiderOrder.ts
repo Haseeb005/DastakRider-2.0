@@ -27,4 +27,8 @@ export interface AvailableRiderOrder {
   deliveryLatitude?: number | null;
   /** @nullable */
   deliveryLongitude?: number | null;
+  /** Short-lived offer token bound to this rider and order. Required when accepting. */
+  offerToken: string;
+  /** Time at which this offer token expires. */
+  offerExpiresAt: Date;
 }

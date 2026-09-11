@@ -135,7 +135,9 @@ export const GetAvailableOrdersResponseItem = zod.object({
   "martLongitude": zod.number().nullish(),
   "deliveryAddress": zod.string().nullish(),
   "deliveryLatitude": zod.number().nullish(),
-  "deliveryLongitude": zod.number().nullish()
+  "deliveryLongitude": zod.number().nullish(),
+  "offerToken": zod.string().describe('Short-lived offer token bound to this rider and order. Required when accepting.'),
+  "offerExpiresAt": zod.coerce.date().describe('Time at which this offer token expires.')
 }).describe('Pickup and delivery locations visible before a rider accepts the order. Full order details remain restricted until acceptance.')
 export const GetAvailableOrdersResponse = zod.array(GetAvailableOrdersResponseItem)
 
@@ -276,6 +278,13 @@ export const GetOrderHistoryResponse = zod.array(GetOrderHistoryResponseItem)
  */
 export const AcceptOrderParams = zod.object({
   "orderId": zod.coerce.string()
+})
+
+
+
+
+export const AcceptOrderBody = zod.object({
+  "offerToken": zod.string().min(1)
 })
 
 export const AcceptOrderResponse = zod.object({
