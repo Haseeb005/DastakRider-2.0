@@ -93,6 +93,8 @@ export interface AvailableRiderOrder {
   deliveryLatitude?: number | null;
   /** @nullable */
   deliveryLongitude?: number | null;
+  /** Whether the rider must pay cash to the restaurant when collecting this order. */
+  payCashToRestaurant: boolean;
   /** Short-lived offer token bound to this rider and order. Required when accepting. */
   offerToken: string;
   /** Time at which this offer token expires. */

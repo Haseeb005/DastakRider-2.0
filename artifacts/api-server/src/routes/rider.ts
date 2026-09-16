@@ -2841,6 +2841,8 @@ function normalizeAvailableOrder(
     deliveryAddress,
     deliveryLatitude,
     deliveryLongitude,
+    payCashToRestaurant:
+      String(doc.billingMode || "").toLowerCase() === "prepaid",
     offerToken: offerToken || null,
     offerExpiresAt: offerExpiresAt ? new Date(offerExpiresAt).toISOString() : null,
     // Backward compatibility for build 4.6.5, whose available-order card

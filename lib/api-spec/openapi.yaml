@@ -502,6 +502,9 @@ components:
           type: ["number", "null"]
         deliveryLongitude:
           type: ["number", "null"]
+        payCashToRestaurant:
+          type: boolean
+          description: Whether the rider must pay cash to the restaurant when collecting this order.
         offerToken:
           type: string
           description: Short-lived offer token bound to this rider and order. Required when accepting.
@@ -511,6 +514,7 @@ components:
           description: Time at which this offer token expires.
       required:
         - id
+        - payCashToRestaurant
         - offerToken
         - offerExpiresAt
 

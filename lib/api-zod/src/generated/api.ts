@@ -136,6 +136,7 @@ export const GetAvailableOrdersResponseItem = zod.object({
   "deliveryAddress": zod.string().nullish(),
   "deliveryLatitude": zod.number().nullish(),
   "deliveryLongitude": zod.number().nullish(),
+  "payCashToRestaurant": zod.boolean().describe('Whether the rider must pay cash to the restaurant when collecting this order.'),
   "offerToken": zod.string().describe('Short-lived offer token bound to this rider and order. Required when accepting.'),
   "offerExpiresAt": zod.coerce.date().describe('Time at which this offer token expires.')
 }).describe('Pickup and delivery locations visible before a rider accepts the order. Full order details remain restricted until acceptance.')

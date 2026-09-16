@@ -197,6 +197,29 @@ export function AvailableOrderCard({
             </Text>
           </Pressable>
         ) : null}
+        {order.payCashToRestaurant ? (
+          <View
+            style={{
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: "#F59E0B",
+              backgroundColor: "#FFFBEB",
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: "#78350F",
+                fontSize: 14,
+                fontFamily: "Inter_700Bold",
+              }}
+            >
+              Pay Cash to Restaurant
+            </Text>
+          </View>
+        ) : null}
         <View
           style={{
             borderTopWidth: 1,
