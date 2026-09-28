@@ -12,11 +12,8 @@ import {
 } from "../lib/mongo";
 import { getHeatmapSnapshot } from "../lib/heatmapService";
 import {
-  signOrderAcceptConfirmationToken,
   signOrderOfferToken,
   signRiderToken,
-  verifyOrderAcceptConfirmationToken,
-  verifyOrderOfferToken,
   verifyRiderToken,
 } from "../lib/riderToken";
 
@@ -45,45 +42,9 @@ const ACTIVE_STATUSES = ["Rider Accepted", "Rider Picked Up"];
 const AVAILABLE_STATUS = "Admin Accepted";
 const DELIVERED_STATUS = "Delivered";
 const COD_TYPES = ["COD", "Cash", "cash", "cod"];
-// Older installed clients may keep a card open while the app is backgrounded.
-// Allow time to return and accept without weakening signature or ownership checks.
+// Older installed clients still expect an offer token on each available order.
+// Acceptance no longer validates it, but it remains in responses for compatibility.
 const ORDER_OFFER_TTL_MS = 10 * 60_000;
-const ACCEPT_CONFIRMATION_TTL_MS = 60_000;
-const ACCEPT_MIN_INTERVAL_MS = 1_200;
-const ACCEPT_ATTEMPT_WINDOW_MS = 60_000;
-const MAX_ACCEPT_ATTEMPTS_PER_WINDOW = 8;
-
-type AcceptAttemptState = {
-  timestamps: number[];
-  lastAttemptAt: number;
-};
-
-const acceptAttemptsByRider = new Map<string, AcceptAttemptState>();
-
-function checkAcceptAttemptRate(riderId: string, nowMs: number): string | null {
-  const minTimestamp = nowMs - ACCEPT_ATTEMPT_WINDOW_MS;
-  for (const [id, state] of acceptAttemptsByRider) {
-    if (state.lastAttemptAt < minTimestamp) acceptAttemptsByRider.delete(id);
-  }
-
-  const state = acceptAttemptsByRider.get(riderId) ?? {
-    timestamps: [],
-    lastAttemptAt: 0,
-  };
-  state.timestamps = state.timestamps.filter((timestamp) => timestamp >= minTimestamp);
-
-  if (nowMs - state.lastAttemptAt < ACCEPT_MIN_INTERVAL_MS) {
-    return "Please wait a moment before trying to accept another order.";
-  }
-  if (state.timestamps.length >= MAX_ACCEPT_ATTEMPTS_PER_WINDOW) {
-    return "Too many order-accept attempts. Please wait one minute and try again.";
-  }
-
-  state.timestamps.push(nowMs);
-  state.lastAttemptAt = nowMs;
-  acceptAttemptsByRider.set(riderId, state);
-  return null;
-}
 
 function normPhone(phone: any): string {
   return String(phone).replace(/[\s\-()]/g, "");
@@ -2059,57 +2020,32 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       return res.status(400).json({ message: "Invalid order id" });
     }
 
-    const offerToken = String(req.body?.offerToken || "");
-    const offer = verifyOrderOfferToken(offerToken);
-    if (
-      !offer ||
-      offer.orderId !== orderObjectId.toHexString() ||
-      offer.riderId !== riderId
-    ) {
-      return res.status(403).json({
-        message:
-          "This order offer is no longer valid. Refresh available orders and try again.",
-      });
-    }
-
-    const confirmationToken = String(req.body?.confirmationToken || "");
-    const confirmation = verifyOrderAcceptConfirmationToken(confirmationToken);
-    const hasValidConfirmation =
-      !!confirmation &&
-      confirmation.orderId === orderObjectId.toHexString() &&
-      confirmation.riderId === riderId;
-
-    const rateLimitMessage = hasValidConfirmation
-      ? null
-      : checkAcceptAttemptRate(riderId, Date.now());
-    if (rateLimitMessage) {
-      const confirmationExpiresAt = Date.now() + ACCEPT_CONFIRMATION_TTL_MS;
-      req.log.warn(
-        {
-          riderId,
-          orderId: orderObjectId.toHexString(),
-          reason: rateLimitMessage,
-        },
-        "Rider order acceptance throttled",
-      );
-      return res.status(429).json({
-        message:
-          "We noticed unusually rapid order-accept attempts. Please confirm that you want this order.",
-        requiresConfirmation: true,
-        confirmationToken: signOrderAcceptConfirmationToken({
-          orderId: orderObjectId.toHexString(),
-          riderId,
-          expiresAt: confirmationExpiresAt,
-          nonce: crypto.randomBytes(18).toString("base64url"),
-        }),
-      });
-    }
-
     const rider = await findRiderById(riderId);
     if (!rider) return res.status(404).json({ message: "Rider not found" });
 
     const targetOrder = await ordersCol().findOne({ _id: orderObjectId });
     if (!targetOrder) return res.status(404).json({ message: "Order not found" });
+    // Without an offer-token check, enforce the same city/zone and delivery
+    // eligibility rules that determine which orders this rider can see.
+    const zones = Array.isArray(rider.riderZones) ? rider.riderZones.filter(Boolean) : [];
+    const eligibilityFilter: Record<string, any> = {
+      status: AVAILABLE_STATUS,
+      selfDelivery: { $ne: true },
+      orderType: { $ne: "PickUp" },
+      $or: [{ riderId: { $exists: false } }, { riderId: null }, { riderId: "" }],
+    };
+    if (rider.city) eligibilityFilter.city = rider.city;
+    if (zones.length) eligibilityFilter.zone = { $in: zones };
+    if (
+      targetOrder.status !== AVAILABLE_STATUS ||
+      targetOrder.selfDelivery === true ||
+      targetOrder.orderType === "PickUp" ||
+      (rider.city && targetOrder.city !== rider.city) ||
+      (zones.length && !zones.includes(targetOrder.zone)) ||
+      (targetOrder.riderId != null && targetOrder.riderId !== "")
+    ) {
+      return res.status(409).json({ message: "Order already taken or unavailable." });
+    }
 
     // maxOrderLimit caps how many orders a rider can carry at once (admin-owned field).
     // The limit is enforced from the current active-order count.
@@ -2226,8 +2162,7 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
     const updated = await ordersCol().findOneAndUpdate(
       {
         _id: orderObjectId,
-        status: AVAILABLE_STATUS,
-        $or: [{ riderId: { $exists: false } }, { riderId: null }, { riderId: "" }],
+        ...eligibilityFilter,
       },
       {
         $set: {

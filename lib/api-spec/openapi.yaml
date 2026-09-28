@@ -239,11 +239,7 @@ paths:
         "400":
           description: Already has active delivery
         "409":
-          description: Order already taken
-        "403":
-          description: Offer has expired or does not belong to this rider
-        "429":
-          description: Unusually rapid acceptance attempts require confirmation
+          description: Order already taken or not available to this rider
 
   /rider/orders/{orderId}/arrived:
     post:
@@ -507,7 +503,7 @@ components:
           description: Whether the rider must pay cash to the restaurant when collecting this order.
         offerToken:
           type: string
-          description: Short-lived offer token bound to this rider and order. Required when accepting.
+          description: Legacy offer token returned for compatibility with installed rider apps. The server does not require it to accept an order.
         offerExpiresAt:
           type: string
           format: date-time
@@ -523,12 +519,12 @@ components:
       properties:
         offerToken:
           type: string
-          minLength: 1
+          deprecated: true
+          description: Optional legacy field; ignored by the server.
         confirmationToken:
           type: string
-          description: Short-lived confirmation token requested only after suspicious acceptance activity.
-      required:
-        - offerToken
+          deprecated: true
+          description: Optional legacy field; ignored by the server.
 
     RiderOrder:
       type: object

@@ -1,12 +1,10 @@
 ---
-name: Rider acceptance anti-automation
-description: Product decision for keeping order acceptance fast while adding server-enforced abuse controls.
+name: Rider acceptance flow
+description: Product decision for one-tap acceptance without offer-token or suspicious-activity confirmation checks.
 ---
 
-Routine rider order acceptance must remain a single tap or click. Do not require every rider to hold the button for a fixed duration. A second confirmation is required only when the API identifies suspiciously rapid or repeated acceptance behavior.
+Routine rider order acceptance must remain a single tap or click. The server must not gate it on a signed offer token, token expiry, a holding duration, or suspicious-activity confirmation.
 
-**Why:** The user confirmed that a universal 1.2-second hold would irritate legitimate riders. Anti-automation must be enforced primarily by the server rather than by adding routine friction.
+**Why:** The user expressly chose immediate acceptance after tapping "Accept order" and declined extra offer/confirmation security. A universal hold irritates legitimate riders. An already installed older app can still enforce its own hold gesture before calling the server; no server change can remove that UI behavior.
 
-**How to apply:** Keep short-lived rider- and order-bound offers, atomic order assignment, replay resistance, and rate controls as the baseline. If a request crosses the suspicious-activity threshold, issue a short-lived confirmation for that rider and order; the client must ask for an explicit second action before retrying. Never downgrade normal riders to a mandatory hold without a new product decision.
-
-Installed older mobile builds may retain an available-order card when backgrounded and then submit its expired signed offer. A temporary, bounded server-side validity extension can mitigate this without requiring an OTA update, but never accept an unsigned, tampered, wrong-rider, wrong-order, or indefinitely expired offer. **Why:** The server cannot force an already installed build to refresh its cached offer before the rider presses accept. **How to apply:** Keep atomic availability and rider restrictions intact; prefer a client-side fresh-offer retry when an updated build can actually reach riders.
+**How to apply:** Keep rider authentication, city/zone eligibility, order availability, cash/capacity checks, and atomic single-rider assignment. Continue returning legacy offer tokens while older clients need them to submit accept requests, but do not validate them on acceptance. Do not claim server changes remove a hold gesture from already installed builds; that requires a mobile update.

@@ -137,7 +137,7 @@ export const GetAvailableOrdersResponseItem = zod.object({
   "deliveryLatitude": zod.number().nullish(),
   "deliveryLongitude": zod.number().nullish(),
   "payCashToRestaurant": zod.boolean().describe('Whether the rider must pay cash to the restaurant when collecting this order.'),
-  "offerToken": zod.string().describe('Short-lived offer token bound to this rider and order. Required when accepting.'),
+  "offerToken": zod.string().describe('Legacy offer token returned for compatibility with installed rider apps. The server does not require it to accept an order.'),
   "offerExpiresAt": zod.coerce.date().describe('Time at which this offer token expires.')
 }).describe('Pickup and delivery locations visible before a rider accepts the order. Full order details remain restricted until acceptance.')
 export const GetAvailableOrdersResponse = zod.array(GetAvailableOrdersResponseItem)
@@ -281,12 +281,9 @@ export const AcceptOrderParams = zod.object({
   "orderId": zod.coerce.string()
 })
 
-
-
-
 export const AcceptOrderBody = zod.object({
-  "offerToken": zod.string().min(1),
-  "confirmationToken": zod.string().optional().describe('Short-lived confirmation token requested only after suspicious acceptance activity.')
+  "offerToken": zod.string().optional().describe('Optional legacy field; ignored by the server.'),
+  "confirmationToken": zod.string().optional().describe('Optional legacy field; ignored by the server.')
 })
 
 export const AcceptOrderResponse = zod.object({

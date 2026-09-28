@@ -95,16 +95,22 @@ export interface AvailableRiderOrder {
   deliveryLongitude?: number | null;
   /** Whether the rider must pay cash to the restaurant when collecting this order. */
   payCashToRestaurant: boolean;
-  /** Short-lived offer token bound to this rider and order. Required when accepting. */
+  /** Legacy offer token returned for compatibility with installed rider apps. The server does not require it to accept an order. */
   offerToken: string;
   /** Time at which this offer token expires. */
   offerExpiresAt: string;
 }
 
 export interface AcceptOrderInput {
-  /** @minLength 1 */
-  offerToken: string;
-  /** Short-lived confirmation token requested only after suspicious acceptance activity. */
+  /**
+     * Optional legacy field; ignored by the server.
+     * @deprecated
+     */
+  offerToken?: string;
+  /**
+     * Optional legacy field; ignored by the server.
+     * @deprecated
+     */
   confirmationToken?: string;
 }
 
