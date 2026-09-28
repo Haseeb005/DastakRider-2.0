@@ -45,7 +45,9 @@ const ACTIVE_STATUSES = ["Rider Accepted", "Rider Picked Up"];
 const AVAILABLE_STATUS = "Admin Accepted";
 const DELIVERED_STATUS = "Delivered";
 const COD_TYPES = ["COD", "Cash", "cash", "cod"];
-const ORDER_OFFER_TTL_MS = 90_000;
+// Older installed clients may keep a card open while the app is backgrounded.
+// Allow time to return and accept without weakening signature or ownership checks.
+const ORDER_OFFER_TTL_MS = 10 * 60_000;
 const ACCEPT_CONFIRMATION_TTL_MS = 60_000;
 const ACCEPT_MIN_INTERVAL_MS = 1_200;
 const ACCEPT_ATTEMPT_WINDOW_MS = 60_000;
@@ -2066,7 +2068,7 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
     ) {
       return res.status(403).json({
         message:
-          "This order offer has expired. Refresh available orders, then hold to accept it again.",
+          "This order offer is no longer valid. Refresh available orders and try again.",
       });
     }
 
