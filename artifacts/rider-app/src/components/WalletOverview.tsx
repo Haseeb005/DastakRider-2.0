@@ -58,6 +58,7 @@ export interface WeeklyEarningsSummary {
   weekStart: string | Date;
   weekEnd: string | Date;
   deliveryEarnings: number;
+  tipEarnings: number;
   challengeBonuses: number;
   fastDeliveryBonuses: number;
   totalEarnings: number;
@@ -68,6 +69,7 @@ export interface WalletOverviewProps {
   loading?: boolean;
   error?: string | boolean;
   deliveryEarnings?: number;
+  tipEarnings?: number;
   challengeBonuses?: number;
   fastDeliveryBonuses?: number;
   totalEarnings?: number;
@@ -528,6 +530,11 @@ const PreviousWeekEarningsCard = ({ summary }: { summary?: WeeklyEarningsSummary
             <p className="mt-0.5 text-[11px] text-muted-foreground">{summary.deliveries} completed</p>
           </div>
           <div className="rounded-xl bg-muted/60 p-3">
+            <p className="text-[11px] font-semibold text-muted-foreground">Rider tips</p>
+            <p className="mt-1 text-sm font-bold">Rs. {(summary.tipEarnings ?? 0).toLocaleString()}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">Included in deliveries</p>
+          </div>
+          <div className="rounded-xl bg-muted/60 p-3">
             <p className="text-[11px] font-semibold text-muted-foreground">Bonuses</p>
             <p className="mt-1 text-sm font-bold">Rs. {totalBonuses.toLocaleString()}</p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">Challenges + fast delivery</p>
@@ -542,6 +549,7 @@ export function WalletOverview({
   loading,
   error,
   deliveryEarnings = 0,
+  tipEarnings = 0,
   challengeBonuses = 0,
   fastDeliveryBonuses = 0,
   totalEarnings = 0,
@@ -609,6 +617,10 @@ export function WalletOverview({
                 </p>
               </div>
             </div>
+            <p className="mt-3 text-sm font-semibold text-primary-foreground">
+              Rider tips: Rs. {tipEarnings.toLocaleString()}
+              <span className="block text-xs font-normal text-primary-foreground/70">Included in delivery earnings above</span>
+            </p>
           </div>
         </div>
       </section>

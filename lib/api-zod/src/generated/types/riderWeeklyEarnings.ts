@@ -10,6 +10,8 @@ export interface RiderWeeklyEarnings {
   weekStart: Date;
   weekEnd: Date;
   deliveryEarnings: number;
+  /** Tips from this week's delivered orders; already included in deliveryEarnings and totalEarnings. */
+  tipEarnings: number;
   challengeBonuses: number;
   fastDeliveryBonuses: number;
   totalEarnings: number;

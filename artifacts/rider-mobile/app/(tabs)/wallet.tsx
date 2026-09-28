@@ -600,6 +600,9 @@ function PreviousWeekEarningsCard({ summary }: { summary?: RiderWeeklyEarnings }
           </Text>
         </View>
       </View>
+      <Text style={{ color: c.mutedForeground, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
+        Rider tips: {rupees(summary.tipEarnings ?? 0)} · included in deliveries
+      </Text>
     </View>
   );
 }
@@ -728,6 +731,12 @@ export default function WalletScreen() {
                 </Text>
               </View>
             </View>
+            <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 13, marginTop: 12 }}>
+              Rider tips: {rupees(data.tipEarnings ?? 0)}
+            </Text>
+            <Text style={{ color: "rgba(255,255,255,0.72)", fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 2 }}>
+              Included in delivery earnings above
+            </Text>
           </View>
 
           {data.previousWeek ? <PreviousWeekEarningsCard summary={data.previousWeek} /> : null}
@@ -848,12 +857,14 @@ function makeWalletMilestoneFixture(scenario: WalletMilestoneFixtureScenario): R
       weekStart: "2098-12-25T00:00:00.000Z",
       weekEnd: WALLET_FIXTURE_PERIOD_START,
       deliveryEarnings: 0,
+      tipEarnings: 0,
       challengeBonuses: 0,
       fastDeliveryBonuses: 0,
       totalEarnings: 0,
       deliveries: 0,
     },
     deliveryEarnings: 0,
+    tipEarnings: 0,
     challengeBonuses: 0,
     fastDeliveryBonuses: 0,
     totalEarnings: 0,

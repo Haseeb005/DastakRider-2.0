@@ -13,13 +13,17 @@ The accept endpoint still snapshots `rider.tillNoonFare` onto the order as `ride
 their current `tillNoonFare` from the users doc. It OVERRIDES the per-order snapshot
 everywhere (available, active, history, accept, arrived, status). The stored
 `order.riderFare` snapshot is only a fallback for riders with no `tillNoonFare`.
-Earnings = delivered count × current `tillNoonFare` (e.g. tnf 140 × 11623 =
-1,627,220). Changing a rider's rate therefore RE-VALUES their whole history/earnings.
+Base fare earnings = delivered count × current `tillNoonFare` (e.g. tnf 140 × 11623 =
+1,627,220). Rider tips are added to base fare and already included in the earnings
+and wallet delivery totals; a separately displayed tip subtotal is a breakdown,
+not an extra amount to add. Changing a rider's rate therefore RE-VALUES the base
+fare portion of their history/earnings.
 
 **Why:** this is an explicit user decision (chosen over snapshot-based payouts). The
 trade-off, if revisited: snapshot = stable payout history when admins change a rate;
 current `tillNoonFare` = always-current rate that re-values past deliveries. The
-chosen policy is always-current-rate.
+chosen policy is always-current-rate. Showing tips separately must not double-count
+money already included in the combined payout.
 
 **Never use `deliveryCharges` as rider pay** — it is the CUSTOMER's delivery charge.
 The normalized `deliveryFee` field = `doc.deliveryCharges` (customer bill line, e.g.

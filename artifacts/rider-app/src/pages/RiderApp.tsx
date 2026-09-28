@@ -1749,8 +1749,11 @@ function DeliveryHistory() {
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-bold text-green-600">{formatMoney(order.riderFare)}</p>
-                  <p className="text-xs text-gray-400">{formatMoney(order.total)} order</p>
+                  <p className="font-bold text-green-600">
+                    {formatMoney((order.riderFare ?? 0) + (order.tip ?? 0))}
+                  </p>
+                  <p className="text-xs text-gray-500">Tip: {formatMoney(order.tip ?? 0)}</p>
+                  <p className="text-xs text-gray-400">Includes tip · {formatMoney(order.total)} order</p>
                 </div>
               </CardContent>
             </Card>
@@ -1787,6 +1790,7 @@ function RiderWallet() {
           : false
       }
       deliveryEarnings={wallet?.deliveryEarnings}
+      tipEarnings={wallet?.tipEarnings}
       challengeBonuses={wallet?.challengeBonuses}
       fastDeliveryBonuses={wallet?.fastDeliveryBonuses}
       totalEarnings={wallet?.totalEarnings}

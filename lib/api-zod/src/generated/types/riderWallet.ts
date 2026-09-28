@@ -14,6 +14,8 @@ export interface RiderWallet {
   weekEnd: Date;
   previousWeek: RiderWeeklyEarnings;
   deliveryEarnings: number;
+  /** Tips from this week's delivered orders; already included in deliveryEarnings and totalEarnings. */
+  tipEarnings: number;
   challengeBonuses: number;
   fastDeliveryBonuses: number;
   totalEarnings: number;

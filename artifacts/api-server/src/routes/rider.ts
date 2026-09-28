@@ -2582,6 +2582,9 @@ router.get("/rider/wallet", async (req: any, res: any) => {
           0,
         ),
       );
+      const tipEarnings = Math.round(
+        weekOrders.reduce((sum: number, order: any) => sum + (Number(order.tip) || 0), 0),
+      );
       const challengeBonuses = Math.round(
         weekBonusEntries
           .filter((entry: any) => entry.type === "challenge_bonus")
@@ -2594,6 +2597,7 @@ router.get("/rider/wallet", async (req: any, res: any) => {
       );
       return {
         deliveryEarnings,
+        tipEarnings,
         challengeBonuses,
         fastDeliveryBonuses,
         totalEarnings: deliveryEarnings + challengeBonuses + fastDeliveryBonuses,

@@ -545,7 +545,10 @@ export default function HistoryScreen() {
                   Your earning
                 </Text>
                 <Text style={{ color: c.success, fontFamily: "Inter_700Bold", fontSize: 14, marginTop: 2 }}>
-                  {money(item.riderFare)}
+                  {money((item.riderFare ?? 0) + (item.tip ?? 0))}
+                </Text>
+                <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 2 }}>
+                  Tip: {money(item.tip ?? 0)} · included
                 </Text>
               </View>
             </View>

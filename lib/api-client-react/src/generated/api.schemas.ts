@@ -314,6 +314,8 @@ export interface RiderWeeklyEarnings {
   weekStart: string;
   weekEnd: string;
   deliveryEarnings: number;
+  /** Tips from this week's delivered orders; already included in deliveryEarnings and totalEarnings. */
+  tipEarnings: number;
   challengeBonuses: number;
   fastDeliveryBonuses: number;
   totalEarnings: number;
@@ -325,6 +327,8 @@ export interface RiderWallet {
   weekEnd: string;
   previousWeek: RiderWeeklyEarnings;
   deliveryEarnings: number;
+  /** Tips from this week's delivered orders; already included in deliveryEarnings and totalEarnings. */
+  tipEarnings: number;
   challengeBonuses: number;
   fastDeliveryBonuses: number;
   totalEarnings: number;

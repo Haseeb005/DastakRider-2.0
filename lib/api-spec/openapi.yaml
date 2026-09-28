@@ -844,6 +844,9 @@ components:
           format: date-time
         deliveryEarnings:
           type: number
+        tipEarnings:
+          type: number
+          description: Tips from this week's delivered orders; already included in deliveryEarnings and totalEarnings.
         challengeBonuses:
           type: number
         fastDeliveryBonuses:
@@ -856,6 +859,7 @@ components:
         - weekStart
         - weekEnd
         - deliveryEarnings
+        - tipEarnings
         - challengeBonuses
         - fastDeliveryBonuses
         - totalEarnings
@@ -874,6 +878,9 @@ components:
           $ref: "#/components/schemas/RiderWeeklyEarnings"
         deliveryEarnings:
           type: number
+        tipEarnings:
+          type: number
+          description: Tips from this week's delivered orders; already included in deliveryEarnings and totalEarnings.
         challengeBonuses:
           type: number
         fastDeliveryBonuses:
@@ -899,6 +906,7 @@ components:
         - weekEnd
         - previousWeek
         - deliveryEarnings
+        - tipEarnings
         - challengeBonuses
         - fastDeliveryBonuses
         - totalEarnings
