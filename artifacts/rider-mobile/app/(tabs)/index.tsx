@@ -479,7 +479,7 @@ export default function AvailableScreen() {
                 marginTop: 1,
               }}
             >
-                  Hold accept to secure an order.
+              Tap accept to secure an order.
             </Text>
           </View>
           <Icon name="x" size={20} color="rgba(255,255,255,0.85)" />
