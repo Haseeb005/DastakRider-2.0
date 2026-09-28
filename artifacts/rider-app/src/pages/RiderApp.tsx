@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, type ReactNode, lazy, Suspense } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  findRenewedOffer,
   useGetRiderMe,
   getGetRiderMeQueryKey,
   useLoginRider,
@@ -1159,6 +1160,8 @@ function AvailableOrderCard({
 function AvailableOrders({ rider }: { rider: Rider }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const refreshingOffer = useRef(false);
+  const [isRefreshingOffer, setIsRefreshingOffer] = useState(false);
 
   const {
     data: orders = [],
@@ -1183,10 +1186,40 @@ function AvailableOrders({ rider }: { rider: Rider }) {
 
   const acceptMutation = useAcceptOrder();
 
+  const refreshRejectedOffer = async (order: AvailableRiderOrder) => {
+    if (refreshingOffer.current) return;
+    refreshingOffer.current = true;
+    setIsRefreshingOffer(true);
+    try {
+      const result = await refetch();
+      if (result.isError) {
+        toast({ title: "Could not refresh order", description: "Check your connection and try again.", variant: "destructive" });
+        return;
+      }
+      const renewed = findRenewedOffer(order, result.data);
+      if (!renewed) {
+        toast({ title: "Order no longer available", description: "This order is gone or its offer could not be renewed.", variant: "destructive" });
+        return;
+      }
+      if (window.confirm("This order is still available. Accept it with the new offer?")) {
+        handleAccept(renewed);
+      }
+    } catch {
+      toast({ title: "Could not refresh order", description: "Check your connection and try again.", variant: "destructive" });
+    } finally {
+      refreshingOffer.current = false;
+      setIsRefreshingOffer(false);
+    }
+  };
+
   const handleAccept = (
     order: AvailableRiderOrder,
     confirmationToken?: string,
   ) => {
+    if (!order.offerToken) {
+      void refreshRejectedOffer(order);
+      return;
+    }
     // Accepting within the alert window must silence the beep immediately.
     stopAlert();
     acceptMutation.mutate(
@@ -1204,6 +1237,10 @@ function AvailableOrders({ rider }: { rider: Rider }) {
           qc.invalidateQueries({ queryKey: getGetActiveOrdersQueryKey() });
         },
         onError: (e: any) => {
+          if (e?.status === 403) {
+            void refreshRejectedOffer(order);
+            return;
+          }
           const response = e?.data;
           if (
             response?.requiresConfirmation === true &&
@@ -1297,7 +1334,7 @@ function AvailableOrders({ rider }: { rider: Rider }) {
             <AvailableOrderCard
               key={order.id}
               order={order}
-              busy={acceptMutation.isPending}
+              busy={acceptMutation.isPending || isRefreshingOffer}
               onAccept={() => handleAccept(order)}
             />
           ))}

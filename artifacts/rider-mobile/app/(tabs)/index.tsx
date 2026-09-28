@@ -1,5 +1,6 @@
 import { Icon } from "@/components/Icon";
 import {
+  findRenewedOffer,
   getGetActiveOrdersQueryKey,
   getGetAvailableOrdersQueryKey,
   getGetRiderMeQueryKey,
@@ -143,6 +144,42 @@ export default function AvailableScreen() {
     mutation: { retry: 1, retryDelay: 500 },
   });
   const acceptM = useAcceptOrder();
+  const refreshingOffer = useRef(false);
+  const [isRefreshingOffer, setIsRefreshingOffer] = useState(false);
+
+  const refreshRejectedOffer = async (order: AvailableRiderOrder) => {
+    if (refreshingOffer.current) return;
+    refreshingOffer.current = true;
+    setIsRefreshingOffer(true);
+    try {
+      const result = await ordersQ.refetch();
+      if (result.isError) {
+        Alert.alert("Could not refresh order", "Check your connection and try again.");
+        return;
+      }
+      const renewed = findRenewedOffer(order, result.data);
+      if (!renewed) {
+        Alert.alert(
+          "Order no longer available",
+          "This order is gone or its offer could not be renewed. Please choose an available order.",
+        );
+        return;
+      }
+      Alert.alert(
+        "Order offer refreshed",
+        "This order is still available. Accept it with the new offer?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Accept order", onPress: () => accept(renewed) },
+        ],
+      );
+    } catch {
+      Alert.alert("Could not refresh order", "Check your connection and try again.");
+    } finally {
+      refreshingOffer.current = false;
+      setIsRefreshingOffer(false);
+    }
+  };
 
   const toggleOnline = () => {
     Haptics.selectionAsync().catch(() => {});
@@ -170,11 +207,7 @@ export default function AvailableScreen() {
     confirmationToken?: string,
   ) => {
     if (!order.offerToken) {
-      ordersQ.refetch();
-      Alert.alert(
-        "Order offer refreshed",
-        "Please hold the accept button again to confirm this order.",
-      );
+      void refreshRejectedOffer(order);
       return;
     }
     // Accepting within the alert window must silence the beep and hide the
@@ -197,6 +230,10 @@ export default function AvailableScreen() {
           qc.invalidateQueries({ queryKey: getGetActiveOrdersQueryKey() });
         },
         onError: (e: any) => {
+          if (e?.status === 403) {
+            void refreshRejectedOffer(order);
+            return;
+          }
           const response = e?.data;
           if (
             response?.requiresConfirmation === true &&
@@ -571,7 +608,7 @@ export default function AvailableScreen() {
                 icon="check"
                 onPress={() => accept(item)}
                 loading={acceptM.isPending && acceptM.variables?.orderId === item.id}
-                disabled={acceptM.isPending}
+                disabled={acceptM.isPending || isRefreshingOffer}
                 style={{ alignSelf: "stretch" }}
               />
             </AvailableOrderCard>
