@@ -8,3 +8,9 @@ Do not diagnose a general OneSignal outage from queued rider notifications alone
 **Why:** A minimal rider test successfully reached FCM while previously queued customized order notifications remained pending. That evidence narrows the investigation but does not identify which customized field or provider setting caused the difference.
 
 **How to apply:** Read notification delivery reports, not just server acceptance logs. A positive successful count means push-provider handoff, not confirmed display on a phone. Inspect invalid saved subscriptions separately. Never send diagnostic pushes without user authorization or publish a native update merely to investigate a server-side delivery problem.
+
+Compare historical recipient IDs with the rider's currently saved subscription before interpreting a prior test as testing the current registration.
+
+**Why:** A rider's OneSignal user can contain several registrations for the same handset, including an old invalid registration and a newer enabled one. Device registration can update the database during diagnosis, so an earlier test may have targeted an invalid ID even when the current saved ID is valid.
+
+**How to apply:** Verify ownership and enabled/token state of the exact saved subscription. Compare the notification report's actual recipient IDs with that subscription; user-level identity matching or the existence of some enabled subscription is not sufficient.
