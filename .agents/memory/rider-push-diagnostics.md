@@ -26,3 +26,9 @@ Android locks a notification category's sound after the device first receives th
 **Why:** This rider's Dastak category was already created with the device-default sound; the delivered test payload requested Dastak, but Android played its locked default.
 
 **How to apply:** To apply a bundled custom sound to an existing device, create a new OneSignal Android category with sound `dastak` (without `.wav`) and send on its new channel ID. Consider the delivery scope carefully when replacing a channel ID shared by all riders.
+
+If foreground alerts play Dastak but background alerts use the default tone for all riders, foreground audio and Android channel audio are separate paths. The raw WAV must also survive Android release resource shrinking.
+
+**Why:** Foreground order alerts play the bundled file directly, while Android renders background pushes from its notification category; the rider build enabled resource shrinking without a keep rule for the dynamically named sound.
+
+**How to apply:** Configure a new shared OneSignal Android category with Custom `dastak`, update the server's channel ID, and preserve `res/raw/dastak.wav` in the next Android release build.
