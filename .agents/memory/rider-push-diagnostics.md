@@ -20,3 +20,9 @@ When only one rider reports the default sound and others hear the custom sound, 
 **Why:** The user clarified that this sound issue affected only one rider, while the sound-enabled push was accepted and received.
 
 **How to apply:** Confirm the rider's channel is set to Alerting with the custom Dastak sound, plus notification volume and Do Not Disturb, before making a global native-build change.
+
+Android locks a notification category's sound after the device first receives that category. A device sound picker may offer system tones but not an app-bundled sound resource.
+
+**Why:** This rider's Dastak category was already created with the device-default sound; the delivered test payload requested Dastak, but Android played its locked default.
+
+**How to apply:** To apply a bundled custom sound to an existing device, create a new OneSignal Android category with sound `dastak` (without `.wav`) and send on its new channel ID. Consider the delivery scope carefully when replacing a channel ID shared by all riders.
