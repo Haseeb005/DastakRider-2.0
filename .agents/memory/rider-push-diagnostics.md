@@ -14,3 +14,9 @@ Compare historical recipient IDs with the rider's currently saved subscription b
 **Why:** A rider's OneSignal user can contain several registrations for the same handset, including an old invalid registration and a newer enabled one. Device registration can update the database during diagnosis, so an earlier test may have targeted an invalid ID even when the current saved ID is valid.
 
 **How to apply:** Verify ownership and enabled/token state of the exact saved subscription. Compare the notification report's actual recipient IDs with that subscription; user-level identity matching or the existence of some enabled subscription is not sufficient.
+
+When only one rider reports the default sound and others hear the custom sound, prioritize that device's Android notification-channel and system sound settings over shared payload or release-build changes.
+
+**Why:** The user clarified that this sound issue affected only one rider, while the sound-enabled push was accepted and received.
+
+**How to apply:** Confirm the rider's channel is set to Alerting with the custom Dastak sound, plus notification volume and Do Not Disturb, before making a global native-build change.
