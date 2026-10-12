@@ -9,8 +9,13 @@ export type RiderCandidate = {
   deleted?: unknown;
   city?: unknown;
   riderZones?: unknown;
-  maxOrderLimit?: unknown;
   playerId?: unknown;
+};
+
+export type RiderLiveOrderCounts = {
+  activeCount: number;
+  acceptedCount: number;
+  pickedUpCount: number;
 };
 
 export type AvailableOrderForDistribution = {
@@ -20,16 +25,18 @@ export type AvailableOrderForDistribution = {
 };
 
 export type RiderOfferAudience = {
+  /** Riders allowed to accept after the 30-second idle-rider window. */
   eligibleRiders: RiderCandidate[];
   idleRiders: RiderCandidate[];
   priorityEndsAt: number;
+  priorityWindowOpen: boolean;
   idlePriorityActive: boolean;
 };
 
-export async function getActiveOrderCounts(
+export async function getRiderLiveOrderCounts(
   riders: RiderCandidate[],
   session?: any,
-): Promise<Map<string, number>> {
+): Promise<Map<string, RiderLiveOrderCounts>> {
   const riderIds = riders.map((rider) => String(rider._id));
   if (riderIds.length === 0) return new Map();
 
@@ -42,12 +49,26 @@ export async function getActiveOrderCounts(
             status: { $in: ["Rider Accepted", "Rider Picked Up"] },
           },
         },
-        { $group: { _id: "$riderId", count: { $sum: 1 } } },
+        { $group: { _id: { riderId: "$riderId", status: "$status" }, count: { $sum: 1 } } },
       ],
       session ? { session } : {},
     )
     .toArray();
-  return new Map(rows.map((row: any) => [String(row._id), Number(row.count) || 0]));
+  const counts = new Map<string, RiderLiveOrderCounts>();
+  for (const row of rows as any[]) {
+    const riderId = String(row._id.riderId);
+    const current = counts.get(riderId) ?? {
+      activeCount: 0,
+      acceptedCount: 0,
+      pickedUpCount: 0,
+    };
+    const count = Number(row.count) || 0;
+    current.activeCount += count;
+    if (row._id.status === "Rider Accepted") current.acceptedCount += count;
+    if (row._id.status === "Rider Picked Up") current.pickedUpCount += count;
+    counts.set(riderId, current);
+  }
+  return counts;
 }
 
 export async function ensureRiderOfferStartedAt(order: {
@@ -83,14 +104,21 @@ export async function ensureRiderOfferStartedAt(order: {
   return Number.isFinite(persisted.getTime()) ? persisted : startedAt;
 }
 
-function activeCountFor(rider: RiderCandidate, activeCounts: Map<string, number>) {
-  return activeCounts.get(String(rider._id)) ?? 0;
+function liveCountsFor(
+  rider: RiderCandidate,
+  liveCounts: Map<string, RiderLiveOrderCounts>,
+): RiderLiveOrderCounts {
+  return liveCounts.get(String(rider._id)) ?? {
+    activeCount: 0,
+    acceptedCount: 0,
+    pickedUpCount: 0,
+  };
 }
 
 export function getRiderOfferAudience(
   order: AvailableOrderForDistribution,
   riders: RiderCandidate[],
-  activeCounts: Map<string, number>,
+  liveCounts: Map<string, RiderLiveOrderCounts>,
   now = Date.now(),
 ): RiderOfferAudience {
   const orderCity = String(order.city ?? "");
@@ -104,14 +132,21 @@ export function getRiderOfferAudience(
       ? rider.riderZones.filter(Boolean).map(String)
       : [];
     if (zones.length > 0 && !zones.includes(orderZone)) return false;
-
-    const limit = Number(rider.maxOrderLimit) || 0;
-    return limit <= 0 || activeCountFor(rider, activeCounts) < limit;
+    return true;
   });
 
   const idleRiders = eligibleRiders.filter(
-    (rider) => activeCountFor(rider, activeCounts) === 0,
+    (rider) => liveCountsFor(rider, liveCounts).activeCount === 0,
   );
+  const pickedUpRiders = eligibleRiders.filter((rider) => {
+    const counts = liveCountsFor(rider, liveCounts);
+    return (
+      counts.activeCount > 0 &&
+      counts.activeCount < 2 &&
+      counts.acceptedCount === 0 &&
+      counts.pickedUpCount > 0
+    );
+  });
   const start = new Date(
     order.riderOfferStartedAt as string | number | Date,
   ).getTime();
@@ -120,10 +155,11 @@ export function getRiderOfferAudience(
     : now + IDLE_RIDER_PRIORITY_MS;
 
   return {
-    eligibleRiders,
+    eligibleRiders: [...idleRiders, ...pickedUpRiders],
     idleRiders,
     priorityEndsAt,
-    idlePriorityActive: idleRiders.length > 0 && now < priorityEndsAt,
+    priorityWindowOpen: now < priorityEndsAt,
+    idlePriorityActive: now < priorityEndsAt,
   };
 }
 
@@ -131,7 +167,7 @@ export function riderCanSeeAvailableOrder(
   riderId: string,
   audience: RiderOfferAudience,
 ): boolean {
-  const visibleRiders = audience.idlePriorityActive
+  const visibleRiders = audience.priorityWindowOpen
     ? audience.idleRiders
     : audience.eligibleRiders;
   return visibleRiders.some((rider) => String(rider._id) === riderId);

@@ -5,7 +5,7 @@
 - [Dastak monorepo type quirks](dastak-monorepo-types.md) — Expo pins @types/react 19.1.x vs catalog 19.2.x (expected); rider-app calendar.tsx typecheck error is pre-existing, NOT from the mobile artifact.
 - [DastakMart brand theme](dastakmart-branding.md) — brand is crimson #DB143C (hsl 348 83 47), white base, Inter, pill CTAs; NOT the old orange.
 - [Dastak mobile icons](dastak-mobile-icons.md) — Expo app uses lucide SVG icons (font icons rendered blank); add/change icons via components/Icon.tsx, not @expo/vector-icons.
-- [Rider accept-order limits](rider-order-accept-limits.md) — paymentLimit/maxOrderLimit gate accept; grep pasted "legacy specs" before porting them, they may not match this repo.
+- [Rider accept-order limits](rider-order-accept-limits.md) — paymentLimit remains admin-owned; live order statuses now set the two-order cap and pickup eligibility.
 - [Delivered filter race condition](delivered-filter-race.md) — admin system reverts status within seconds; gate "Delivered" on pickUpTime+!timeWhenDelivered, not status field.
 - [Background-location consent](background-location-consent.md) — Android background location may only be requested after explicit action on the dedicated rider disclosure screen.
 - [Rider notification sounds](rider-notification-sounds.md) — OneSignal Expo plugin packages only WAV; derive the push WAV from the source audio and keep Android/iOS names aligned.
@@ -19,4 +19,4 @@
 - [Available-order privacy](available-order-privacy.md) — pre-acceptance order data stays restricted, with a narrow exception for aggregate prepaid restaurant cash due.
 - [Rider API response caching](rider-api-response-caching.md) — API polling must never return bodyless 304s; clients interpret them as missing profile/order data.
 - [Rider acceptance flow](rider-acceptance-anti-automation.md) — one-tap acceptance has no offer-token or confirmation gate; preserve authentication, eligibility and atomic assignment.
-- [Rider order distribution](rider-order-distribution.md) — idle eligible riders share new orders for 30s, then the audience broadens without bypassing admin order caps.
+- [Rider order distribution](rider-order-distribution.md) — idle riders get 30s priority; afterward only riders with picked-up orders and capacity may take another.

@@ -18,7 +18,7 @@ import {
 } from "../lib/restaurantCashDue";
 import {
   ensureRiderOfferStartedAt,
-  getActiveOrderCounts,
+  getRiderLiveOrderCounts,
   getRiderOfferAudience,
   riderCanSeeAvailableOrder,
 } from "../lib/riderOrderDistribution";
@@ -1952,10 +1952,10 @@ router.get("/rider/orders/available", async (req: any, res: any) => {
     const onlineRiders = await usersCol()
       .find(
         { type: "rider", isOnline: true, deleted: { $ne: true } },
-        { projection: { _id: 1, type: 1, isOnline: 1, deleted: 1, city: 1, riderZones: 1, maxOrderLimit: 1 } },
+        { projection: { _id: 1, type: 1, isOnline: 1, deleted: 1, city: 1, riderZones: 1 } },
       )
       .toArray();
-    const activeCounts = await getActiveOrderCounts(onlineRiders);
+    const liveCounts = await getRiderLiveOrderCounts(onlineRiders);
     const offerExpiresAt = Date.now() + ORDER_OFFER_TTL_MS;
     const visibleDocs = await Promise.all(
       docs.map(async (doc) => {
@@ -1963,7 +1963,7 @@ router.get("/rider/orders/available", async (req: any, res: any) => {
         const audience = getRiderOfferAudience(
           { ...doc, riderOfferStartedAt: offerStartedAt },
           onlineRiders,
-          activeCounts,
+          liveCounts,
         );
         return riderCanSeeAvailableOrder(riderId, audience) ? doc : null;
       }),
@@ -2233,27 +2233,36 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
           const onlineRiders = await usersCol()
             .find(
               { type: "rider", isOnline: true, deleted: { $ne: true } },
-              { session, projection: { _id: 1, type: 1, isOnline: 1, deleted: 1, city: 1, riderZones: 1, maxOrderLimit: 1 } },
+              { session, projection: { _id: 1, type: 1, isOnline: 1, deleted: 1, city: 1, riderZones: 1 } },
             )
             .toArray();
-          const activeCounts = await getActiveOrderCounts(onlineRiders, session);
-          const activeCount = activeCounts.get(riderId) ?? 0;
-          const maxOrderLimit = Number(currentRider.maxOrderLimit) || 0;
-          if (maxOrderLimit > 0 && activeCount >= maxOrderLimit) {
+          const liveCounts = await getRiderLiveOrderCounts(onlineRiders, session);
+          const riderCounts = liveCounts.get(riderId) ?? {
+            activeCount: 0,
+            acceptedCount: 0,
+            pickedUpCount: 0,
+          };
+          if (riderCounts.activeCount >= 2) {
             throw new RiderAcceptRejected(
-              `You can only have ${maxOrderLimit} active order${maxOrderLimit === 1 ? "" : "s"} at a time. Complete a current delivery before accepting more.`,
+              "You can have at most two live orders. Complete a delivery before accepting another.",
               400,
+            );
+          }
+          if (riderCounts.acceptedCount > 0) {
+            throw new RiderAcceptRejected(
+              "Pick up your current order before accepting another.",
+              409,
             );
           }
 
           const audience = getRiderOfferAudience(
             { ...currentOrder, riderOfferStartedAt: offerStartedAt },
             onlineRiders,
-            activeCounts,
+            liveCounts,
           );
           if (!riderCanSeeAvailableOrder(riderId, audience)) {
             throw new RiderAcceptRejected(
-              "This order is being offered to riders without an active order first. It will open to other eligible riders after 30 seconds.",
+              "This order is reserved for riders without a live order for the first 30 seconds. After that, riders who have picked up their current orders may accept it.",
               409,
             );
           }

@@ -17,7 +17,7 @@ import { ordersCol, subscribeToLiveChanges, usersCol } from "./mongo";
 import { sendNewOrderPush } from "./onesignal";
 import {
   ensureRiderOfferStartedAt,
-  getActiveOrderCounts,
+  getRiderLiveOrderCounts,
   getRiderOfferAudience,
 } from "./riderOrderDistribution";
 
@@ -69,13 +69,13 @@ async function handleOrderChange(rawId: string): Promise<void> {
         {
           projection: {
             _id: 1, type: 1, isOnline: 1, deleted: 1, city: 1,
-            riderZones: 1, maxOrderLimit: 1, playerId: 1,
+            riderZones: 1, playerId: 1,
           },
         },
       )
       .toArray();
 
-    const counts = await getActiveOrderCounts(riders);
+    const counts = await getRiderLiveOrderCounts(riders);
     const offerStartedAt = await ensureRiderOfferStartedAt(order as any);
     const audience = getRiderOfferAudience(
       { ...order, riderOfferStartedAt: offerStartedAt },
