@@ -104,6 +104,8 @@ export interface AvailableRiderOrder {
   offerToken: string;
   /** Time at which this offer token expires. */
   offerExpiresAt: string;
+  /** Server-recorded start time for the 30-second idle-rider priority window. */
+  riderOfferStartedAt?: string;
 }
 
 export interface AcceptOrderInput {

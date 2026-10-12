@@ -25,6 +25,7 @@ import {
 
 import { ChatBadgeButton } from "@/components/ChatBadgeButton";
 import { OrderCard } from "@/components/OrderCard";
+import { OrderCapacityStatus } from "@/components/OrderCapacityStatus";
 import { OrderDetailModal } from "@/components/OrderDetailModal";
 import { Button, EmptyState, ScreenHeader } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
@@ -302,6 +303,8 @@ export default function ActiveScreen() {
             : "No active deliveries"
         }
       />
+
+      <OrderCapacityStatus orders={orders} />
 
       {trackCount > 0 ? (
         <View

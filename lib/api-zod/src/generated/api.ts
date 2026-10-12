@@ -139,7 +139,8 @@ export const GetAvailableOrdersResponseItem = zod.object({
   "payCashToRestaurant": zod.boolean().describe('Whether the rider must pay cash to the restaurant when collecting this order.'),
   "restaurantCashAmount": zod.number().nullish().describe('Aggregate restaurant cash payable for prepaid restaurant orders, calculated from positive actualPrice times count plus vatAmount. Product details are not returned.'),
   "offerToken": zod.string().describe('Legacy offer token returned for compatibility with installed rider apps. The server does not require it to accept an order.'),
-  "offerExpiresAt": zod.coerce.date().describe('Time at which this offer token expires.')
+  "offerExpiresAt": zod.coerce.date().describe('Time at which this offer token expires.'),
+  "riderOfferStartedAt": zod.coerce.date().optional().describe('Server-recorded start time for the 30-second idle-rider priority window.')
 }).describe('Pickup and delivery locations, plus an aggregate restaurant cash amount for prepaid restaurant orders, are visible before acceptance. Product details remain restricted until acceptance.')
 export const GetAvailableOrdersResponse = zod.array(GetAvailableOrdersResponseItem)
 

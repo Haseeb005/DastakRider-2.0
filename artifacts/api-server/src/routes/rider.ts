@@ -1965,7 +1965,9 @@ router.get("/rider/orders/available", async (req: any, res: any) => {
           onlineRiders,
           liveCounts,
         );
-        return riderCanSeeAvailableOrder(riderId, audience) ? doc : null;
+        return riderCanSeeAvailableOrder(riderId, audience)
+          ? { ...doc, riderOfferStartedAt: offerStartedAt }
+          : null;
       }),
     );
     res.json(
@@ -2931,6 +2933,9 @@ function normalizeAvailableOrder(
     restaurantCashAmount,
     offerToken: offerToken || null,
     offerExpiresAt: offerExpiresAt ? new Date(offerExpiresAt).toISOString() : null,
+    riderOfferStartedAt: doc.riderOfferStartedAt
+      ? new Date(doc.riderOfferStartedAt).toISOString()
+      : null,
     // Backward compatibility for build 4.6.5, whose available-order card
     // reads the destination from the full-order field names.
     address: deliveryAddress,

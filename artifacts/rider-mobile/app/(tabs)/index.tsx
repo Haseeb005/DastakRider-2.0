@@ -5,6 +5,7 @@ import {
   getGetAvailableOrdersQueryKey,
   getGetRiderMeQueryKey,
   useAcceptOrder,
+  useGetActiveOrders,
   useGetAvailableOrders,
   useGetRiderMe,
   useUpdateRiderAvailability,
@@ -28,6 +29,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AvailableOrderCard } from "@/components/OrderCard";
+import { OrderCapacityStatus } from "@/components/OrderCapacityStatus";
 import { Button, EmptyState, Loading } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 import { useOrderAlert } from "@/lib/alert";
@@ -128,6 +130,22 @@ export default function AvailableScreen() {
     },
   });
   const orders = ordersQ.data ?? EMPTY_ORDERS;
+  const activeQ = useGetActiveOrders({
+    query: {
+      queryKey: getGetActiveOrdersQueryKey(),
+      enabled: !!meQ.data,
+      refetchInterval: 10_000,
+    },
+  });
+  const activeOrders = activeQ.data ?? [];
+  const hasOfferCountdown = orders.some((order) => !!order.riderOfferStartedAt);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!hasOfferCountdown) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [hasOfferCountdown]);
 
   const { newCount, clearNew } = useOrderAlert(orders, isOnline);
 
@@ -560,49 +578,52 @@ export default function AvailableScreen() {
             />
           }
           ListHeaderComponent={
-            orders.length > 0 ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 12,
-                  paddingHorizontal: 2,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: "Inter_700Bold",
-                    fontSize: 18,
-                    color: c.foreground,
-                  }}
-                >
-                  Available Orders
-                </Text>
+            <View>
+              <OrderCapacityStatus orders={activeOrders} />
+              {orders.length > 0 ? (
                 <View
                   style={{
-                    backgroundColor: c.primary,
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 999,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 12,
+                    paddingHorizontal: 2,
                   }}
                 >
                   <Text
                     style={{
                       fontFamily: "Inter_700Bold",
-                      fontSize: 11,
-                      letterSpacing: 0.5,
-                      color: "#FFFFFF",
+                      fontSize: 18,
+                      color: c.foreground,
                     }}
                   >
-                    LIVE
+                    Available Orders
                   </Text>
+                  <View
+                    style={{
+                      backgroundColor: c.primary,
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 999,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: "Inter_700Bold",
+                        fontSize: 11,
+                        letterSpacing: 0.5,
+                        color: "#FFFFFF",
+                      }}
+                    >
+                      LIVE
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            ) : null
+              ) : null}
+            </View>
           }
           renderItem={({ item }) => (
-            <AvailableOrderCard order={item}>
+            <AvailableOrderCard order={item} now={now}>
               <Button
                 label="Accept order"
                 icon="check"

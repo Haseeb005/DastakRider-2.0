@@ -49,9 +49,11 @@ function coordinate(value: string | number | null | undefined): number | null {
 export function AvailableOrderCard({
   order,
   children,
+  now = Date.now(),
 }: {
   order: AvailableRiderOrder;
   children?: React.ReactNode;
+  now?: number;
 }) {
   const c = useColors();
   const legacyOrder = order as AvailableRiderOrder & LegacyAvailableOrderLocation;
@@ -77,6 +79,10 @@ export function AvailableOrderCard({
   const deliveryMapTarget = hasDeliveryCoordinates
     ? `${deliveryLatitude},${deliveryLongitude}`
     : deliveryAddress;
+  const priorityStartedAt = Date.parse(order.riderOfferStartedAt ?? "");
+  const prioritySecondsLeft = Number.isFinite(priorityStartedAt)
+    ? Math.max(0, Math.ceil((priorityStartedAt + 30_000 - now) / 1000))
+    : 0;
 
   return (
     <View
@@ -145,6 +151,29 @@ export function AvailableOrderCard({
       </View>
 
       <View style={{ padding: 14, gap: 12 }}>
+        {prioritySecondsLeft > 0 ? (
+          <View
+            accessibilityLabel={`Idle rider priority ends in ${prioritySecondsLeft} seconds`}
+            style={{
+              borderRadius: 12,
+              backgroundColor: "#FFF7F8",
+              borderWidth: 1,
+              borderColor: c.border,
+              paddingHorizontal: 12,
+              paddingVertical: 9,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Text style={{ color: c.mutedForeground, fontSize: 12, fontFamily: "Inter_500Medium" }}>
+              Idle riders’ priority
+            </Text>
+            <Text style={{ color: c.primary, fontSize: 13, fontFamily: "Inter_700Bold" }}>
+              0:{String(prioritySecondsLeft).padStart(2, "0")}
+            </Text>
+          </View>
+        ) : null}
         {order.martAddress ? (
           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
             <Icon name="map-pin" size={17} color={c.primary} />
@@ -345,6 +374,22 @@ export function OrderCard({
     order.items?.reduce((s, i) => s + (i.quantity || 0), 0) ?? 0;
   const cod = isCOD(order.paymentType);
   const dt = formatDateTime(order.createdAt);
+  const nextStopIsPickup = order.status === "Rider Accepted";
+  const nextStopLabel = nextStopIsPickup ? "Restaurant pickup" : "Customer drop-off";
+  const nextStopTarget = nextStopIsPickup
+    ? (typeof order.martLatitude === "number" && typeof order.martLongitude === "number"
+        ? `${order.martLatitude},${order.martLongitude}`
+        : [order.restaurantName, order.martAddress].filter(Boolean).join(" "))
+    : (typeof order.latitude === "number" && typeof order.longitude === "number"
+        ? `${order.latitude},${order.longitude}`
+        : order.address ?? "");
+  const nextStopPhone = nextStopIsPickup ? order.martPhone : order.phone;
+  const openNextStop = () => {
+    if (!nextStopTarget) return;
+    Linking.openURL(
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(nextStopTarget)}`,
+    ).catch(() => {});
+  };
 
   return (
     <Pressable
@@ -432,6 +477,20 @@ export function OrderCard({
 
       {/* Route timeline */}
       <View style={{ position: "relative" }}>
+        <View
+          style={{
+            alignSelf: "flex-start",
+            backgroundColor: c.primary,
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 999,
+            marginBottom: 12,
+          }}
+        >
+          <Text style={{ color: "#FFFFFF", fontFamily: "Inter_700Bold", fontSize: 10, letterSpacing: 0.5 }}>
+            NEXT STOP · {nextStopLabel.toUpperCase()}
+          </Text>
+        </View>
         {/* Connector line behind the tiles */}
         <View
           style={{
@@ -454,7 +513,7 @@ export function OrderCard({
               width: 44,
               height: 44,
               borderRadius: 14,
-              backgroundColor: c.primary,
+              backgroundColor: nextStopIsPickup ? c.primary : c.muted,
               alignItems: "center",
               justifyContent: "center",
             }}
@@ -463,7 +522,7 @@ export function OrderCard({
               style={{
                 fontFamily: "Inter_800ExtraBold",
                 fontSize: 13,
-                color: "#FFFFFF",
+                color: nextStopIsPickup ? c.primaryForeground : c.mutedForeground,
               }}
             >
               {initials(order.restaurantName)}
@@ -513,12 +572,16 @@ export function OrderCard({
               width: 44,
               height: 44,
               borderRadius: 14,
-              backgroundColor: c.muted,
+              backgroundColor: nextStopIsPickup ? c.muted : c.primary,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Icon name="map-pin" size={20} color={c.mutedForeground} />
+            <Icon
+              name="map-pin"
+              size={20}
+              color={nextStopIsPickup ? c.mutedForeground : c.primaryForeground}
+            />
           </View>
           <View style={{ flex: 1 }}>
             <Text
@@ -568,6 +631,53 @@ export function OrderCard({
             ) : null}
           </View>
         </View>
+      </View>
+
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+        {nextStopPhone ? (
+          <Pressable
+            accessibilityLabel={`Call ${nextStopIsPickup ? "restaurant" : "customer"}`}
+            onPress={() => Linking.openURL(`tel:${nextStopPhone}`).catch(() => {})}
+            style={{
+              flex: 1,
+              minHeight: 40,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: c.border,
+              backgroundColor: c.card,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+            }}
+          >
+            <Icon name="phone" size={15} color={c.primary} />
+            <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
+              Call {nextStopIsPickup ? "restaurant" : "customer"}
+            </Text>
+          </Pressable>
+        ) : null}
+        {nextStopTarget ? (
+          <Pressable
+            accessibilityLabel={`Navigate to ${nextStopIsPickup ? "restaurant" : "customer"}`}
+            onPress={openNextStop}
+            style={{
+              flex: 1,
+              minHeight: 40,
+              borderRadius: 12,
+              backgroundColor: c.primary,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+            }}
+          >
+            <Icon name="navigation" size={15} color={c.primaryForeground} />
+            <Text style={{ color: c.primaryForeground, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
+              Navigate
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Footer: customer bill + items, dashed divider */}

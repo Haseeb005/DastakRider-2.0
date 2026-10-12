@@ -852,6 +852,38 @@ function useLocationTracking(activeOrders: RiderOrder[]): LocationShareStatus {
   return status;
 }
 
+function OrderCapacityStatus({ orders }: { orders: RiderOrder[] }) {
+  const live = orders.filter((order) =>
+    order.status === "Rider Accepted" || order.status === "Rider Picked Up",
+  );
+  const hasAccepted = live.some((order) => order.status === "Rider Accepted");
+  const hasPickedUp = live.some((order) => order.status === "Rider Picked Up");
+  const full = live.length >= 2;
+  const message = full && hasAccepted
+    ? "At capacity. Pick up the accepted order, then complete a delivery before taking another."
+    : full
+      ? "Complete a delivery before accepting another order."
+      : hasAccepted
+      ? "Pick up your accepted order before accepting another."
+      : hasPickedUp
+        ? "You may see another order after idle riders' 30-second priority."
+        : "New orders are offered to riders with no active deliveries first.";
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-3.5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-bold text-gray-900">{live.length} of 2 live orders</p>
+        <p className={`text-xs font-semibold ${full ? "text-amber-700" : "text-brand-600"}`}>
+          {full ? "Capacity full" : `${2 - live.length} slot${live.length === 1 ? "" : "s"} open`}
+        </p>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
+        <div className={`h-full rounded-full ${full ? "bg-amber-500" : "bg-brand-500"}`} style={{ width: `${Math.min(live.length / 2, 1) * 100}%` }} />
+      </div>
+      <p className="mt-2 text-xs leading-4 text-gray-500">{message}</p>
+    </div>
+  );
+}
+
 // ── Order Card ────────────────────────────────────────────────────────────────
 
 function OrderCard({
@@ -909,6 +941,19 @@ function OrderCard({
   const badgeColor = atRestaurant
     ? "bg-brand-100 text-brand-800"
     : STATUS_COLORS[order.status] || "bg-gray-100 text-gray-700";
+  const nextStopIsPickup = order.status === "Rider Accepted";
+  const nextStopName = nextStopIsPickup ? "Restaurant pickup" : "Customer drop-off";
+  const nextStopTarget = nextStopIsPickup
+    ? typeof order.martLatitude === "number" && typeof order.martLongitude === "number"
+      ? `${order.martLatitude},${order.martLongitude}`
+      : [order.restaurantName, order.martAddress].filter(Boolean).join(" ")
+    : typeof order.latitude === "number" && typeof order.longitude === "number"
+      ? `${order.latitude},${order.longitude}`
+      : order.address || "";
+  const nextStopPhone = nextStopIsPickup ? order.martPhone : order.phone;
+  const nextStopMaps = nextStopTarget
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(nextStopTarget)}`
+    : "";
 
   return (
     <Card className="overflow-hidden border-0 shadow-md bg-white">
@@ -954,6 +999,23 @@ function OrderCard({
                 <span>{order.userName}</span>
               </div>
             )}
+          </div>
+
+          <div className="mb-3 rounded-xl border border-brand-100 bg-brand-50 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-brand-600">Next stop</p>
+            <p className="mt-0.5 text-sm font-semibold text-gray-900">{nextStopName}</p>
+            <div className="mt-2 flex gap-2">
+              {nextStopMaps && (
+                <a href={nextStopMaps} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-2 text-xs font-semibold text-white">
+                  <Navigation className="h-3.5 w-3.5" /> Navigate
+                </a>
+              )}
+              {nextStopPhone && (
+                <a href={`tel:${nextStopPhone}`} onClick={(event) => event.stopPropagation()} className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-brand-200 bg-white px-2 text-xs font-semibold text-brand-700">
+                  <Phone className="h-3.5 w-3.5" /> Call {nextStopIsPickup ? "restaurant" : "customer"}
+                </a>
+              )}
+            </div>
           </div>
 
           {order.items && order.items.length > 0 && (
@@ -1044,10 +1106,12 @@ function AvailableOrderCard({
   order,
   busy,
   onAccept,
+  now,
 }: {
   order: AvailableRiderOrder;
   busy: boolean;
   onAccept: () => void;
+  now: number;
 }) {
   const hasCoordinates =
     typeof order.martLatitude === "number" &&
@@ -1067,6 +1131,10 @@ function AvailableOrderCard({
   const deliveryMapHref = deliveryMapTarget
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryMapTarget)}`
     : "";
+  const priorityStartedAt = Date.parse(order.riderOfferStartedAt ?? "");
+  const prioritySecondsLeft = Number.isFinite(priorityStartedAt)
+    ? Math.max(0, Math.ceil((priorityStartedAt + 30_000 - now) / 1000))
+    : 0;
 
   return (
     <Card className="overflow-hidden border-gray-200 shadow-sm">
@@ -1084,6 +1152,14 @@ function AvailableOrderCard({
         </div>
       </div>
       <CardContent className="space-y-3 p-4">
+        {prioritySecondsLeft > 0 && (
+          <div className="flex items-center justify-between rounded-lg border border-brand-100 bg-brand-50 px-3 py-2">
+            <span className="text-xs font-medium text-gray-600">Idle riders’ priority ends in</span>
+            <span className="font-mono text-sm font-bold text-brand-700">
+              0:{String(prioritySecondsLeft).padStart(2, "0")}
+            </span>
+          </div>
+        )}
         {order.martAddress && (
           <div className="flex items-start gap-2 text-sm text-gray-600">
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
@@ -1162,7 +1238,7 @@ function AvailableOrderCard({
   );
 }
 
-function AvailableOrders({ rider }: { rider: Rider }) {
+function AvailableOrders({ rider, activeOrders }: { rider: Rider; activeOrders: RiderOrder[] }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const refreshingOffer = useRef(false);
@@ -1179,6 +1255,13 @@ function AvailableOrders({ rider }: { rider: Rider }) {
       enabled: rider.isOnline,
     },
   });
+  const hasTimedOffers = orders.some((order) => !!order.riderOfferStartedAt);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!hasTimedOffers) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [hasTimedOffers]);
 
   const { newCount, triggerTest, stopAlert } = useOrderAlert(orders, rider.isOnline);
 
@@ -1283,6 +1366,7 @@ function AvailableOrders({ rider }: { rider: Rider }) {
 
   return (
     <div className="p-4 space-y-4">
+      <OrderCapacityStatus orders={activeOrders} />
       {/* New-order alert banner */}
       {newCount > 0 && (
         <div className="flex items-center gap-3 rounded-xl bg-brand-500 text-white px-4 py-3 shadow-lg animate-pulse">
@@ -1339,6 +1423,7 @@ function AvailableOrders({ rider }: { rider: Rider }) {
             <AvailableOrderCard
               key={order.id}
               order={order}
+              now={now}
               busy={acceptMutation.isPending || isRefreshingOffer}
               onAccept={() => handleAccept(order)}
             />
@@ -1501,6 +1586,8 @@ function ActiveDelivery({
           <RefreshCw className="w-4 h-4 mr-1" /> Refresh
         </Button>
       </div>
+
+      <OrderCapacityStatus orders={orders} />
 
       {orders.some((o) => o.status === "Rider Picked Up") &&
         (locationStatus === "error" ? (
@@ -2224,7 +2311,7 @@ export default function RiderApp() {
 
       {/* Content */}
       <main className="flex-1 overflow-auto pb-20">
-        {view === "available" && <AvailableOrders rider={rider} />}
+        {view === "available" && <AvailableOrders rider={rider} activeOrders={activeOrders} />}
         {view === "active" && <ActiveDelivery locationStatus={locationStatus} chatOrder={chatOrder} setChatOrder={setChatOrder} />}
         {view === "history" && <DeliveryHistory />}
         {view === "wallet" && <RiderWallet />}

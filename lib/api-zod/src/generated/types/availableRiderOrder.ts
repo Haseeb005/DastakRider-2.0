@@ -38,4 +38,6 @@ export interface AvailableRiderOrder {
   offerToken: string;
   /** Time at which this offer token expires. */
   offerExpiresAt: Date;
+  /** Server-recorded start time for the 30-second idle-rider priority window. */
+  riderOfferStartedAt?: Date;
 }
