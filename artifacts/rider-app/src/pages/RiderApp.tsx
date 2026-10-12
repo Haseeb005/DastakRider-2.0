@@ -884,6 +884,133 @@ function OrderCapacityStatus({ orders }: { orders: RiderOrder[] }) {
   );
 }
 
+type DeliveryStop = {
+  order: RiderOrder;
+  kind: "pickup" | "dropoff";
+  target: string;
+};
+
+function getDeliveryStopTarget(order: RiderOrder, kind: DeliveryStop["kind"]) {
+  if (kind === "pickup") {
+    return typeof order.martLatitude === "number" &&
+      typeof order.martLongitude === "number"
+      ? `${order.martLatitude},${order.martLongitude}`
+      : [order.restaurantName, order.martAddress].filter(Boolean).join(" ");
+  }
+  return typeof order.latitude === "number" &&
+    typeof order.longitude === "number"
+    ? `${order.latitude},${order.longitude}`
+    : order.address || "";
+}
+
+function getDeliveryStopSequence(orders: RiderOrder[]): DeliveryStop[] {
+  const live = orders
+    .filter(
+      (order) =>
+        order.status === "Rider Accepted" ||
+        order.status === "Rider Picked Up",
+    )
+    .slice(0, 2);
+  return [
+    ...live
+      .filter((order) => order.status === "Rider Accepted")
+      .map((order) => ({
+        order,
+        kind: "pickup" as const,
+        target: getDeliveryStopTarget(order, "pickup"),
+      })),
+    ...live
+      .filter((order) => order.status === "Rider Picked Up")
+      .map((order) => ({
+        order,
+        kind: "dropoff" as const,
+        target: getDeliveryStopTarget(order, "dropoff"),
+      })),
+  ];
+}
+
+function DeliveryStopSequence({ orders }: { orders: RiderOrder[] }) {
+  const liveCount = orders.filter(
+    (order) =>
+      order.status === "Rider Accepted" ||
+      order.status === "Rider Picked Up",
+  ).length;
+  if (liveCount < 2) return null;
+
+  const stops = getDeliveryStopSequence(orders);
+  return (
+    <section
+      aria-label="Suggested stop sequence"
+      className="rounded-xl border border-brand-100 bg-white p-4"
+    >
+      <div className="mb-3">
+        <h3 className="text-sm font-bold text-gray-900">
+          Suggested stop sequence
+        </h3>
+        <p className="mt-1 text-xs leading-4 text-gray-500">
+          Pick up an accepted order before continuing; orders already picked up
+          go to their customers.
+        </p>
+      </div>
+      <ol className="space-y-2">
+        {stops.map((stop, index) => {
+          const isPickup = stop.kind === "pickup";
+          const locationName = isPickup
+            ? stop.order.restaurantName || "Restaurant pickup"
+            : stop.order.userName
+              ? `Deliver to ${stop.order.userName}`
+              : "Customer drop-off";
+          const orderLabel = stop.order.orderNum
+            ? `Order #${stop.order.orderNum}`
+            : `Order ${stop.order.id.slice(-6)}`;
+          const instruction = isPickup
+            ? stop.order.riderArrived
+              ? "At restaurant — mark this order picked up before the next stop."
+              : "Mark arrived, then pick up this order before the next stop."
+            : "This order is picked up; continue to the customer.";
+          const mapsUrl = stop.target
+            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.target)}`
+            : "";
+
+          return (
+            <li
+              key={`${stop.order.id}-${stop.kind}`}
+              className="flex items-start gap-3 rounded-lg bg-gray-50 p-3"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
+                {index + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-brand-700">
+                  {isPickup ? "Pickup" : "Customer drop-off"} · {orderLabel}
+                </p>
+                <p className="mt-0.5 truncate text-sm font-semibold text-gray-900">
+                  {locationName}
+                </p>
+                <p className="mt-0.5 text-xs leading-4 text-gray-500">
+                  {instruction}
+                </p>
+                {stop.target && (
+                  <a
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 text-xs font-semibold text-brand-700"
+                    aria-label={`Navigate to ${locationName}, ${orderLabel}`}
+                  >
+                    <Navigation className="h-3.5 w-3.5" />
+                    Navigate
+                  </a>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
 // ── Order Card ────────────────────────────────────────────────────────────────
 
 function OrderCard({
@@ -1588,6 +1715,7 @@ function ActiveDelivery({
       </div>
 
       <OrderCapacityStatus orders={orders} />
+      <DeliveryStopSequence orders={orders} />
 
       {orders.some((o) => o.status === "Rider Picked Up") &&
         (locationStatus === "error" ? (

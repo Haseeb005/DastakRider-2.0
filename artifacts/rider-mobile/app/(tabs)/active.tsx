@@ -16,14 +16,17 @@ import React, { useEffect, useReducer, useState } from "react";
 import {
   Alert,
   FlatList,
+  Linking,
   Modal,
   Platform,
+  Pressable,
   RefreshControl,
   Text,
   View,
 } from "react-native";
 
 import { ChatBadgeButton } from "@/components/ChatBadgeButton";
+import { Icon } from "@/components/Icon";
 import { OrderCard } from "@/components/OrderCard";
 import { OrderCapacityStatus } from "@/components/OrderCapacityStatus";
 import { OrderDetailModal } from "@/components/OrderDetailModal";
@@ -49,6 +52,225 @@ function shouldRetryStatusMutation(failureCount: number, error: any): boolean {
   if (!Number.isFinite(status)) return true;
 
   return status === 408 || status === 429 || status >= 500;
+}
+
+type DeliveryStop = {
+  order: RiderOrder;
+  kind: "pickup" | "dropoff";
+  target: string;
+};
+
+function getDeliveryStopTarget(order: RiderOrder, kind: DeliveryStop["kind"]) {
+  if (kind === "pickup") {
+    return typeof order.martLatitude === "number" &&
+      typeof order.martLongitude === "number"
+      ? `${order.martLatitude},${order.martLongitude}`
+      : [order.restaurantName, order.martAddress].filter(Boolean).join(" ");
+  }
+  return typeof order.latitude === "number" &&
+    typeof order.longitude === "number"
+    ? `${order.latitude},${order.longitude}`
+    : order.address ?? "";
+}
+
+function getDeliveryStopSequence(orders: RiderOrder[]): DeliveryStop[] {
+  const live = orders
+    .filter(
+      (order) =>
+        order.status === "Rider Accepted" ||
+        order.status === "Rider Picked Up",
+    )
+    .slice(0, 2);
+  return [
+    ...live
+      .filter((order) => order.status === "Rider Accepted")
+      .map((order) => ({
+        order,
+        kind: "pickup" as const,
+        target: getDeliveryStopTarget(order, "pickup"),
+      })),
+    ...live
+      .filter((order) => order.status === "Rider Picked Up")
+      .map((order) => ({
+        order,
+        kind: "dropoff" as const,
+        target: getDeliveryStopTarget(order, "dropoff"),
+      })),
+  ];
+}
+
+function DeliveryStopSequence({ orders }: { orders: RiderOrder[] }) {
+  const c = useColors();
+  const liveCount = orders.filter(
+    (order) =>
+      order.status === "Rider Accepted" ||
+      order.status === "Rider Picked Up",
+  ).length;
+  if (liveCount < 2) return null;
+
+  const stops = getDeliveryStopSequence(orders);
+  return (
+    <View
+      accessibilityLabel="Suggested stop sequence. Pick up accepted orders before customer drop-offs."
+      style={{
+        marginHorizontal: 20,
+        marginBottom: 12,
+        padding: 14,
+        borderRadius: c.radius,
+        borderWidth: 1,
+        borderColor: c.border,
+        backgroundColor: c.card,
+      }}
+    >
+      <Text
+        style={{
+          color: c.foreground,
+          fontSize: 14,
+          fontFamily: "Inter_700Bold",
+        }}
+      >
+        Suggested stop sequence
+      </Text>
+      <Text
+        style={{
+          marginTop: 4,
+          marginBottom: 10,
+          color: c.mutedForeground,
+          fontSize: 12,
+          lineHeight: 17,
+          fontFamily: "Inter_400Regular",
+        }}
+      >
+        Pick up an accepted order before continuing; orders already picked up
+        go to their customers.
+      </Text>
+      <View style={{ gap: 8 }}>
+        {stops.map((stop, index) => {
+          const isPickup = stop.kind === "pickup";
+          const locationName = isPickup
+            ? stop.order.restaurantName || "Restaurant pickup"
+            : stop.order.userName
+              ? `Deliver to ${stop.order.userName}`
+              : "Customer drop-off";
+          const orderLabel = stop.order.orderNum
+            ? `Order #${stop.order.orderNum}`
+            : `Order ${stop.order.id.slice(-6)}`;
+          const instruction = isPickup
+            ? stop.order.riderArrived
+              ? "At restaurant — mark this order picked up before the next stop."
+              : "Mark arrived, then pick up this order before the next stop."
+            : "This order is picked up; continue to the customer.";
+
+          return (
+            <View
+              key={`${stop.order.id}-${stop.kind}`}
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                gap: 10,
+                padding: 10,
+                borderRadius: 14,
+                backgroundColor: c.background,
+              }}
+            >
+              <View
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: c.primary,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    fontSize: 12,
+                    fontFamily: "Inter_700Bold",
+                  }}
+                >
+                  {index + 1}
+                </Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{
+                    color: c.primary,
+                    fontSize: 10,
+                    letterSpacing: 0.5,
+                    fontFamily: "Inter_700Bold",
+                  }}
+                >
+                  {isPickup ? "PICKUP" : "CUSTOMER DROP-OFF"} · {orderLabel}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    marginTop: 2,
+                    color: c.foreground,
+                    fontSize: 14,
+                    fontFamily: "Inter_600SemiBold",
+                  }}
+                >
+                  {locationName}
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 2,
+                    color: c.mutedForeground,
+                    fontSize: 11,
+                    lineHeight: 16,
+                    fontFamily: "Inter_400Regular",
+                  }}
+                >
+                  {instruction}
+                </Text>
+                {stop.target ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Navigate to ${locationName}, ${orderLabel}`}
+                    testID={`delivery-stop-navigate-${stop.order.id}`}
+                    onPress={() =>
+                      Linking.openURL(
+                        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.target)}`,
+                      ).catch(() =>
+                        Alert.alert("Could not open maps", "Try again or open your maps app."),
+                      )
+                    }
+                    style={{
+                      minHeight: 38,
+                      alignSelf: "flex-start",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      marginTop: 8,
+                      paddingHorizontal: 11,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: c.border,
+                      backgroundColor: c.card,
+                    }}
+                  >
+                    <Icon name="navigation" size={15} color={c.primary} />
+                    <Text
+                      style={{
+                        color: c.primary,
+                        fontSize: 12,
+                        fontFamily: "Inter_600SemiBold",
+                      }}
+                    >
+                      Navigate
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
 }
 
 export default function ActiveScreen() {
@@ -305,6 +527,7 @@ export default function ActiveScreen() {
       />
 
       <OrderCapacityStatus orders={orders} />
+      <DeliveryStopSequence orders={orders} />
 
       {trackCount > 0 ? (
         <View
