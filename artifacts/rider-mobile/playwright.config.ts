@@ -19,16 +19,26 @@ export default defineConfig({
     },
     trace: "retain-on-failure",
   },
-  webServer: {
-    command:
-      "EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_URL=http://127.0.0.1:9 pnpm exec expo start --web --localhost --port 23243",
-    url: "http://127.0.0.1:23243",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command:
+        "EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_URL=http://127.0.0.1:9 pnpm exec expo start --web --localhost --port 23243",
+      url: "http://127.0.0.1:23243",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      command:
+        "PORT=22969 BASE_PATH=/ pnpm --filter @workspace/rider-app run dev",
+      url: "http://127.0.0.1:22969",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+  ],
   projects: [
     {
       name: "android-small",
+      testMatch: /(?:rider-mobile-capacity|wallet-milestones)\.spec\.ts/,
       use: {
         ...devices["Pixel 5"],
         browserName: "chromium",
@@ -38,11 +48,24 @@ export default defineConfig({
     },
     {
       name: "iphone-small",
+      testMatch: /(?:rider-mobile-capacity|wallet-milestones)\.spec\.ts/,
       use: {
         ...devices["iPhone 12 Mini"],
         browserName: "chromium",
         viewport: { width: 320, height: 720 },
         deviceScaleFactor: 1,
+      },
+    },
+    {
+      name: "rider-web",
+      testMatch: /rider-web-capacity\.spec\.ts/,
+      use: {
+        browserName: "chromium",
+        baseURL: "http://127.0.0.1:22969",
+        viewport: { width: 402, height: 874 },
+        launchOptions: {
+          executablePath: chromiumPath,
+        },
       },
     },
   ],
