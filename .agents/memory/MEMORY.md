@@ -19,3 +19,4 @@
 - [Available-order privacy](available-order-privacy.md) — pre-acceptance order data stays restricted, with a narrow exception for aggregate prepaid restaurant cash due.
 - [Rider API response caching](rider-api-response-caching.md) — API polling must never return bodyless 304s; clients interpret them as missing profile/order data.
 - [Rider acceptance flow](rider-acceptance-anti-automation.md) — one-tap acceptance has no offer-token or confirmation gate; preserve authentication, eligibility and atomic assignment.
+- [Rider order distribution](rider-order-distribution.md) — idle eligible riders share new orders for 30s, then the audience broadens without bypassing admin order caps.

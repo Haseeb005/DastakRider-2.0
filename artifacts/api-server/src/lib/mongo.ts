@@ -7,6 +7,7 @@ import {
 import { logger } from "./logger";
 
 let db: Db;
+let mongoClient: MongoClient;
 const LIVE_CHANGE_RETRY_MS = 5_000;
 const LIVE_CHANGE_RECONCILE_MAX_RETRY_MS = 60_000;
 
@@ -34,10 +35,25 @@ const liveChangeResetListeners = new Set<LiveChangeResetListener>();
 export async function connectMongo(): Promise<void> {
   const uri = process.env["MONGODB_URI_RIDER"];
   if (!uri) throw new Error("MONGODB_URI_RIDER environment variable is required.");
-  const client = new MongoClient(uri);
-  await client.connect();
-  db = client.db();
+  mongoClient = new MongoClient(uri);
+  await mongoClient.connect();
+  db = mongoClient.db();
+  try {
+    await db.collection("riderOrderAcceptanceMutex").updateOne(
+      { _id: "global" } as any,
+      { $setOnInsert: { revision: 0 } },
+      { upsert: true },
+    );
+  } catch (error: any) {
+    // Multiple API instances may race to initialize the same singleton row.
+    if (error?.code !== 11000) throw error;
+  }
   logger.info("Connected to MongoDB");
+}
+
+export function getMongoClient(): MongoClient {
+  if (!mongoClient) throw new Error("MongoDB is not connected.");
+  return mongoClient;
 }
 
 // Riders are stored in the shared `users` collection with `type: "rider"`.
@@ -47,6 +63,10 @@ export function usersCol() {
 
 export function ordersCol() {
   return db.collection("orders");
+}
+
+export function riderOrderAcceptanceMutexCol() {
+  return db.collection("riderOrderAcceptanceMutex") as any;
 }
 
 // Reviews are stored with _id = rider's user ID (string, not ObjectId).

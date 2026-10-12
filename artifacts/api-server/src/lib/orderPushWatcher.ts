@@ -15,9 +15,17 @@ import { ObjectId } from "mongodb";
 import { logger } from "./logger";
 import { ordersCol, subscribeToLiveChanges, usersCol } from "./mongo";
 import { sendNewOrderPush } from "./onesignal";
+import {
+  ensureRiderOfferStartedAt,
+  getActiveOrderCounts,
+  getRiderOfferAudience,
+} from "./riderOrderDistribution";
 
-/** Tracks orderIds we have already pushed so we don't repeat on subsequent updates. */
-const pushedOrders = new Set<string>();
+/** Deduplicate each phase while allowing the 30-second broadening push. */
+const priorityPushedOrders = new Set<string>();
+const broadPushedOrders = new Set<string>();
+const priorityRecipients = new Map<string, Set<string>>();
+const broadPushTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const processingOrders = new Set<string>();
 
 async function handleOrderChange(rawId: string): Promise<void> {
@@ -39,73 +47,120 @@ async function handleOrderChange(rawId: string): Promise<void> {
     // can notify riders again.
     const hasRider = order.riderId && order.riderId !== "";
     if (order.status !== "Admin Accepted" || hasRider) {
-      pushedOrders.delete(rawId);
+      priorityPushedOrders.delete(rawId);
+      broadPushedOrders.delete(rawId);
+      priorityRecipients.delete(rawId);
+      const timer = broadPushTimers.get(rawId);
+      if (timer) clearTimeout(timer);
+      broadPushTimers.delete(rawId);
       return;
     }
 
-    // Deduplicate: only push once per order per availability window.
-    if (pushedOrders.has(rawId)) return;
+    if (broadPushedOrders.has(rawId)) return;
     const city: string = order.city ?? "";
     const zone: string = order.zone ?? "";
     const orderId = String(order._id);
     const restaurantName: string | undefined = order.martName || undefined;
     const martAddress: string | undefined = order.martAddress || undefined;
 
-    // Find all online riders eligible for this order (same city + zone match).
-    const riderQuery: Record<string, any> = {
-      type: "rider",
-      isOnline: true,
-      deleted: { $ne: true },
-    };
-    if (city) riderQuery.city = city;
-    // Zone filter: if the order has a zone, only notify riders whose riderZones
-    // include it OR riders with no zones assigned (they see everything in their city).
-    if (zone) {
-      riderQuery.$or = [
-        { riderZones: zone },
-        { riderZones: { $exists: false } },
-        { riderZones: { $size: 0 } },
-      ];
-    }
-
     const riders = await usersCol()
-      .find(riderQuery, { projection: { _id: 1, playerId: 1 } })
-      .limit(500)
+      .find(
+        { type: "rider", isOnline: true, deleted: { $ne: true } },
+        {
+          projection: {
+            _id: 1, type: 1, isOnline: 1, deleted: 1, city: 1,
+            riderZones: 1, maxOrderLimit: 1, playerId: 1,
+          },
+        },
+      )
       .toArray();
 
-    if (riders.length === 0) {
-      logger.info({ orderId, city, zone }, "orderPushWatcher: no online riders to notify");
-      return;
+    const counts = await getActiveOrderCounts(riders);
+    const offerStartedAt = await ensureRiderOfferStartedAt(order as any);
+    const audience = getRiderOfferAudience(
+      { ...order, riderOfferStartedAt: offerStartedAt },
+      riders,
+      counts,
+    );
+    const priorityPhase = audience.idlePriorityActive;
+    let recipients = priorityPhase ? audience.idleRiders : audience.eligibleRiders;
+    if (!priorityPhase && priorityRecipients.has(rawId)) {
+      const alreadyNotified = priorityRecipients.get(rawId)!;
+      recipients = recipients.filter(
+        (r: any) => !alreadyNotified.has(String(r._id)),
+      );
     }
 
-    // Prefer subscription IDs (stored in riders.playerId) for direct targeting.
-    // Fall back to external_id alias for riders that haven't saved a playerId yet.
-    const playerIds = riders
-      .filter((r: any) => r.playerId)
-      .map((r: any) => String(r.playerId));
-    const riderIds = riders
-      .filter((r: any) => !r.playerId)
-      .map((r: any) => String(r._id));
+    if (priorityPhase && priorityPushedOrders.has(rawId)) {
+      scheduleBroadPush(rawId, audience.priorityEndsAt - Date.now());
+      return;
+    }
+    if (!priorityPhase && broadPushedOrders.has(rawId)) return;
+    if (!priorityPhase && recipients.length === 0) {
+      broadPushedOrders.add(rawId);
+      return;
+    }
+    if (priorityPhase) {
+      scheduleBroadPush(rawId, audience.priorityEndsAt - Date.now());
+    }
 
-    const sent = await sendNewOrderPush({
-      playerIds,
-      riderIds,
-      orderId,
-      restaurantName,
-      martAddress,
-    });
-    if (!sent) return;
+    if (recipients.length === 0) {
+      logger.info({ orderId, city, zone }, "orderPushWatcher: no online riders to notify");
+    } else {
+      const playerIds = recipients
+        .filter((r: any) => r.playerId)
+        .map((r: any) => String(r.playerId));
+      const riderIds = recipients
+        .filter((r: any) => !r.playerId)
+        .map((r: any) => String(r._id));
+      const sent = await sendNewOrderPush({
+        playerIds,
+        riderIds,
+        orderId,
+        restaurantName,
+        martAddress,
+      });
+      if (!sent) return;
 
-    pushedOrders.add(rawId);
-    logger.info(
-      { orderId, withPlayerId: playerIds.length, withExternalId: riderIds.length, city, zone },
-      "orderPushWatcher: sent new-order push",
-    );
+      if (priorityPhase) {
+        priorityPushedOrders.add(rawId);
+        priorityRecipients.set(
+          rawId,
+          new Set(recipients.map((r: any) => String(r._id))),
+        );
+      } else {
+        broadPushedOrders.add(rawId);
+      }
+      logger.info(
+        {
+          orderId,
+          phase: priorityPhase ? "idle-priority" : "broad",
+          withPlayerId: playerIds.length,
+          withExternalId: riderIds.length,
+          city,
+          zone,
+        },
+        "orderPushWatcher: sent new-order push",
+      );
+    }
   } catch (err) {
     logger.error({ err, rawId }, "orderPushWatcher: error processing change");
   } finally {
     processingOrders.delete(rawId);
   }
+}
+
+function scheduleBroadPush(rawId: string, delayMs: number): void {
+  if (broadPushTimers.has(rawId)) return;
+  const timer = setTimeout(() => {
+    broadPushTimers.delete(rawId);
+    if (processingOrders.has(rawId)) {
+      scheduleBroadPush(rawId, 250);
+      return;
+    }
+    void handleOrderChange(rawId);
+  }, Math.max(0, delayMs));
+  broadPushTimers.set(rawId, timer);
 }
 
 async function reconcileAvailableOrders(): Promise<void> {

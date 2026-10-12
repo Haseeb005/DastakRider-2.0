@@ -5,13 +5,23 @@ import { ObjectId } from "mongodb";
 import {
   usersCol,
   ordersCol,
+  getMongoClient,
+  riderOrderAcceptanceMutexCol,
   reviewsCol,
   chatsCol,
   riderChallengesCol,
   riderWalletEntriesCol,
 } from "../lib/mongo";
 import { getHeatmapSnapshot } from "../lib/heatmapService";
-import { calculatePrepaidRestaurantCashAmount } from "../lib/restaurantCashDue";
+import {
+  calculatePrepaidRestaurantCashAmount,
+} from "../lib/restaurantCashDue";
+import {
+  ensureRiderOfferStartedAt,
+  getActiveOrderCounts,
+  getRiderOfferAudience,
+  riderCanSeeAvailableOrder,
+} from "../lib/riderOrderDistribution";
 import {
   signOrderOfferToken,
   signRiderToken,
@@ -43,6 +53,15 @@ const ACTIVE_STATUSES = ["Rider Accepted", "Rider Picked Up"];
 const AVAILABLE_STATUS = "Admin Accepted";
 const DELIVERED_STATUS = "Delivered";
 const COD_TYPES = ["COD", "Cash", "cash", "cod"];
+
+class RiderAcceptRejected extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
 // Older installed clients still expect an offer token on each available order.
 // Acceptance no longer validates it, but it remains in responses for compatibility.
 const ORDER_OFFER_TTL_MS = 10 * 60_000;
@@ -1913,6 +1932,7 @@ router.get("/rider/orders/available", async (req: any, res: any) => {
     if (!riderId) return;
     const rider = await findRiderById(riderId);
     if (!rider) return res.status(404).json({ message: "Rider not found" });
+    if (rider.isOnline !== true) return res.json([]);
 
     const query: Record<string, any> = {
       status: AVAILABLE_STATUS,
@@ -1929,11 +1949,31 @@ router.get("/rider/orders/available", async (req: any, res: any) => {
       .sort({ createdAt: -1 })
       .limit(100)
       .toArray();
+    const onlineRiders = await usersCol()
+      .find(
+        { type: "rider", isOnline: true, deleted: { $ne: true } },
+        { projection: { _id: 1, type: 1, isOnline: 1, deleted: 1, city: 1, riderZones: 1, maxOrderLimit: 1 } },
+      )
+      .toArray();
+    const activeCounts = await getActiveOrderCounts(onlineRiders);
     const offerExpiresAt = Date.now() + ORDER_OFFER_TTL_MS;
+    const visibleDocs = await Promise.all(
+      docs.map(async (doc) => {
+        const offerStartedAt = await ensureRiderOfferStartedAt(doc);
+        const audience = getRiderOfferAudience(
+          { ...doc, riderOfferStartedAt: offerStartedAt },
+          onlineRiders,
+          activeCounts,
+        );
+        return riderCanSeeAvailableOrder(riderId, audience) ? doc : null;
+      }),
+    );
     res.json(
-      docs.map((doc) =>
-        normalizeAvailableOrder(
-          doc,
+      visibleDocs
+        .filter(Boolean)
+        .map((doc: any) =>
+          normalizeAvailableOrder(
+            doc,
           signOrderOfferToken({
             orderId: String(doc._id),
             riderId,
@@ -1941,8 +1981,8 @@ router.get("/rider/orders/available", async (req: any, res: any) => {
             nonce: crypto.randomBytes(18).toString("base64url"),
           }),
           offerExpiresAt,
+          ),
         ),
-      ),
     );
   } catch (e: any) {
     req.log.error(e);
@@ -2023,6 +2063,9 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
 
     const rider = await findRiderById(riderId);
     if (!rider) return res.status(404).json({ message: "Rider not found" });
+    if (rider.isOnline !== true) {
+      return res.status(409).json({ message: "Go online before accepting an order." });
+    }
 
     const targetOrder = await ordersCol().findOne({ _id: orderObjectId });
     if (!targetOrder) return res.status(404).json({ message: "Order not found" });
@@ -2048,19 +2091,7 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       return res.status(409).json({ message: "Order already taken or unavailable." });
     }
 
-    // maxOrderLimit caps how many orders a rider can carry at once (admin-owned field).
-    // The limit is enforced from the current active-order count.
-    const maxOrderLimit = Number(rider?.maxOrderLimit || 0);
-    if (maxOrderLimit > 0) {
-      const activeCount = await ordersCol().countDocuments({
-        riderId,
-        status: { $in: ACTIVE_STATUSES },
-      });
-      if (activeCount >= maxOrderLimit)
-        return res.status(400).json({
-          message: `You can only have ${maxOrderLimit} active order${maxOrderLimit === 1 ? "" : "s"} at a time. Complete a current delivery before accepting more.`,
-        });
-    }
+    const offerStartedAt = await ensureRiderOfferStartedAt(targetOrder);
 
     // Previous-day cash clearance gate.
     // Blocks only when pendingCollection > 0 AND the rider has NO COD deliveries
@@ -2157,34 +2188,134 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
       }
     }
 
-    const now = new Date();
-    // Atomic update guards against a race where two riders accept the same order at once —
-    // it only succeeds if the order is still available and has no riderId assigned.
-    const updated = await ordersCol().findOneAndUpdate(
-      {
-        _id: orderObjectId,
-        ...eligibilityFilter,
-      },
-      {
-        $set: {
-          riderId,
-          riderName: rider.name,
-          riderPhone: rider.phone,
-          riderFare: rider.tillNoonFare ? Number(rider.tillNoonFare) : undefined,
-          status: "Rider Accepted",
-          acceptedTime: now,
-          updatedAt: now,
+    const session = getMongoClient().startSession();
+    let updated: any = null;
+    let acceptedRider: any = rider;
+    try {
+      await session.withTransaction(
+        async () => {
+          updated = null;
+          // Serialize accept attempts across riders so parallel requests cannot
+          // skip the idle-rider priority or overbook a rider's active-order cap.
+          await riderOrderAcceptanceMutexCol().updateOne(
+            { _id: "global" },
+            { $inc: { revision: 1 } },
+            { upsert: true, session },
+          );
+
+          const currentRider = await usersCol().findOne(
+            { _id: new ObjectId(riderId), type: "rider" },
+            { session },
+          );
+          if (!currentRider || currentRider.isOnline !== true) {
+            throw new RiderAcceptRejected("Go online before accepting an order.", 409);
+          }
+          acceptedRider = currentRider;
+
+          const currentOrder = await ordersCol().findOne(
+            { _id: orderObjectId },
+            { session },
+          );
+          if (
+            !currentOrder ||
+            currentOrder.status !== AVAILABLE_STATUS ||
+            currentOrder.selfDelivery === true ||
+            currentOrder.orderType === "PickUp" ||
+            (currentRider.city && currentOrder.city !== currentRider.city) ||
+            (Array.isArray(currentRider.riderZones) &&
+              currentRider.riderZones.filter(Boolean).length > 0 &&
+              !currentRider.riderZones.includes(currentOrder.zone)) ||
+            (currentOrder.riderId != null && currentOrder.riderId !== "")
+          ) {
+            throw new RiderAcceptRejected("Order already taken or unavailable.", 409);
+          }
+
+          const onlineRiders = await usersCol()
+            .find(
+              { type: "rider", isOnline: true, deleted: { $ne: true } },
+              { session, projection: { _id: 1, type: 1, isOnline: 1, deleted: 1, city: 1, riderZones: 1, maxOrderLimit: 1 } },
+            )
+            .toArray();
+          const activeCounts = await getActiveOrderCounts(onlineRiders, session);
+          const activeCount = activeCounts.get(riderId) ?? 0;
+          const maxOrderLimit = Number(currentRider.maxOrderLimit) || 0;
+          if (maxOrderLimit > 0 && activeCount >= maxOrderLimit) {
+            throw new RiderAcceptRejected(
+              `You can only have ${maxOrderLimit} active order${maxOrderLimit === 1 ? "" : "s"} at a time. Complete a current delivery before accepting more.`,
+              400,
+            );
+          }
+
+          const audience = getRiderOfferAudience(
+            { ...currentOrder, riderOfferStartedAt: offerStartedAt },
+            onlineRiders,
+            activeCounts,
+          );
+          if (!riderCanSeeAvailableOrder(riderId, audience)) {
+            throw new RiderAcceptRejected(
+              "This order is being offered to riders without an active order first. It will open to other eligible riders after 30 seconds.",
+              409,
+            );
+          }
+
+          const now = new Date();
+          const transactionEligibility: Record<string, any> = {
+            status: AVAILABLE_STATUS,
+            selfDelivery: { $ne: true },
+            orderType: { $ne: "PickUp" },
+            $or: [
+              { riderId: { $exists: false } },
+              { riderId: null },
+              { riderId: "" },
+            ],
+          };
+          if (currentRider.city) transactionEligibility.city = currentRider.city;
+          const zones = Array.isArray(currentRider.riderZones)
+            ? currentRider.riderZones.filter(Boolean)
+            : [];
+          if (zones.length) transactionEligibility.zone = { $in: zones };
+
+          updated = await ordersCol().findOneAndUpdate(
+            { _id: orderObjectId, ...transactionEligibility },
+            {
+              $set: {
+                riderId,
+                riderName: currentRider.name,
+                riderPhone: currentRider.phone,
+                riderFare: currentRider.tillNoonFare
+                  ? Number(currentRider.tillNoonFare)
+                  : undefined,
+                status: "Rider Accepted",
+                acceptedTime: now,
+                updatedAt: now,
+                riderOfferStartedAt: null,
+              },
+            },
+            { returnDocument: "after", session },
+          );
+          if (!updated) {
+            throw new RiderAcceptRejected("Order already taken or unavailable.", 409);
+          }
         },
-      },
-      { returnDocument: "after" }
-    );
-    if (!updated) return res.status(409).json({ message: "Order already taken or unavailable." });
+        {
+          readConcern: { level: "snapshot" },
+          writeConcern: { w: "majority" },
+        },
+      );
+    } catch (error: any) {
+      if (error instanceof RiderAcceptRejected) {
+        return res.status(error.status).json({ message: error.message });
+      }
+      throw error;
+    } finally {
+      await session.endSession();
+    }
     // Rider is now carrying at least one order — mark "on delivery".
     await usersCol().updateOne(
       { _id: new ObjectId(riderId) },
       { $set: { status: "on delivery" } }
     );
-    res.json(normalizeOrder(updated, Number(rider.tillNoonFare) || 0));
+    res.json(normalizeOrder(updated, Number(acceptedRider.tillNoonFare) || 0));
   } catch (e: any) {
     req.log.error(e);
     res.status(500).json({ message: e.message });
