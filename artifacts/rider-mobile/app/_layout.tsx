@@ -240,7 +240,7 @@ function RootLayoutNav() {
   );
 }
 
-const APP_VERSION = "4.6.6";
+const APP_VERSION = "4.6.7";
 const API_BASE = API_BASE_URL;
 
 function RootLayout() {
