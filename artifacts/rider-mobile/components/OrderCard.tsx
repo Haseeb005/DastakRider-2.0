@@ -218,6 +218,18 @@ export function AvailableOrderCard({
             >
               Pay Cash to Restaurant
             </Text>
+            {order.restaurantCashAmount != null ? (
+              <Text
+                style={{
+                  color: "#78350F",
+                  fontSize: 15,
+                  fontFamily: "Inter_700Bold",
+                  marginTop: 3,
+                }}
+              >
+                Amount to give: {money(order.restaurantCashAmount)}
+              </Text>
+            ) : null}
           </View>
         ) : null}
         <View

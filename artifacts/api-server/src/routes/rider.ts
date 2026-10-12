@@ -11,6 +11,7 @@ import {
   riderWalletEntriesCol,
 } from "../lib/mongo";
 import { getHeatmapSnapshot } from "../lib/heatmapService";
+import { calculatePrepaidRestaurantCashAmount } from "../lib/restaurantCashDue";
 import {
   signOrderOfferToken,
   signRiderToken,
@@ -2771,6 +2772,10 @@ function normalizeAvailableOrder(
   const deliveryAddress = doc.address || null;
   const deliveryLatitude = toNumOrNull(doc.latitude);
   const deliveryLongitude = toNumOrNull(doc.longitude);
+  const isPrepaidRestaurant =
+    String(doc.billingMode || "").trim().toLowerCase() === "prepaid" &&
+    String(doc.shopType || "").trim().toLowerCase() === "restaurant";
+  const restaurantCashAmount = calculatePrepaidRestaurantCashAmount(doc);
 
   return {
     id: String(doc._id),
@@ -2782,8 +2787,8 @@ function normalizeAvailableOrder(
     deliveryAddress,
     deliveryLatitude,
     deliveryLongitude,
-    payCashToRestaurant:
-      String(doc.billingMode || "").toLowerCase() === "prepaid",
+    payCashToRestaurant: isPrepaidRestaurant,
+    restaurantCashAmount,
     offerToken: offerToken || null,
     offerExpiresAt: offerExpiresAt ? new Date(offerExpiresAt).toISOString() : null,
     // Backward compatibility for build 4.6.5, whose available-order card
@@ -2803,7 +2808,7 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
         // (e.g. "Half", "Regular", "12 Pcs"), so it must not be used as the count.
         quantity: Number(p.count) || 1,
         price: toNum(p.price ?? p.net),
-        // Original pre-discount price. When actualPrice > price the item is discounted.
+        // Restaurant's per-unit payable price; the fallback is retained for legacy order details.
         actualPrice: toNum(p.actualPrice ?? p.price ?? p.net),
         // For single products: the size/variation string from the `quantity` DB field.
         size:

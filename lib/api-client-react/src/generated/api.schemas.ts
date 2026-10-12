@@ -73,7 +73,7 @@ export interface Rider {
 }
 
 /**
- * Pickup and delivery locations visible before a rider accepts the order. Full order details remain restricted until acceptance.
+ * Pickup and delivery locations, plus an aggregate restaurant cash amount for prepaid restaurant orders, are visible before acceptance. Product details remain restricted until acceptance.
  */
 export interface AvailableRiderOrder {
   id: string;
@@ -95,6 +95,11 @@ export interface AvailableRiderOrder {
   deliveryLongitude?: number | null;
   /** Whether the rider must pay cash to the restaurant when collecting this order. */
   payCashToRestaurant: boolean;
+  /**
+     * Aggregate restaurant cash payable for prepaid restaurant orders, calculated from positive actualPrice times count plus vatAmount. Product details are not returned.
+     * @nullable
+     */
+  restaurantCashAmount?: number | null;
   /** Legacy offer token returned for compatibility with installed rider apps. The server does not require it to accept an order. */
   offerToken: string;
   /** Time at which this offer token expires. */

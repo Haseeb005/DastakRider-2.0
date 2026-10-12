@@ -1112,7 +1112,12 @@ function AvailableOrderCard({
         )}
         {order.payCashToRestaurant && (
           <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center text-sm font-bold text-amber-900">
-            Pay Cash to Restaurant
+            <div>Pay Cash to Restaurant</div>
+            {order.restaurantCashAmount != null && (
+              <div className="mt-1 text-base">
+                Amount to give: {formatMoney(order.restaurantCashAmount)}
+              </div>
+            )}
           </div>
         )}
         <div className="space-y-3 border-t border-gray-100 pt-3">
