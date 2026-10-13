@@ -2112,19 +2112,17 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
     if (pendingCollectionRaw > 0) {
       const windowStart = pkt8AMCutoff();
       // Look for any COD delivery completed in today's window (after 8AM PKT).
+      // Use the rider-owned timestamp instead of canonical status: the external
+      // admin system may revert "Delivered" shortly after the rider records it.
       // If found, the pending cash is from the current window — do not block.
       // If none found, the pending cash is from a previous day — block.
       const todayDelivery = await ordersCol().findOne({
         riderId,
-        status: "Delivered",
-        timeWhenDelivered: { $exists: true, $gt: "" },
         riderDeliveredAt: { $gte: windowStart },
-        $expr: {
-          $in: [
-            { $ifNull: ["$paymentType", "$paymentMethod"] },
-            COD_TYPES,
-          ],
-        },
+        $or: [
+          { paymentType: { $in: COD_TYPES } },
+          { paymentMethod: { $in: COD_TYPES } },
+        ],
       });
       if (!todayDelivery) {
         return res.status(400).json({
