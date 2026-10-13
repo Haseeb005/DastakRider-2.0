@@ -13,3 +13,11 @@ Both apps already render active orders as an array (badge = `activeOrders.length
 **Why this file exists:** a user once pasted a large legacy-looking spec (notifications, emails, admin/super-admin overrides, `riderCurrentOrdersTotal`, `{status,msg}` response shape) that doesn't correspond to this codebase. Keep the actual cash-collection gate and status-derived live-order rules; do not restore the legacy concurrent-order or counter behavior.
 
 **How to apply:** if another pasted "spec" surfaces referencing patterns absent from this repo, grep first before implementing — don't assume it describes existing code here.
+
+## Legacy cash-delivery evidence
+
+Current-day COD deliveries made through legacy/admin clients can have a time-of-day delivery marker but no full rider-owned delivery timestamp. Do not classify aggregate cash as previous-day debt simply because the full timestamp is absent, and do not rely on the mutable shared status.
+
+**Why:** live same-day COD deliveries were omitted from the collection-window check, falsely blocking riders with current-day cash.
+
+**How to apply:** accept either a full delivery timestamp in the collection window, or (when that timestamp is absent) an order created within the window with a nonempty delivery marker. Do not use bulk-written `updatedAt` as delivery evidence.

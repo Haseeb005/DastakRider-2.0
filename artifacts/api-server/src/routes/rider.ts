@@ -25,6 +25,7 @@ import {
 import {
   getRiderAcceptanceCooldownRemainingMs,
 } from "../lib/riderAcceptanceThrottle";
+import { currentWindowCodDeliveryFilter } from "../lib/riderCashWindow";
 import {
   signOrderOfferToken,
   signRiderToken,
@@ -2112,18 +2113,15 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
     if (pendingCollectionRaw > 0) {
       const windowStart = pkt8AMCutoff();
       // Look for any COD delivery completed in today's window (after 8AM PKT).
-      // Use the rider-owned timestamp instead of canonical status: the external
-      // admin system may revert "Delivered" shortly after the rider records it.
+      // Use delivery evidence instead of canonical status, which the external
+      // admin system may revert. Legacy clients omit riderDeliveredAt, so also
+      // recognize orders created this window with a recorded delivery time.
       // If found, the pending cash is from the current window — do not block.
       // If none found, the pending cash is from a previous day — block.
-      const todayDelivery = await ordersCol().findOne({
-        riderId,
-        riderDeliveredAt: { $gte: windowStart },
-        $or: [
-          { paymentType: { $in: COD_TYPES } },
-          { paymentMethod: { $in: COD_TYPES } },
-        ],
-      });
+      const todayDelivery = await ordersCol().findOne(
+        currentWindowCodDeliveryFilter(riderId, windowStart),
+        { projection: { _id: 1 } },
+      );
       if (!todayDelivery) {
         return res.status(400).json({
           message:
