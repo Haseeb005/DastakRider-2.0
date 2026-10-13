@@ -17,9 +17,11 @@ import {
   calculatePrepaidRestaurantCashAmount,
 } from "../lib/restaurantCashDue";
 import {
+  canAcceptAnotherLiveOrder,
   ensureRiderOfferStartedAt,
   getRiderLiveOrderCounts,
   getRiderOfferAudience,
+  isOrderLimitExemptRider,
   riderCanSeeAvailableOrder,
 } from "../lib/riderOrderDistribution";
 import {
@@ -150,6 +152,7 @@ async function safeRider(user: any) {
     unpaidCollection: Number(user.unpaidCollection) || 0,
     paymentLimit: Number(user.paymentLimit) || 0,
     tillNoonFare: Number(user.tillNoonFare) || 0,
+    orderLimitExempt: isOrderLimitExemptRider(String(user._id)),
   };
 }
 
@@ -2258,13 +2261,13 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
             acceptedCount: 0,
             pickedUpCount: 0,
           };
-          if (riderCounts.activeCount >= 2) {
-            throw new RiderAcceptRejected(
-              "You can have at most two live orders. Complete a delivery before accepting another.",
-              400,
-            );
-          }
-          if (riderCounts.acceptedCount > 0) {
+          if (!canAcceptAnotherLiveOrder(riderId, riderCounts)) {
+            if (riderCounts.activeCount >= 2) {
+              throw new RiderAcceptRejected(
+                "You can have at most two live orders. Complete a delivery before accepting another.",
+                400,
+              );
+            }
             throw new RiderAcceptRejected(
               "Pick up your current order before accepting another.",
               409,

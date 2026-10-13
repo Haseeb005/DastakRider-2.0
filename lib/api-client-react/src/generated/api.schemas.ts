@@ -68,6 +68,8 @@ export interface Rider {
   /** Max unpaidCollection allowed before the rider is blocked from accepting new orders. */
   paymentLimit?: number;
   tillNoonFare?: number;
+  /** True when this rider is exempt from the normal live-order cap. */
+  orderLimitExempt: boolean;
   /** HMAC bearer token, returned only by login/register for mobile clients */
   token?: string;
 }

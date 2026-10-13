@@ -89,6 +89,30 @@ test("counts down the priority window and hides it at 30 seconds", async ({
   ).toHaveCount(0);
 });
 
+test("shows unlimited live-order capacity for an exempt rider", async ({ page }) => {
+  await installRiderApiMocks(
+    page,
+    [
+      riderOrder("order-1", "Rider Accepted"),
+      riderOrder("order-2", "Rider Accepted"),
+      riderOrder("order-3", "Rider Picked Up"),
+    ],
+    false,
+    true,
+  );
+  await page.goto("/");
+  await page.locator("nav").getByRole("button", { name: /Active/ }).click();
+
+  await expect(page.getByText("3 live orders", { exact: true })).toBeVisible();
+  await expect(page.getByText("No order cap", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(
+      "You can accept more orders while these are active. Idle riders still get the first 30 seconds to accept new offers.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+});
+
 test("shows the correct call and map destinations for both next stops", async ({
   page,
 }) => {

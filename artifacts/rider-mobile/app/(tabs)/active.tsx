@@ -5,6 +5,7 @@ import {
   getGetRiderEarningsQueryKey,
   getGetRiderMeQueryKey,
   useGetActiveOrders,
+  useGetRiderMe,
   useMarkOrderArrived,
   useUpdateOrderStatus,
   type RiderOrder,
@@ -278,6 +279,12 @@ export default function ActiveScreen() {
   const qc = useQueryClient();
   const router = useRouter();
   const { token } = useAuth();
+  const riderQ = useGetRiderMe({
+    query: {
+      queryKey: getGetRiderMeQueryKey(),
+      enabled: !!token,
+    },
+  });
   const [selected, setSelected] = useState<RiderOrder | null>(null);
   const [pickupAwaitingConsent, setPickupAwaitingConsent] =
     useState<RiderOrder | null>(null);
@@ -526,7 +533,10 @@ export default function ActiveScreen() {
         }
       />
 
-      <OrderCapacityStatus orders={orders} />
+      <OrderCapacityStatus
+        orders={orders}
+        orderLimitExempt={riderQ.data?.orderLimitExempt}
+      />
 
       {trackCount > 0 ? (
         <View

@@ -2,6 +2,13 @@ import { ordersCol } from "./mongo";
 
 export const IDLE_RIDER_PRIORITY_MS = 30_000;
 
+// Explicit rider-account exceptions requested by operations. Keep all other
+// city/zone, online, order-availability, and cash rules in force.
+const ORDER_LIMIT_EXEMPT_RIDER_IDS = new Set([
+  "63d903994c2d23004da46c15",
+  "63d9097c4c2d23004da46c18",
+]);
+
 export type RiderCandidate = {
   _id: unknown;
   type?: unknown;
@@ -32,6 +39,20 @@ export type RiderOfferAudience = {
   priorityWindowOpen: boolean;
   idlePriorityActive: boolean;
 };
+
+export function isOrderLimitExemptRider(riderId: string): boolean {
+  return ORDER_LIMIT_EXEMPT_RIDER_IDS.has(riderId);
+}
+
+export function canAcceptAnotherLiveOrder(
+  riderId: string,
+  counts: RiderLiveOrderCounts,
+): boolean {
+  return (
+    isOrderLimitExemptRider(riderId) ||
+    (counts.activeCount < 2 && counts.acceptedCount === 0)
+  );
+}
 
 export async function getRiderLiveOrderCounts(
   riders: RiderCandidate[],
@@ -141,12 +162,17 @@ export function getRiderOfferAudience(
   const pickedUpRiders = eligibleRiders.filter((rider) => {
     const counts = liveCountsFor(rider, liveCounts);
     return (
+      !isOrderLimitExemptRider(String(rider._id)) &&
       counts.activeCount > 0 &&
-      counts.activeCount < 2 &&
-      counts.acceptedCount === 0 &&
+      canAcceptAnotherLiveOrder(String(rider._id), counts) &&
       counts.pickedUpCount > 0
     );
   });
+  const unlimitedBusyRiders = eligibleRiders.filter(
+    (rider) =>
+      isOrderLimitExemptRider(String(rider._id)) &&
+      liveCountsFor(rider, liveCounts).activeCount > 0,
+  );
   const start = new Date(
     order.riderOfferStartedAt as string | number | Date,
   ).getTime();
@@ -155,7 +181,7 @@ export function getRiderOfferAudience(
     : now + IDLE_RIDER_PRIORITY_MS;
 
   return {
-    eligibleRiders: [...idleRiders, ...pickedUpRiders],
+    eligibleRiders: [...idleRiders, ...pickedUpRiders, ...unlimitedBusyRiders],
     idleRiders,
     priorityEndsAt,
     priorityWindowOpen: now < priorityEndsAt,

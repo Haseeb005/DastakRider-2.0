@@ -60,6 +60,7 @@ export const LoginRiderResponse = zod.object({
   "unpaidCollection": zod.number().optional(),
   "paymentLimit": zod.number().optional().describe('Max unpaidCollection allowed before the rider is blocked from accepting new orders.'),
   "tillNoonFare": zod.number().optional(),
+  "orderLimitExempt": zod.boolean().describe('True when this rider is exempt from the normal live-order cap.'),
   "token": zod.string().optional().describe('HMAC bearer token, returned only by login\/register for mobile clients')
 })
 
@@ -91,6 +92,7 @@ export const GetRiderMeResponse = zod.object({
   "unpaidCollection": zod.number().optional(),
   "paymentLimit": zod.number().optional().describe('Max unpaidCollection allowed before the rider is blocked from accepting new orders.'),
   "tillNoonFare": zod.number().optional(),
+  "orderLimitExempt": zod.boolean().describe('True when this rider is exempt from the normal live-order cap.'),
   "token": zod.string().optional().describe('HMAC bearer token, returned only by login\/register for mobile clients')
 })
 

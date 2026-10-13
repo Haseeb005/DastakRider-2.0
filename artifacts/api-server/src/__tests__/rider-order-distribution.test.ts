@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  canAcceptAnotherLiveOrder,
   getRiderOfferAudience,
+  isOrderLimitExemptRider,
   riderCanSeeAvailableOrder,
 } from "../lib/riderOrderDistribution";
 
@@ -87,6 +89,47 @@ test("picked-up riders can take a second live order, but not a third", () => {
 
   assert.equal(riderCanSeeAvailableOrder("one-picked-up", audience), true);
   assert.equal(riderCanSeeAvailableOrder("two-picked-up", audience), false);
+});
+
+test("only the two approved rider accounts bypass live-order and pickup-before-accept limits", () => {
+  const khanBabaId = "63d903994c2d23004da46c15";
+  const tornadoId = "63d9097c4c2d23004da46c18";
+  const overLimit = { activeCount: 8, acceptedCount: 5, pickedUpCount: 3 };
+
+  assert.equal(isOrderLimitExemptRider(khanBabaId), true);
+  assert.equal(isOrderLimitExemptRider(tornadoId), true);
+  assert.equal(canAcceptAnotherLiveOrder(khanBabaId, overLimit), true);
+  assert.equal(canAcceptAnotherLiveOrder(tornadoId, overLimit), true);
+  assert.equal(canAcceptAnotherLiveOrder("regular-rider", overLimit), false);
+});
+
+test("busy exempt riders can see offers after the regular 30-second idle priority", () => {
+  const exemptId = "63d903994c2d23004da46c15";
+  const exemptRider = {
+    _id: exemptId,
+    type: "rider",
+    isOnline: true,
+    city: "Lahore",
+    riderZones: ["Gulberg"],
+  };
+  const counts = new Map([
+    [exemptId, { activeCount: 4, acceptedCount: 3, pickedUpCount: 1 }],
+  ]);
+  const beforePriorityEnds = getRiderOfferAudience(
+    order,
+    [exemptRider, ...riders.filter((rider) => rider._id !== "idle-a" && rider._id !== "idle-b")],
+    counts,
+    Date.parse("2026-10-12T12:00:29.999Z"),
+  );
+  const afterPriorityEnds = getRiderOfferAudience(
+    order,
+    [exemptRider],
+    counts,
+    Date.parse("2026-10-12T12:00:30.000Z"),
+  );
+
+  assert.equal(riderCanSeeAvailableOrder(exemptId, beforePriorityEnds), false);
+  assert.equal(riderCanSeeAvailableOrder(exemptId, afterPriorityEnds), true);
 });
 
 test("online, city, and zone eligibility are applied before prioritizing", () => {

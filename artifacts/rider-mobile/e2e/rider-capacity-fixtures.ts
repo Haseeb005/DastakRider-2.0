@@ -35,6 +35,7 @@ export async function installRiderApiMocks(
   page: Page,
   activeOrders: ReturnType<typeof riderOrder>[],
   withTimedOffer = false,
+  orderLimitExempt = false,
 ) {
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
@@ -49,6 +50,7 @@ export async function installRiderApiMocks(
           isOnline: true,
           riderZones: ["Lahore"],
           tillNoonFare: 100,
+          orderLimitExempt,
         }),
       });
       return;

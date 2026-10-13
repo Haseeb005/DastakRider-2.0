@@ -852,13 +852,34 @@ function useLocationTracking(activeOrders: RiderOrder[]): LocationShareStatus {
   return status;
 }
 
-function OrderCapacityStatus({ orders }: { orders: RiderOrder[] }) {
+function OrderCapacityStatus({
+  orders,
+  orderLimitExempt = false,
+}: {
+  orders: RiderOrder[];
+  orderLimitExempt?: boolean;
+}) {
   const live = orders.filter((order) =>
     order.status === "Rider Accepted" || order.status === "Rider Picked Up",
   );
   const hasAccepted = live.some((order) => order.status === "Rider Accepted");
   const hasPickedUp = live.some((order) => order.status === "Rider Picked Up");
   const full = live.length >= 2;
+  if (orderLimitExempt) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-3.5">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-bold text-gray-900">
+            {live.length} live order{live.length === 1 ? "" : "s"}
+          </p>
+          <p className="text-xs font-semibold text-brand-600">No order cap</p>
+        </div>
+        <p className="mt-2 text-xs leading-4 text-gray-500">
+          You can accept more orders while these are active. Idle riders still get the first 30 seconds to accept new offers.
+        </p>
+      </div>
+    );
+  }
   const message = full && hasAccepted
     ? "At capacity. Pick up the accepted order, then complete a delivery before taking another."
     : full
@@ -1493,7 +1514,10 @@ function AvailableOrders({ rider, activeOrders }: { rider: Rider; activeOrders: 
 
   return (
     <div className="p-4 space-y-4">
-      <OrderCapacityStatus orders={activeOrders} />
+      <OrderCapacityStatus
+        orders={activeOrders}
+        orderLimitExempt={rider.orderLimitExempt}
+      />
       {/* New-order alert banner */}
       {newCount > 0 && (
         <div className="flex items-center gap-3 rounded-xl bg-brand-500 text-white px-4 py-3 shadow-lg animate-pulse">
@@ -1625,10 +1649,12 @@ function ActiveDelivery({
   locationStatus,
   chatOrder,
   setChatOrder,
+  orderLimitExempt,
 }: {
   locationStatus: LocationShareStatus;
   chatOrder: RiderOrder | null;
   setChatOrder: (order: RiderOrder | null) => void;
+  orderLimitExempt: boolean;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -1714,7 +1740,10 @@ function ActiveDelivery({
         </Button>
       </div>
 
-      <OrderCapacityStatus orders={orders} />
+      <OrderCapacityStatus
+        orders={orders}
+        orderLimitExempt={orderLimitExempt}
+      />
       <DeliveryStopSequence orders={orders} />
 
       {orders.some((o) => o.status === "Rider Picked Up") &&
@@ -2440,7 +2469,7 @@ export default function RiderApp() {
       {/* Content */}
       <main className="flex-1 overflow-auto pb-20">
         {view === "available" && <AvailableOrders rider={rider} activeOrders={activeOrders} />}
-        {view === "active" && <ActiveDelivery locationStatus={locationStatus} chatOrder={chatOrder} setChatOrder={setChatOrder} />}
+        {view === "active" && <ActiveDelivery locationStatus={locationStatus} chatOrder={chatOrder} setChatOrder={setChatOrder} orderLimitExempt={rider.orderLimitExempt} />}
         {view === "history" && <DeliveryHistory />}
         {view === "wallet" && <RiderWallet />}
         {view === "profile" && <RiderProfile rider={rider} />}

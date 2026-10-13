@@ -579,7 +579,10 @@ export default function AvailableScreen() {
           }
           ListHeaderComponent={
             <View>
-              <OrderCapacityStatus orders={activeOrders} />
+              <OrderCapacityStatus
+                orders={activeOrders}
+                orderLimitExempt={meQ.data?.orderLimitExempt}
+              />
               {orders.length > 0 ? (
                 <View
                   style={{
