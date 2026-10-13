@@ -18,5 +18,5 @@
 - [Expo API hostname separation](expo-api-hostname-separation.md) — `EXPO_PUBLIC_DOMAIN` can be a temporary workspace bundle host; native API traffic must use the permanent API URL.
 - [Available-order privacy](available-order-privacy.md) — pre-acceptance order data stays restricted, with a narrow exception for aggregate prepaid restaurant cash due.
 - [Rider API response caching](rider-api-response-caching.md) — API polling must never return bodyless 304s; clients interpret them as missing profile/order data.
-- [Rider acceptance flow](rider-acceptance-anti-automation.md) — one-tap acceptance has no offer-token or confirmation gate; preserve authentication, eligibility and atomic assignment.
+- [Rider acceptance flow](rider-acceptance-anti-automation.md) — acceptance stays one tap, with a server cooldown against rapid repeated accepts; preserve eligibility and atomic assignment.
 - [Rider order distribution](rider-order-distribution.md) — idle riders get 30s priority; afterward only riders with picked-up orders and capacity may take another.

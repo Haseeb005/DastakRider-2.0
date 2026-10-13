@@ -23,6 +23,9 @@ import {
   riderCanSeeAvailableOrder,
 } from "../lib/riderOrderDistribution";
 import {
+  getRiderAcceptanceCooldownRemainingMs,
+} from "../lib/riderAcceptanceThrottle";
+import {
   signOrderOfferToken,
   signRiderToken,
   verifyRiderToken,
@@ -2214,6 +2217,21 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
           }
           acceptedRider = currentRider;
 
+          const riderThrottleId = `rider:${riderId}`;
+          const throttleState = await riderOrderAcceptanceMutexCol().findOne(
+            { _id: riderThrottleId },
+            { session },
+          );
+          const retryAfterMs = getRiderAcceptanceCooldownRemainingMs(
+            throttleState?.lastAcceptedAt,
+          );
+          if (retryAfterMs > 0) {
+            throw new RiderAcceptRejected(
+              `Please wait ${Math.ceil(retryAfterMs / 1000)} second${Math.ceil(retryAfterMs / 1000) === 1 ? "" : "s"} before accepting another order.`,
+              429,
+            );
+          }
+
           const currentOrder = await ordersCol().findOne(
             { _id: orderObjectId },
             { session },
@@ -2307,6 +2325,12 @@ router.post("/rider/orders/:orderId/accept", async (req: any, res: any) => {
           if (!updated) {
             throw new RiderAcceptRejected("Order already taken or unavailable.", 409);
           }
+
+          await riderOrderAcceptanceMutexCol().updateOne(
+            { _id: riderThrottleId },
+            { $set: { lastAcceptedAt: now } },
+            { upsert: true, session },
+          );
         },
         {
           readConcern: { level: "snapshot" },
