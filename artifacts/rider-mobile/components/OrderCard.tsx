@@ -366,6 +366,7 @@ export function OrderCard({
   const c = useColors();
   const atRestaurant =
     order.status === "Rider Accepted" && !!order.riderArrived;
+  const isDelivered = order.status === "Delivered";
   const sc = atRestaurant
     ? { bg: c.infoBg, fg: c.info }
     : statusColors(order.status, c);
@@ -394,6 +395,12 @@ export function OrderCard({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={
+        onPress
+          ? `Open full details for order ${order.orderNum || order.id.slice(-6)}`
+          : undefined
+      }
       style={({ pressed }) => [
         {
           backgroundColor: c.card,
@@ -477,20 +484,22 @@ export function OrderCard({
 
       {/* Route timeline */}
       <View style={{ position: "relative" }}>
-        <View
-          style={{
-            alignSelf: "flex-start",
-            backgroundColor: c.primary,
-            paddingHorizontal: 10,
-            paddingVertical: 5,
-            borderRadius: 999,
-            marginBottom: 12,
-          }}
-        >
-          <Text style={{ color: "#FFFFFF", fontFamily: "Inter_700Bold", fontSize: 10, letterSpacing: 0.5 }}>
-            NEXT STOP · {nextStopLabel.toUpperCase()}
-          </Text>
-        </View>
+        {!isDelivered ? (
+          <View
+            style={{
+              alignSelf: "flex-start",
+              backgroundColor: c.primary,
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 999,
+              marginBottom: 12,
+            }}
+          >
+            <Text style={{ color: "#FFFFFF", fontFamily: "Inter_700Bold", fontSize: 10, letterSpacing: 0.5 }}>
+              NEXT STOP · {nextStopLabel.toUpperCase()}
+            </Text>
+          </View>
+        ) : null}
         {/* Connector line behind the tiles */}
         <View
           style={{
@@ -633,52 +642,54 @@ export function OrderCard({
         </View>
       </View>
 
-      <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-        {nextStopPhone ? (
-          <Pressable
-            accessibilityLabel={`Call ${nextStopIsPickup ? "restaurant" : "customer"}`}
-            onPress={() => Linking.openURL(`tel:${nextStopPhone}`).catch(() => {})}
-            style={{
-              flex: 1,
-              minHeight: 40,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: c.border,
-              backgroundColor: c.card,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-            }}
-          >
-            <Icon name="phone" size={15} color={c.primary} />
-            <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
-              Call {nextStopIsPickup ? "restaurant" : "customer"}
-            </Text>
-          </Pressable>
-        ) : null}
-        {nextStopTarget ? (
-          <Pressable
-            accessibilityLabel={`Navigate to ${nextStopIsPickup ? "restaurant" : "customer"}`}
-            onPress={openNextStop}
-            style={{
-              flex: 1,
-              minHeight: 40,
-              borderRadius: 12,
-              backgroundColor: c.primary,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-            }}
-          >
-            <Icon name="navigation" size={15} color={c.primaryForeground} />
-            <Text style={{ color: c.primaryForeground, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
-              Navigate
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
+      {!isDelivered ? (
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+          {nextStopPhone ? (
+            <Pressable
+              accessibilityLabel={`Call ${nextStopIsPickup ? "restaurant" : "customer"}`}
+              onPress={() => Linking.openURL(`tel:${nextStopPhone}`).catch(() => {})}
+              style={{
+                flex: 1,
+                minHeight: 40,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: c.border,
+                backgroundColor: c.card,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              <Icon name="phone" size={15} color={c.primary} />
+              <Text style={{ color: c.primary, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
+                Call {nextStopIsPickup ? "restaurant" : "customer"}
+              </Text>
+            </Pressable>
+          ) : null}
+          {nextStopTarget ? (
+            <Pressable
+              accessibilityLabel={`Navigate to ${nextStopIsPickup ? "restaurant" : "customer"}`}
+              onPress={openNextStop}
+              style={{
+                flex: 1,
+                minHeight: 40,
+                borderRadius: 12,
+                backgroundColor: c.primary,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              <Icon name="navigation" size={15} color={c.primaryForeground} />
+              <Text style={{ color: c.primaryForeground, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
+                Navigate
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* Footer: customer bill + items, dashed divider */}
       <View
@@ -743,17 +754,33 @@ export function OrderCard({
             </View>
           )}
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-          <Icon name="shopping-bag" size={13} color={c.mutedForeground} />
-          <Text
-            style={{
-              fontFamily: "Inter_500Medium",
-              fontSize: 12,
-              color: c.mutedForeground,
-            }}
-          >
-            {itemCount} item{itemCount === 1 ? "" : "s"}
-          </Text>
+        <View style={{ alignItems: "flex-end", gap: 5 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <Icon name="shopping-bag" size={13} color={c.mutedForeground} />
+            <Text
+              style={{
+                fontFamily: "Inter_500Medium",
+                fontSize: 12,
+                color: c.mutedForeground,
+              }}
+            >
+              {itemCount} item{itemCount === 1 ? "" : "s"}
+            </Text>
+          </View>
+          {onPress ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+              <Text
+                style={{
+                  fontFamily: "Inter_600SemiBold",
+                  fontSize: 11,
+                  color: c.primary,
+                }}
+              >
+                View details
+              </Text>
+              <Icon name="chevron-right" size={13} color={c.primary} />
+            </View>
+          ) : null}
         </View>
       </View>
 

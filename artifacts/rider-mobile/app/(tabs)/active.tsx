@@ -527,7 +527,6 @@ export default function ActiveScreen() {
       />
 
       <OrderCapacityStatus orders={orders} />
-      <DeliveryStopSequence orders={orders} />
 
       {trackCount > 0 ? (
         <View
@@ -570,6 +569,7 @@ export default function ActiveScreen() {
 
       <FlatList
         data={orders}
+        style={{ flex: 1 }}
         keyExtractor={(o) => o.id}
         contentContainerStyle={{
           paddingHorizontal: 20,
@@ -619,6 +619,7 @@ export default function ActiveScreen() {
             subtitle="Accept an order from the Available tab."
           />
         }
+        ListFooterComponent={<DeliveryStopSequence orders={orders} />}
       />
 
       <OrderDetailModal
