@@ -5,10 +5,10 @@ export const modules: ModuleMap = {
   "./components/mockups/rider-app/CleanEnergy.tsx": () => import("../components/mockups/rider-app/CleanEnergy.tsx"),
   "./components/mockups/rider-app/CleanLight.tsx": () => import("../components/mockups/rider-app/CleanLight.tsx"),
   "./components/mockups/rider-app/DarkPro.tsx": () => import("../components/mockups/rider-app/DarkPro.tsx"),
+  "./components/mockups/rider-order-privacy/AfterAccept.tsx": () => import("../components/mockups/rider-order-privacy/AfterAccept.tsx"),
+  "./components/mockups/rider-order-privacy/BeforeAccept.tsx": () => import("../components/mockups/rider-order-privacy/BeforeAccept.tsx"),
   "./components/mockups/rider-app-copy-MSFREwlx/CleanEnergy.tsx": () => import("../components/mockups/rider-app-copy-MSFREwlx/CleanEnergy.tsx"),
   "./components/mockups/rider-app-copy-MSFREwlx/CleanLight.tsx": () => import("../components/mockups/rider-app-copy-MSFREwlx/CleanLight.tsx"),
   "./components/mockups/rider-app-copy-MSFREwlx/DarkPro.tsx": () => import("../components/mockups/rider-app-copy-MSFREwlx/DarkPro.tsx"),
-  "./components/mockups/rider-app-copy-MSFREwlx/RiderAppCopyMSFREwlx.tsx": () => import("../components/mockups/rider-app-copy-MSFREwlx/RiderAppCopyMSFREwlx.tsx"),
-  "./components/mockups/rider-order-privacy/AfterAccept.tsx": () => import("../components/mockups/rider-order-privacy/AfterAccept.tsx"),
-  "./components/mockups/rider-order-privacy/BeforeAccept.tsx": () => import("../components/mockups/rider-order-privacy/BeforeAccept.tsx")
+  "./components/mockups/rider-app-copy-MSFREwlx/RiderAppCopyMSFREwlx.tsx": () => import("../components/mockups/rider-app-copy-MSFREwlx/RiderAppCopyMSFREwlx.tsx")
 };
