@@ -1,4 +1,4 @@
-export const RIDER_ACCEPTANCE_COOLDOWN_MS = 1_000;
+export const RIDER_ACCEPTANCE_COOLDOWN_MS = 2_000;
 
 export function getRiderAcceptanceCooldownRemainingMs(
   lastAcceptedAt: Date | string | number | null | undefined,
