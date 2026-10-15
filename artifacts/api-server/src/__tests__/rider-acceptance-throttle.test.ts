@@ -19,8 +19,15 @@ test("rapid subsequent acceptance is throttled for the remaining window", () => 
 
 test("acceptance is allowed once the cooldown expires", () => {
   assert.equal(
-    getRiderAcceptanceCooldownRemainingMs(10_000, 12_000),
+    getRiderAcceptanceCooldownRemainingMs(10_000, 11_000),
     0,
+  );
+});
+
+test("acceptance remains throttled until the full one-second cooldown expires", () => {
+  assert.equal(
+    getRiderAcceptanceCooldownRemainingMs(10_000, 10_999),
+    1,
   );
 });
 
