@@ -27,6 +27,7 @@
       "channel": "preview"
     },
     "production": {
+      "environment": "production",
       "channel": "production",
       "env": {
         "EXPO_PUBLIC_DOMAIN": "dastak-rider.replit.app",
@@ -36,6 +37,7 @@
     },
     "production-apk": {
       "extends": "production",
+      "environment": "production",
       "distribution": "internal",
       "android": {
         "buildType": "apk"

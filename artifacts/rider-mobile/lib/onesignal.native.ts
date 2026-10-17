@@ -30,6 +30,18 @@ const APP_ID: string =
 let initialized = false;
 const SUBSCRIPTION_RETRY_DELAYS_MS = [0, 1_000, 3_000, 7_000];
 
+export interface PushRegistrationDiagnostics {
+  appIdConfigured: boolean;
+  initialized: boolean;
+  permissionGranted: boolean | null;
+  subscriptionId: string | null;
+  subscriptionIdPresent: boolean;
+  pushTokenPresent: boolean;
+  optedIn: boolean | null;
+  riderIdentityMatches: boolean | null;
+  errorCode?: "missing_app_id" | "not_initialized" | "sdk_read_failed";
+}
+
 /** Callback registered by the app to persist the subscription ID to the server. */
 let _savePlayerId: ((id: string) => void) | null = null;
 let _expectedRiderId: string | null = null;
@@ -57,7 +69,11 @@ async function saveCurrentSubscriptionId(): Promise<boolean> {
     }
     _savePlayerId(id);
     return true;
-  } catch {
+  } catch (error) {
+    console.warn(
+      "[OneSignal] Could not read the current subscription state",
+      error instanceof Error ? error.name : "UnknownError",
+    );
     return false;
   }
 }
@@ -77,7 +93,13 @@ export interface PushTapEvent {
  * @param onTap  Callback invoked when the rider taps a push notification.
  */
 export function initOneSignal(onTap: (e: PushTapEvent) => void) {
-  if (!APP_ID || initialized) return;
+  if (!APP_ID) {
+    console.warn(
+      "[OneSignal] App ID is missing from this build; push registration is disabled.",
+    );
+    return;
+  }
+  if (initialized) return;
   initialized = true;
 
   OneSignal.initialize(APP_ID);
@@ -130,22 +152,37 @@ export function initOneSignal(onTap: (e: PushTapEvent) => void) {
  * Call this immediately after the rider authenticates.
  */
 export async function oneSignalLogin(riderId: string): Promise<void> {
-  if (!APP_ID || !riderId) return;
+  if (!APP_ID) {
+    console.warn("[OneSignal] Cannot link rider: App ID is missing from this build.");
+    return;
+  }
+  if (!riderId) {
+    console.warn("[OneSignal] Cannot link rider: authenticated rider ID is missing.");
+    return;
+  }
   _expectedRiderId = riderId;
   OneSignal.login(riderId);
 
   try {
     await OneSignal.Notifications.requestPermission(true);
-  } catch {
+  } catch (error) {
     // The OS may already have a permanent permission decision. Continue so an
     // existing valid subscription can still be recovered and persisted.
+    console.warn(
+      "[OneSignal] Permission request failed",
+      error instanceof Error ? error.name : "UnknownError",
+    );
   }
 
   try {
     OneSignal.User.pushSubscription.optIn();
-  } catch {
+  } catch (error) {
     // Subscription creation can lag behind SDK initialization. The observer
     // registered in initOneSignal and the retries below handle that state.
+    console.warn(
+      "[OneSignal] Could not opt in the push subscription",
+      error instanceof Error ? error.name : "UnknownError",
+    );
   }
 
   for (const delayMs of SUBSCRIPTION_RETRY_DELAYS_MS) {
@@ -153,6 +190,87 @@ export async function oneSignalLogin(riderId: string): Promise<void> {
       await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
     }
     if (await saveCurrentSubscriptionId()) return;
+  }
+  console.warn(
+    "[OneSignal] No subscription ID was linked to the authenticated rider after retries.",
+  );
+}
+
+/**
+ * Read device registration state for the Profile diagnostics card.
+ * Never return the push token; the subscription ID is only used transiently
+ * by the caller to compare against the authenticated rider's saved ID.
+ */
+export async function getPushRegistrationDiagnostics(
+  riderId: string,
+): Promise<PushRegistrationDiagnostics> {
+  if (!APP_ID) {
+    return {
+      appIdConfigured: false,
+      initialized: false,
+      permissionGranted: null,
+      subscriptionId: null,
+      subscriptionIdPresent: false,
+      pushTokenPresent: false,
+      optedIn: null,
+      riderIdentityMatches: null,
+      errorCode: "missing_app_id",
+    };
+  }
+  if (!initialized) {
+    return {
+      appIdConfigured: true,
+      initialized: false,
+      permissionGranted: null,
+      subscriptionId: null,
+      subscriptionIdPresent: false,
+      pushTokenPresent: false,
+      optedIn: null,
+      riderIdentityMatches: null,
+      errorCode: "not_initialized",
+    };
+  }
+
+  try {
+    const [
+      permissionGranted,
+      subscriptionId,
+      pushToken,
+      optedIn,
+      externalId,
+    ] = await Promise.all([
+      OneSignal.Notifications.getPermissionAsync(),
+      OneSignal.User.pushSubscription.getIdAsync(),
+      OneSignal.User.pushSubscription.getTokenAsync(),
+      OneSignal.User.pushSubscription.getOptedInAsync(),
+      OneSignal.User.getExternalId(),
+    ]);
+    return {
+      appIdConfigured: true,
+      initialized: true,
+      permissionGranted,
+      subscriptionId,
+      subscriptionIdPresent: Boolean(subscriptionId),
+      pushTokenPresent: Boolean(pushToken),
+      optedIn,
+      riderIdentityMatches: Boolean(riderId && externalId === riderId),
+    };
+  } catch (error) {
+    console.warn(
+      "[OneSignal] Registration diagnostics could not read SDK state",
+      error instanceof Error ? error.name : "UnknownError",
+    );
+    return {
+      appIdConfigured: true,
+      initialized: true,
+      permissionGranted: null,
+      subscriptionId: null,
+      subscriptionIdPresent: false,
+      pushTokenPresent: false,
+      optedIn: null,
+      riderIdentityMatches: null,
+      errorCode: "sdk_read_failed",
+    };
   }
 }
 

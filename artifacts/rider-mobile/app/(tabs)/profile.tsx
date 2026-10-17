@@ -24,6 +24,7 @@ import {
 } from "react-native";
 
 import { Button, Loading, ScreenHeader } from "@/components/ui";
+import { PushRegistrationDiagnostics } from "@/components/PushRegistrationDiagnostics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
 import { money } from "@/lib/format";
@@ -358,6 +359,10 @@ export default function ProfileScreen() {
             </Text>
           </View>
         </View>
+
+        {Platform.OS !== "web" && (
+          <PushRegistrationDiagnostics riderId={rider.id} />
+        )}
 
         <View
           style={{

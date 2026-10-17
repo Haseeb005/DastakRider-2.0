@@ -88,13 +88,17 @@ const queryClient = new QueryClient({
 const PLAYER_ID_SAVE_RETRY_DELAYS_MS = [0, 1_000, 3_000, 7_000];
 
 async function savePlayerIdToServer(playerId: string): Promise<void> {
+  let failureReason = "request did not complete";
   for (const delayMs of PLAYER_ID_SAVE_RETRY_DELAYS_MS) {
     if (delayMs > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
     }
 
     const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
-    if (!storedToken) return;
+    if (!storedToken) {
+      failureReason = "rider session is unavailable";
+      break;
+    }
 
     try {
       const response = await fetch(`${API_BASE}/api/rider/player-id`, {
@@ -106,10 +110,13 @@ async function savePlayerIdToServer(playerId: string): Promise<void> {
         body: JSON.stringify({ playerId }),
       });
       if (response.ok) return;
+      failureReason = `server returned HTTP ${response.status}`;
     } catch {
       // Retry transient connectivity failures while the app finishes login.
+      failureReason = "network request failed";
     }
   }
+  console.warn(`[OneSignal] Server did not save the device subscription: ${failureReason}.`);
 }
 
 /**

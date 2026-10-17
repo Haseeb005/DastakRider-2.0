@@ -3266,6 +3266,36 @@ router.post("/rider/player-id", async (req, res) => {
   }
 });
 
+// Check whether this authenticated rider's saved OneSignal subscription matches
+// the subscription currently reported by their device. Never return either ID.
+router.post("/rider/player-id/verify", async (req, res) => {
+  const riderId = requireRiderId(req, res);
+  if (!riderId) return;
+  const { playerId } = req.body as { playerId?: string | null };
+  if (playerId !== undefined && playerId !== null && typeof playerId !== "string") {
+    return res.status(400).json({ message: "playerId must be a string" });
+  }
+  try {
+    const rider = await usersCol().findOne(
+      { _id: new ObjectId(riderId), type: "rider" } as any,
+      { projection: { playerId: 1 } },
+    );
+    if (!rider) return res.status(404).json({ message: "Rider not found" });
+    const savedPlayerId =
+      typeof rider.playerId === "string" ? rider.playerId.trim() : "";
+    const currentPlayerId =
+      typeof playerId === "string" ? playerId.trim() : "";
+    return res.json({
+      savedSubscriptionPresent: Boolean(savedPlayerId),
+      matchesCurrentSubscription:
+        Boolean(currentPlayerId) && savedPlayerId === currentPlayerId,
+    });
+  } catch (err) {
+    console.error("POST /api/rider/player-id/verify error", err);
+    return res.status(500).json({ message: "Could not check notification registration" });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Version check
 // ---------------------------------------------------------------------------
