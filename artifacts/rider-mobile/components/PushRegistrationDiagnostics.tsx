@@ -5,15 +5,10 @@ import { useColors } from "@/hooks/useColors";
 import { API_BASE_URL } from "@/lib/apiBase";
 import { useAuth } from "@/lib/auth";
 import { getPushRegistrationDiagnostics } from "@/lib/onesignal";
-
-type DeviceStatus = Awaited<ReturnType<typeof getPushRegistrationDiagnostics>>;
-
-interface CheckResult {
-  device: Omit<DeviceStatus, "subscriptionId">;
-  savedSubscriptionPresent: boolean | null;
-  matchesCurrentSubscription: boolean | null;
-  serverCheckFailed: boolean;
-}
+import {
+  getPushRegistrationViewState,
+  type PushRegistrationCheckResult,
+} from "@/lib/pushRegistrationViewState.mjs";
 
 function StatusLine({
   label,
@@ -42,7 +37,7 @@ export function PushRegistrationDiagnostics({ riderId }: { riderId: string }) {
   const c = useColors();
   const { token } = useAuth();
   const [checking, setChecking] = useState(false);
-  const [result, setResult] = useState<CheckResult | null>(null);
+  const [result, setResult] = useState<PushRegistrationCheckResult | null>(null);
 
   const checkRegistration = async () => {
     setChecking(true);
@@ -89,10 +84,7 @@ export function PushRegistrationDiagnostics({ riderId }: { riderId: string }) {
   };
 
   const permission = result?.device.permissionGranted ?? null;
-  const devicePushReady =
-    result?.device.subscriptionIdPresent === true &&
-    result.device.pushTokenPresent &&
-    result.device.optedIn === true;
+  const viewState = result ? getPushRegistrationViewState(result) : null;
 
   return (
     <View
@@ -116,58 +108,30 @@ export function PushRegistrationDiagnostics({ riderId }: { riderId: string }) {
         <View style={{ marginTop: 14, gap: 10 }}>
           <StatusLine
             label="OneSignal app setup"
-            value={result.device.appIdConfigured ? "Configured" : "Missing from this build"}
-            good={result.device.appIdConfigured}
+            value={viewState!.appSetup.value}
+            good={viewState!.appSetup.good}
           />
           <StatusLine
             label="Notification permission"
-            value={permission === null ? "Could not check" : permission ? "Allowed" : "Blocked"}
-            good={permission}
+            value={viewState!.permission.value}
+            good={viewState!.permission.good}
           />
           <StatusLine
             label="OneSignal device registration"
-            value={
-              result.device.errorCode === "missing_app_id"
-                ? "App ID missing"
-                : result.device.errorCode === "not_initialized"
-                  ? "SDK not initialized"
-                  : result.device.errorCode === "sdk_read_failed"
-                    ? "Could not read"
-                    : devicePushReady
-                      ? "Active"
-                      : "Not active"
-            }
-            good={result.device.errorCode ? false : devicePushReady}
+            value={viewState!.registration.value}
+            good={viewState!.registration.good}
           />
           <StatusLine
             label="Linked to this rider"
-            value={
-              result.device.riderIdentityMatches === null
-                ? "Could not check"
-                : result.device.riderIdentityMatches
-                  ? "Yes"
-                  : "No"
-            }
-            good={result.device.riderIdentityMatches}
+            value={viewState!.riderIdentity.value}
+            good={viewState!.riderIdentity.good}
           />
           <StatusLine
             label="Server has this phone’s subscription"
-            value={
-              result.serverCheckFailed
-                ? "Could not check"
-                : result.matchesCurrentSubscription
-                  ? "Yes"
-                  : result.savedSubscriptionPresent
-                    ? "Saved ID does not match"
-                    : "No subscription saved"
-            }
-            good={
-              result.serverCheckFailed
-                ? null
-                : result.matchesCurrentSubscription
-            }
+            value={viewState!.serverSubscription.value}
+            good={viewState!.serverSubscription.good}
           />
-          {result.device.errorCode === "missing_app_id" && (
+          {viewState!.showMissingAppIdHint && (
             <Text style={{ fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 18, color: c.warning }}>
               This installed build needs the OneSignal app ID in its production build environment.
             </Text>
