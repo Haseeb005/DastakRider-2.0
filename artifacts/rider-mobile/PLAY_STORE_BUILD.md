@@ -110,6 +110,6 @@ using the `submit.production` config from `eas.json`.
 | Field           | Value                          |
 |-----------------|--------------------------------|
 | Package name    | `com.dastakriders`             |
-| Current version | `4.6.8` (versionCode `46`)    |
+| Current version | `4.6.9` (versionCode `47`)    |
 | EAS project ID  | `fc7bfa99-d113-4c75-878d-7b1ddb1c630c` |
 | Expo owner      | `haseeb0042-2`                 |
