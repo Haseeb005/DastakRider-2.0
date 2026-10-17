@@ -32,3 +32,9 @@ If foreground alerts play Dastak but background alerts use the default tone for 
 **Why:** Foreground order alerts play the bundled file directly, while Android renders background pushes from its notification category; the rider build enabled resource shrinking without a keep rule for the dynamically named sound.
 
 **How to apply:** Configure a new shared OneSignal Android category with Custom `dastak`, update the server's channel ID, and preserve `res/raw/dastak.wav` in the next Android release build.
+
+Never combine `include_subscription_ids` and `include_aliases` in one OneSignal message.
+
+**Why:** OneSignal's official push API documentation makes those targeting methods mutually exclusive. API acceptance of a mixed request is not evidence that both recipient groups were targeted.
+
+**How to apply:** Use one targeting method per request, or split disjoint recipient groups into separate messages. Check delivery reports before claiming a broadcast reached its intended audience.
