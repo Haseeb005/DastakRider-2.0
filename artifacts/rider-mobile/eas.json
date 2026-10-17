@@ -10,7 +10,9 @@
       "env": {
         "EXPO_PUBLIC_DOMAIN": "dastak-rider.replit.app",
         "EXPO_PUBLIC_API_URL": "https://dastak-rider.replit.app",
-        "EXPO_PUBLIC_SENTRY_DSN": "https://cced82b3556ae52e8b9f0f0088c3be21@o4511823864332288.ingest.us.sentry.io/4511823868002304"
+        "EXPO_PUBLIC_SENTRY_DSN": "https://cced82b3556ae52e8b9f0f0088c3be21@o4511823864332288.ingest.us.sentry.io/4511823868002304",
+        "EXPO_PUBLIC_ONESIGNAL_APP_ID_RIDER":"db856bdb-f114-4dd4-b793-c306c8f4e0a1"
+      
       },
       "channel": "development"
     },
@@ -22,7 +24,9 @@
       "env": {
         "EXPO_PUBLIC_DOMAIN": "dastak-rider.replit.app",
         "EXPO_PUBLIC_API_URL": "https://dastak-rider.replit.app",
-        "EXPO_PUBLIC_SENTRY_DSN": "https://cced82b3556ae52e8b9f0f0088c3be21@o4511823864332288.ingest.us.sentry.io/4511823868002304"
+        "EXPO_PUBLIC_SENTRY_DSN": "https://cced82b3556ae52e8b9f0f0088c3be21@o4511823864332288.ingest.us.sentry.io/4511823868002304",
+        "EXPO_PUBLIC_ONESIGNAL_APP_ID_RIDER":"db856bdb-f114-4dd4-b793-c306c8f4e0a1"
+      
       },
       "channel": "preview"
     },
@@ -32,7 +36,9 @@
       "env": {
         "EXPO_PUBLIC_DOMAIN": "dastak-rider.replit.app",
         "EXPO_PUBLIC_API_URL": "https://dastak-rider.replit.app",
-        "EXPO_PUBLIC_SENTRY_DSN": "https://cced82b3556ae52e8b9f0f0088c3be21@o4511823864332288.ingest.us.sentry.io/4511823868002304"
+        "EXPO_PUBLIC_SENTRY_DSN": "https://cced82b3556ae52e8b9f0f0088c3be21@o4511823864332288.ingest.us.sentry.io/4511823868002304",
+        "EXPO_PUBLIC_ONESIGNAL_APP_ID_RIDER":"db856bdb-f114-4dd4-b793-c306c8f4e0a1"
+      
       }
     },
     "production-apk": {
