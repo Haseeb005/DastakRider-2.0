@@ -48,6 +48,10 @@ export async function connectMongo(): Promise<void> {
     // Multiple API instances may race to initialize the same singleton row.
     if (error?.code !== 11000) throw error;
   }
+  await db.collection("riderOrderPushDeliveries").createIndex(
+    { expiresAt: 1 },
+    { expireAfterSeconds: 0, name: "rider_order_push_expiry" },
+  );
   logger.info("Connected to MongoDB");
 }
 
@@ -67,6 +71,10 @@ export function ordersCol() {
 
 export function riderOrderAcceptanceMutexCol() {
   return db.collection("riderOrderAcceptanceMutex") as any;
+}
+
+export function riderOrderPushDeliveriesCol() {
+  return db.collection("riderOrderPushDeliveries") as any;
 }
 
 // Reviews are stored with _id = rider's user ID (string, not ObjectId).

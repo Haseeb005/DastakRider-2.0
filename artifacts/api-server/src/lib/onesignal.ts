@@ -72,6 +72,12 @@ async function notifyRiders(payload: RiderNotificationPayload): Promise<boolean>
     return false;
   }
   if (subscriptionIds.length === 0 && riderIds.length === 0) return false;
+  if (subscriptionIds.length > 0 && riderIds.length > 0) {
+    logger.error(
+      "notifyRiders: refusing mixed subscription and external-ID targets",
+    );
+    return false;
+  }
 
   const notification = new Notification();
   notification.app_id = APP_ID;

@@ -13,8 +13,17 @@
 import { ObjectId } from "mongodb";
 
 import { logger } from "./logger";
-import { ordersCol, subscribeToLiveChanges, usersCol } from "./mongo";
+import {
+  ordersCol,
+  riderOrderPushDeliveriesCol,
+  subscribeToLiveChanges,
+  usersCol,
+} from "./mongo";
 import { sendNewOrderPush } from "./onesignal";
+import {
+  claimRiderOrderPushes,
+  finishRiderOrderPushClaims,
+} from "./riderOrderPushDedupe";
 import {
   ensureRiderOfferStartedAt,
   getRiderLiveOrderCounts,
@@ -107,36 +116,73 @@ async function handleOrderChange(rawId: string): Promise<void> {
     if (recipients.length === 0) {
       logger.info({ orderId, city, zone }, "orderPushWatcher: no online riders to notify");
     } else {
-      const playerIds = recipients
-        .filter((r: any) => r.playerId)
-        .map((r: any) => String(r.playerId));
-      const riderIds = recipients
-        .filter((r: any) => !r.playerId)
-        .map((r: any) => String(r._id));
-      const sent = await sendNewOrderPush({
-        playerIds,
-        riderIds,
+      const claims = await claimRiderOrderPushes(
+        riderOrderPushDeliveriesCol(),
         orderId,
-        restaurantName,
-        martAddress,
-      });
-      if (!sent) return;
+        offerStartedAt,
+        recipients,
+      );
+      if (claims.length === 0) return;
 
-      if (priorityPhase) {
-        priorityPushedOrders.add(rawId);
+      // OneSignal does not allow subscription IDs and external IDs in the same
+      // request. Keep the two disjoint target groups in separate messages.
+      const groups = [
+        claims.filter((claim) => claim.playerId),
+        claims.filter((claim) => !claim.playerId),
+      ].filter((group) => group.length > 0);
+      const results = await Promise.all(
+        groups.map(async (group) => {
+          let accepted = false;
+          try {
+            accepted = await sendNewOrderPush({
+              playerIds: group.flatMap((claim) =>
+                claim.playerId ? [claim.playerId] : [],
+              ),
+              riderIds: group.flatMap((claim) =>
+                claim.playerId ? [] : [claim.riderId],
+              ),
+              orderId,
+              restaurantName,
+              martAddress,
+            });
+          } finally {
+            await finishRiderOrderPushClaims(
+              riderOrderPushDeliveriesCol(),
+              group,
+              accepted,
+            );
+          }
+          return { accepted, riderIds: group.map((claim) => claim.riderId) };
+        }),
+      );
+      const acceptedRiderIds = results
+        .filter((result) => result.accepted)
+        .flatMap((result) => result.riderIds);
+      const allAccepted = results.every((result) => result.accepted);
+
+      if (priorityPhase && acceptedRiderIds.length > 0) {
         priorityRecipients.set(
           rawId,
-          new Set(recipients.map((r: any) => String(r._id))),
+          new Set([
+            ...(priorityRecipients.get(rawId) ?? []),
+            ...acceptedRiderIds,
+          ]),
         );
-      } else {
-        broadPushedOrders.add(rawId);
+      }
+      if (allAccepted) {
+        if (priorityPhase) {
+          priorityPushedOrders.add(rawId);
+        } else {
+          broadPushedOrders.add(rawId);
+        }
       }
       logger.info(
         {
           orderId,
           phase: priorityPhase ? "idle-priority" : "broad",
-          withPlayerId: playerIds.length,
-          withExternalId: riderIds.length,
+          withPlayerId: claims.filter((claim) => claim.playerId).length,
+          withExternalId: claims.filter((claim) => !claim.playerId).length,
+          accepted: acceptedRiderIds.length,
           city,
           zone,
         },
