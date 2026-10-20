@@ -5,6 +5,9 @@ export function fastDeliveryDurationMinutes(
   acceptedTime: unknown,
   deliveredAt: Date,
 ): number | null {
+  if (acceptedTime === null || acceptedTime === undefined || acceptedTime === "") {
+    return null;
+  }
   const acceptedAt = new Date(acceptedTime as string | number | Date);
   const acceptedAtMs = acceptedAt.getTime();
   const deliveredAtMs = deliveredAt.getTime();

@@ -1743,7 +1743,7 @@ describe("Fast delivery bonuses", () => {
     });
   });
 
-  it("completes delivery but skips the bonus when the rider is more than 20 meters away", async () => {
+  it("awards the bonus for a fast delivery without a GPS reading", async () => {
     const riderId = testRiderOid.toHexString();
     const farOrderId = fastDeliveryOrderOids[3];
     const now = new Date();
@@ -1767,8 +1767,6 @@ describe("Fast delivery bonuses", () => {
       createdAt: now,
       updatedAt: now,
     });
-    await pushRiderLocation(farOrderId, 31.5214, 74.3587);
-
     const delivered = await fetch(`${serverUrl}/api/rider/orders/${farOrderId}/status`, {
       method: "PUT",
       headers: {
@@ -1781,17 +1779,18 @@ describe("Fast delivery bonuses", () => {
     assert.equal(
       (await dbCol.orders().findOne({ _id: farOrderId }))?.status,
       "Delivered",
-      "delivery must still complete when the rider is outside the bonus geofence",
+      "delivery must complete regardless of the rider's distance",
     );
-    assert.equal(
-      await dbCol.riderWalletEntries().countDocuments({
+    const bonus = await dbCol.riderWalletEntries().findOne({
         entryKey: `fast_delivery:${riderId}:${farOrderId.toHexString()}`,
-      }),
-      0,
-      "a blocked delivery must not receive a fast-delivery bonus",
-    );
+      });
+    assert.equal(bonus?.type, "fast_delivery_bonus");
+    assert.equal(bonus?.amount, 50);
 
     await dbCol.orders().deleteOne({ _id: farOrderId });
+    await dbCol.riderWalletEntries().deleteOne({
+      entryKey: `fast_delivery:${riderId}:${farOrderId.toHexString()}`,
+    });
   });
 
   it("does not backfill a bonus for an order that was already delivered", async () => {

@@ -2423,19 +2423,6 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
             pickUpTime: { $exists: true },
             timeWhenDelivered: { $exists: false },
           };
-    let fastDeliveryGeofenceMessage: string | null = null;
-    if (status === DELIVERED_STATUS) {
-      const pendingDelivery = await ordersCol().findOne(filter);
-      if (!pendingDelivery) {
-        return res.status(409).json({
-          message: "Invalid status transition, or order not assigned to you.",
-        });
-      }
-      fastDeliveryGeofenceMessage = deliveryGeofenceMessage(
-        pendingDelivery,
-        riderId,
-      );
-    }
     // Additive timestamps that mirror the original app (no shared counter writes).
     const extra: Record<string, any> =
       status === "Rider Picked Up"
@@ -2527,19 +2514,12 @@ router.put("/rider/orders/:orderId/status", async (req: any, res: any) => {
           { $set: { status: "idle" } }
         );
       }
-      if (!fastDeliveryGeofenceMessage) {
-        try {
-          await awardFastDeliveryBonus(updated, riderId, now);
-        } catch (bonusError) {
-          // Delivery is already committed. Never report it as failed because its
-          // additive wallet award is temporarily unavailable.
-          req.log.error(bonusError, "Could not persist fast-delivery bonus");
-        }
-      } else {
-        req.log.info(
-          { orderId: String(orderObjectId), reason: fastDeliveryGeofenceMessage },
-          "Fast-delivery bonus skipped because rider was not within the delivery geofence",
-        );
+      try {
+        await awardFastDeliveryBonus(updated, riderId, now);
+      } catch (bonusError) {
+        // Delivery is already committed. Never report it as failed because its
+        // additive wallet award is temporarily unavailable.
+        req.log.error(bonusError, "Could not persist fast-delivery bonus");
       }
     }
     res.json(normalizeOrder(updated, tnf));
@@ -2792,52 +2772,6 @@ const riderLocations = new Map<
   { lat: number; lng: number; riderId: string; ts: number }
 >();
 const LOCATION_TTL_MS = 90_000;
-
-function distanceInMeters(
-  firstLat: number,
-  firstLng: number,
-  secondLat: number,
-  secondLng: number,
-): number {
-  const earthRadiusMeters = 6_371_000;
-  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
-  const latitudeDelta = toRadians(secondLat - firstLat);
-  const longitudeDelta = toRadians(secondLng - firstLng);
-  const haversine =
-    Math.sin(latitudeDelta / 2) ** 2 +
-    Math.cos(toRadians(firstLat)) *
-      Math.cos(toRadians(secondLat)) *
-      Math.sin(longitudeDelta / 2) ** 2;
-  return 2 * earthRadiusMeters * Math.asin(Math.sqrt(haversine));
-}
-
-function deliveryGeofenceMessage(order: any, riderId: string): string | null {
-  const customerLat = toNumOrNull(order.latitude);
-  const customerLng = toNumOrNull(order.longitude);
-  if (customerLat === null || customerLng === null) {
-    return "Customer delivery coordinates are unavailable. Delivery cannot be confirmed.";
-  }
-
-  const location = riderLocations.get(String(order._id));
-  if (
-    !location ||
-    location.riderId !== riderId ||
-    Date.now() - location.ts > LOCATION_TTL_MS
-  ) {
-    return "A recent GPS location is required before confirming delivery.";
-  }
-
-  const distance = distanceInMeters(
-    location.lat,
-    location.lng,
-    customerLat,
-    customerLng,
-  );
-  if (distance > DELIVERY_GEOFENCE_RADIUS_METERS) {
-    return `Move within ${DELIVERY_GEOFENCE_RADIUS_METERS} meters of the customer before confirming delivery.`;
-  }
-  return null;
-}
 
 // Rider pushes GPS coordinates for an active order they own and are delivering.
 router.post("/rider/location", async (req: any, res: any) => {
