@@ -24,6 +24,7 @@ import {
   isOrderLimitExemptRider,
   riderCanSeeAvailableOrder,
 } from "../lib/riderOrderDistribution";
+import { fastDeliveryDurationMinutes } from "../lib/fastDeliveryEligibility";
 import {
   getRiderAcceptanceCooldownRemainingMs,
 } from "../lib/riderAcceptanceThrottle";
@@ -285,9 +286,7 @@ const RETIRED_DAILY_MILESTONES: ChallengeMilestone[] = [
 // shared-system writes around a daily/weekly boundary without repeatedly
 // recounting every unsuccessful historical challenge on each Wallet refresh.
 const CHALLENGE_SETTLEMENT_GRACE_MS = PKT_DAY_MS;
-const FAST_DELIVERY_WINDOW_MS = 20 * 60 * 1000;
 const FAST_DELIVERY_BONUS = 50;
-const DELIVERY_GEOFENCE_RADIUS_METERS = 20;
 
 let walletIndexesPromise: Promise<void> | null = null;
 
@@ -1525,10 +1524,11 @@ async function awardFastDeliveryBonus(
   riderId: string,
   deliveredAt: Date,
 ): Promise<boolean> {
-  const acceptedAt = new Date(order.acceptedTime);
-  if (Number.isNaN(acceptedAt.getTime()) || Number.isNaN(deliveredAt.getTime())) return false;
-  const durationMs = deliveredAt.getTime() - acceptedAt.getTime();
-  if (durationMs < 0 || durationMs > FAST_DELIVERY_WINDOW_MS) return false;
+  const durationMinutes = fastDeliveryDurationMinutes(
+    order.acceptedTime,
+    deliveredAt,
+  );
+  if (durationMinutes === null) return false;
 
   await ensureRiderWalletIndexes();
   const orderId = String(order._id);
@@ -1549,7 +1549,7 @@ async function awardFastDeliveryBonus(
         amount: FAST_DELIVERY_BONUS,
         title: "Fast delivery bonus",
         createdAt: deliveredAt,
-        deliveryDurationMinutes: Math.ceil(durationMs / 60_000),
+        deliveryDurationMinutes: Math.ceil(durationMinutes),
       },
     },
     { upsert: true },
