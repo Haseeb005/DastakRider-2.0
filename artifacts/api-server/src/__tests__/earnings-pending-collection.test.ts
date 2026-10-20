@@ -47,6 +47,8 @@ const fastDeliveryOrderOids = [
   new ObjectId(),
   new ObjectId(),
   new ObjectId(),
+  new ObjectId(),
+  new ObjectId(),
 ];
 
 // ── lifecycle ─────────────────────────────────────────────────────────────────
@@ -1791,6 +1793,150 @@ describe("Fast delivery bonuses", () => {
     await dbCol.riderWalletEntries().deleteOne({
       entryKey: `fast_delivery:${riderId}:${farOrderId.toHexString()}`,
     });
+  });
+
+  it("retries an ambiguous wallet write without duplicating the credit", async () => {
+    const riderId = testRiderOid.toHexString();
+    const orderId = fastDeliveryOrderOids[4];
+    const now = new Date();
+    await dbCol.orders().insertOne({
+      _id: orderId,
+      riderId,
+      orderNum: "FAST-DELIVERY-RETRY-TEST",
+      status: "Rider Picked Up",
+      billingMode: "prepaid",
+      paymentType: "Online",
+      orderTotal: 500,
+      products: [],
+      riderFare: 100,
+      city: "TestCity",
+      zone: "TestZone",
+      acceptedTime: new Date(now.getTime() - 10 * 60_000),
+      riderArrived: true,
+      pickUpTime: "12:00:00",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const key = `fast_delivery:${riderId}:${orderId.toHexString()}`;
+    const prototype = Object.getPrototypeOf(dbCol.riderWalletEntries()) as {
+      updateOne: (...args: any[]) => Promise<unknown>;
+    };
+    const originalUpdateOne = prototype.updateOne;
+    let matchingWrites = 0;
+    prototype.updateOne = async function (this: any, filter: any, ...args: any[]) {
+      const result = await originalUpdateOne.call(this, filter, ...args);
+      if (
+        this.collectionName === "riderWalletEntries" &&
+        filter?.entryKey === key &&
+        ++matchingWrites === 1
+      ) {
+        // Model a connection failure after MongoDB committed the insert.
+        throw new Error("temporary connection failure after wallet commit");
+      }
+      return result;
+    };
+
+    try {
+      const delivered = await fetch(
+        `${serverUrl}/api/rider/orders/${orderId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${bearerToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: "Delivered" }),
+        },
+      );
+      assert.equal(delivered.status, 200, "delivery remains successful during wallet retry");
+    } finally {
+      prototype.updateOne = originalUpdateOne;
+    }
+
+    assert.equal(matchingWrites, 2, "the failed wallet write is retried");
+    assert.equal(
+      await dbCol.riderWalletEntries().countDocuments({ entryKey: key }),
+      1,
+      "retrying an ambiguous commit must not create a duplicate credit",
+    );
+    assert.equal(
+      (await dbCol.orders().findOne({ _id: orderId }))?.status,
+      "Delivered",
+    );
+    await dbCol.orders().deleteOne({ _id: orderId });
+    await dbCol.riderWalletEntries().deleteOne({ entryKey: key });
+  });
+
+  it("keeps delivery successful when wallet persistence remains unavailable", async () => {
+    const riderId = testRiderOid.toHexString();
+    const orderId = fastDeliveryOrderOids[5];
+    const now = new Date();
+    await dbCol.orders().insertOne({
+      _id: orderId,
+      riderId,
+      orderNum: "FAST-DELIVERY-WALLET-OUTAGE-TEST",
+      status: "Rider Picked Up",
+      billingMode: "prepaid",
+      paymentType: "Online",
+      orderTotal: 500,
+      products: [],
+      riderFare: 100,
+      city: "TestCity",
+      zone: "TestZone",
+      acceptedTime: new Date(now.getTime() - 10 * 60_000),
+      riderArrived: true,
+      pickUpTime: "12:00:00",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const key = `fast_delivery:${riderId}:${orderId.toHexString()}`;
+    const prototype = Object.getPrototypeOf(dbCol.riderWalletEntries()) as {
+      updateOne: (...args: any[]) => Promise<unknown>;
+    };
+    const originalUpdateOne = prototype.updateOne;
+    prototype.updateOne = async function (this: any, filter: any, ...args: any[]) {
+      if (
+        this.collectionName === "riderWalletEntries" &&
+        filter?.entryKey === key
+      ) {
+        throw new Error("wallet unavailable");
+      }
+      return originalUpdateOne.call(this, filter, ...args);
+    };
+
+    try {
+      const delivered = await fetch(
+        `${serverUrl}/api/rider/orders/${orderId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${bearerToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: "Delivered" }),
+        },
+      );
+      assert.equal(
+        delivered.status,
+        200,
+        "temporary wallet unavailability must not fail a committed delivery",
+      );
+    } finally {
+      prototype.updateOne = originalUpdateOne;
+    }
+
+    assert.equal(
+      (await dbCol.orders().findOne({ _id: orderId }))?.status,
+      "Delivered",
+    );
+    assert.equal(
+      await dbCol.riderWalletEntries().countDocuments({ entryKey: key }),
+      0,
+      "the outage must not create a partial wallet entry",
+    );
+    await dbCol.orders().deleteOne({ _id: orderId });
   });
 
   it("does not backfill a bonus for an order that was already delivered", async () => {

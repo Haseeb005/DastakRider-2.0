@@ -24,7 +24,10 @@ import {
   isOrderLimitExemptRider,
   riderCanSeeAvailableOrder,
 } from "../lib/riderOrderDistribution";
-import { fastDeliveryDurationMinutes } from "../lib/fastDeliveryEligibility";
+import {
+  fastDeliveryDurationMinutes,
+  retryFastDeliveryBonusWrite,
+} from "../lib/fastDeliveryEligibility";
 import {
   getRiderAcceptanceCooldownRemainingMs,
 } from "../lib/riderAcceptanceThrottle";
@@ -322,7 +325,12 @@ export function ensureRiderWalletIndexes(): Promise<void> {
         riderWalletEntriesCol().createIndex({ entryKey: 1 }, { unique: true, sparse: true }),
         riderWalletEntriesCol().createIndex({ riderId: 1, weekKey: 1, createdAt: -1 }),
       ]);
-    })();
+    })().catch((error) => {
+      // A transient Mongo outage must not permanently poison future bonus
+      // attempts with a cached rejected index-initialization promise.
+      walletIndexesPromise = null;
+      throw error;
+    });
   }
   return walletIndexesPromise;
 }
@@ -1530,30 +1538,32 @@ async function awardFastDeliveryBonus(
   );
   if (durationMinutes === null) return false;
 
-  await ensureRiderWalletIndexes();
   const orderId = String(order._id);
   const entryKey = `fast_delivery:${riderId}:${orderId}`;
   const weekKey = pktDateKey(pktPeriodStartAt("week", deliveredAt));
-  await riderWalletEntriesCol().updateOne(
-    { entryKey },
-    {
-      $setOnInsert: {
-        entryKey,
-        // challengeKey already has a legacy unique index. Reuse the same
-        // per-order key here so fast bonuses never collide on a missing value.
-        challengeKey: entryKey,
-        riderId,
-        orderId,
-        weekKey,
-        type: "fast_delivery_bonus",
-        amount: FAST_DELIVERY_BONUS,
-        title: "Fast delivery bonus",
-        createdAt: deliveredAt,
-        deliveryDurationMinutes: Math.ceil(durationMinutes),
+  await retryFastDeliveryBonusWrite(async () => {
+    await ensureRiderWalletIndexes();
+    return riderWalletEntriesCol().updateOne(
+      { entryKey },
+      {
+        $setOnInsert: {
+          entryKey,
+          // challengeKey already has a legacy unique index. Reuse the same
+          // per-order key here so fast bonuses never collide on a missing value.
+          challengeKey: entryKey,
+          riderId,
+          orderId,
+          weekKey,
+          type: "fast_delivery_bonus",
+          amount: FAST_DELIVERY_BONUS,
+          title: "Fast delivery bonus",
+          createdAt: deliveredAt,
+          deliveryDurationMinutes: Math.ceil(durationMinutes),
+        },
       },
-    },
-    { upsert: true },
-  );
+      { upsert: true },
+    );
+  });
   return true;
 }
 
