@@ -481,6 +481,41 @@ export function OrderCard({
           fg={cod ? c.purple : c.info}
         />
       </View>
+      {order.status === "Rider Accepted" &&
+      order.payCashToRestaurant &&
+      order.restaurantCashAmount != null ? (
+        <View
+          style={{
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: c.warning,
+            backgroundColor: c.warningBg,
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            marginBottom: 16,
+          }}
+        >
+          <Text
+            style={{
+              color: c.warning,
+              fontSize: 13,
+              fontFamily: "Inter_700Bold",
+            }}
+          >
+            Pay Cash to Restaurant
+          </Text>
+          <Text
+            style={{
+              color: c.warning,
+              fontSize: 17,
+              fontFamily: "Inter_700Bold",
+              marginTop: 3,
+            }}
+          >
+            Amount to give: {money(order.restaurantCashAmount)}
+          </Text>
+        </View>
+      ) : null}
 
       {/* Route timeline */}
       <View style={{ position: "relative" }}>

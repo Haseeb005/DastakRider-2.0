@@ -49,6 +49,13 @@ export interface RiderOrder {
      * @nullable
      */
   billingMode?: string | null;
+  /** Whether the rider must pay cash to the restaurant while this prepaid restaurant order is awaiting pickup. */
+  payCashToRestaurant: boolean;
+  /**
+     * Restaurant cash payable, calculated as positive product actualPrice times count plus VAT.
+     * @nullable
+     */
+  restaurantCashAmount: number | null;
   /** The amount the rider physically collects from the customer. For prepaid+COD orders this is orderTotal minus the sum of (actualPrice × quantity) per product. For non-prepaid COD it equals total. For non-COD it is 0. */
   collectAmount?: number;
   /** @nullable */

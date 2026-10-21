@@ -1166,6 +1166,17 @@ function OrderCard({
             </div>
           </div>
 
+          {order.status === "Rider Accepted" &&
+            order.payCashToRestaurant &&
+            order.restaurantCashAmount != null && (
+              <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-center text-sm font-bold text-amber-900">
+                <div>Pay Cash to Restaurant</div>
+                <div className="mt-1 text-base">
+                  Amount to give: {formatMoney(order.restaurantCashAmount)}
+                </div>
+              </div>
+            )}
+
           {order.items && order.items.length > 0 && (
             <div className="bg-gray-50 rounded-lg p-3 mb-3">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">

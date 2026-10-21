@@ -3000,6 +3000,10 @@ function normalizeOrder(doc: any, riderFareOverride?: number) {
     martPhone: doc.martPhone || null,
     paymentType: doc.paymentType || doc.paymentMethod || null,
     billingMode: doc.billingMode || null,
+    payCashToRestaurant:
+      String(doc.billingMode || "").trim().toLowerCase() === "prepaid" &&
+      String(doc.shopType || "").trim().toLowerCase() === "restaurant",
+    restaurantCashAmount: calculatePrepaidRestaurantCashAmount(doc),
     collectAmount: (() => {
       const payType = String(
         doc.paymentType || doc.paymentMethod || ""

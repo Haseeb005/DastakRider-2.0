@@ -60,7 +60,7 @@ export const LoginRiderResponse = zod.object({
   "unpaidCollection": zod.number().optional(),
   "paymentLimit": zod.number().optional().describe('Max unpaidCollection allowed before the rider is blocked from accepting new orders.'),
   "tillNoonFare": zod.number().optional(),
-  "orderLimitExempt": zod.boolean().describe('True when this rider is exempt from the normal live-order cap.'),
+  "orderLimitExempt": zod.boolean().describe('Whether this rider is exempt from the standard active-order capacity limit.'),
   "token": zod.string().optional().describe('HMAC bearer token, returned only by login\/register for mobile clients')
 })
 
@@ -92,7 +92,7 @@ export const GetRiderMeResponse = zod.object({
   "unpaidCollection": zod.number().optional(),
   "paymentLimit": zod.number().optional().describe('Max unpaidCollection allowed before the rider is blocked from accepting new orders.'),
   "tillNoonFare": zod.number().optional(),
-  "orderLimitExempt": zod.boolean().describe('True when this rider is exempt from the normal live-order cap.'),
+  "orderLimitExempt": zod.boolean().describe('Whether this rider is exempt from the standard active-order capacity limit.'),
   "token": zod.string().optional().describe('HMAC bearer token, returned only by login\/register for mobile clients')
 })
 
@@ -184,6 +184,8 @@ export const GetActiveOrdersResponseItem = zod.object({
   "martPhone": zod.string().nullish(),
   "paymentType": zod.string().nullish(),
   "billingMode": zod.string().nullish().describe('Billing mode from the admin system (\"prepaid\" or \"postpaid\"). Prepaid COD orders show collectAmount instead of total as the amount to collect.'),
+  "payCashToRestaurant": zod.boolean().describe('Whether the rider must pay cash to the restaurant while this prepaid restaurant order is awaiting pickup.'),
+  "restaurantCashAmount": zod.number().nullable().describe('Restaurant cash payable, calculated as positive product actualPrice times count plus VAT.'),
   "collectAmount": zod.number().optional().describe('The amount the rider physically collects from the customer. For prepaid+COD orders this is orderTotal minus the sum of (actualPrice × quantity) per product. For non-prepaid COD it equals total. For non-COD it is 0.'),
   "orderNum": zod.string().nullish(),
   "comment": zod.string().nullish(),
@@ -252,6 +254,8 @@ export const GetOrderHistoryResponseItem = zod.object({
   "martPhone": zod.string().nullish(),
   "paymentType": zod.string().nullish(),
   "billingMode": zod.string().nullish().describe('Billing mode from the admin system (\"prepaid\" or \"postpaid\"). Prepaid COD orders show collectAmount instead of total as the amount to collect.'),
+  "payCashToRestaurant": zod.boolean().describe('Whether the rider must pay cash to the restaurant while this prepaid restaurant order is awaiting pickup.'),
+  "restaurantCashAmount": zod.number().nullable().describe('Restaurant cash payable, calculated as positive product actualPrice times count plus VAT.'),
   "collectAmount": zod.number().optional().describe('The amount the rider physically collects from the customer. For prepaid+COD orders this is orderTotal minus the sum of (actualPrice × quantity) per product. For non-prepaid COD it equals total. For non-COD it is 0.'),
   "orderNum": zod.string().nullish(),
   "comment": zod.string().nullish(),
@@ -324,6 +328,8 @@ export const AcceptOrderResponse = zod.object({
   "martPhone": zod.string().nullish(),
   "paymentType": zod.string().nullish(),
   "billingMode": zod.string().nullish().describe('Billing mode from the admin system (\"prepaid\" or \"postpaid\"). Prepaid COD orders show collectAmount instead of total as the amount to collect.'),
+  "payCashToRestaurant": zod.boolean().describe('Whether the rider must pay cash to the restaurant while this prepaid restaurant order is awaiting pickup.'),
+  "restaurantCashAmount": zod.number().nullable().describe('Restaurant cash payable, calculated as positive product actualPrice times count plus VAT.'),
   "collectAmount": zod.number().optional().describe('The amount the rider physically collects from the customer. For prepaid+COD orders this is orderTotal minus the sum of (actualPrice × quantity) per product. For non-prepaid COD it equals total. For non-COD it is 0.'),
   "orderNum": zod.string().nullish(),
   "comment": zod.string().nullish(),
@@ -391,6 +397,8 @@ export const MarkOrderArrivedResponse = zod.object({
   "martPhone": zod.string().nullish(),
   "paymentType": zod.string().nullish(),
   "billingMode": zod.string().nullish().describe('Billing mode from the admin system (\"prepaid\" or \"postpaid\"). Prepaid COD orders show collectAmount instead of total as the amount to collect.'),
+  "payCashToRestaurant": zod.boolean().describe('Whether the rider must pay cash to the restaurant while this prepaid restaurant order is awaiting pickup.'),
+  "restaurantCashAmount": zod.number().nullable().describe('Restaurant cash payable, calculated as positive product actualPrice times count plus VAT.'),
   "collectAmount": zod.number().optional().describe('The amount the rider physically collects from the customer. For prepaid+COD orders this is orderTotal minus the sum of (actualPrice × quantity) per product. For non-prepaid COD it equals total. For non-COD it is 0.'),
   "orderNum": zod.string().nullish(),
   "comment": zod.string().nullish(),
@@ -461,6 +469,8 @@ export const UpdateOrderStatusResponse = zod.object({
   "martPhone": zod.string().nullish(),
   "paymentType": zod.string().nullish(),
   "billingMode": zod.string().nullish().describe('Billing mode from the admin system (\"prepaid\" or \"postpaid\"). Prepaid COD orders show collectAmount instead of total as the amount to collect.'),
+  "payCashToRestaurant": zod.boolean().describe('Whether the rider must pay cash to the restaurant while this prepaid restaurant order is awaiting pickup.'),
+  "restaurantCashAmount": zod.number().nullable().describe('Restaurant cash payable, calculated as positive product actualPrice times count plus VAT.'),
   "collectAmount": zod.number().optional().describe('The amount the rider physically collects from the customer. For prepaid+COD orders this is orderTotal minus the sum of (actualPrice × quantity) per product. For non-prepaid COD it equals total. For non-COD it is 0.'),
   "orderNum": zod.string().nullish(),
   "comment": zod.string().nullish(),

@@ -461,6 +461,9 @@ components:
           description: Max unpaidCollection allowed before the rider is blocked from accepting new orders.
         tillNoonFare:
           type: number
+        orderLimitExempt:
+          type: boolean
+          description: Whether this rider is exempt from the standard active-order capacity limit.
         token:
           type: string
           description: HMAC bearer token, returned only by login/register for mobile clients
@@ -475,6 +478,7 @@ components:
         - totalDeliveries
         - rating
         - ratingCount
+        - orderLimitExempt
 
     AvailableRiderOrder:
       type: object
@@ -582,6 +586,12 @@ components:
         billingMode:
           type: ["string", "null"]
           description: Billing mode from the admin system ("prepaid" or "postpaid"). Prepaid COD orders show collectAmount instead of total as the amount to collect.
+        payCashToRestaurant:
+          type: boolean
+          description: Whether the rider must pay cash to the restaurant while this prepaid restaurant order is awaiting pickup.
+        restaurantCashAmount:
+          type: ["number", "null"]
+          description: Restaurant cash payable, calculated as positive product actualPrice times count plus VAT.
         collectAmount:
           type: number
           description: The amount the rider physically collects from the customer. For prepaid+COD orders this is orderTotal minus the sum of (actualPrice × quantity) per product. For non-prepaid COD it equals total. For non-COD it is 0.
@@ -628,6 +638,8 @@ components:
         - total
         - deliveryFee
         - subtotal
+        - payCashToRestaurant
+        - restaurantCashAmount
         - createdAt
 
     OrderAction:
