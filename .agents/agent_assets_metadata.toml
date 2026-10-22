@@ -7,6 +7,7 @@ uri = "file://artifacts/rider-mobile/assets/images/icon.png"
 type = "image"
 title = "icon.png — App Store / iOS icon"
 description = "White background, crimson rider icon, 1024×1024"
+logical_id = "68e9751b-4a48-46d0-bafc-256a34dd9947"
 
 [[outputs]]
 id = "Qujmc9DdT9-dWlKQe1GRa"
@@ -14,3 +15,18 @@ uri = "file://artifacts/rider-mobile/assets/images/adaptive-icon.png"
 type = "image"
 title = "adaptive-icon.png — Android adaptive foreground"
 description = "Transparent background, crimson rider icon within safe zone, 1024×1024"
+logical_id = "468ac98b-c14c-4c04-912f-45f6d3e29bf7"
+
+[[outputs]]
+id = "2RHtXz54FxMw8zdBJFRyu"
+uri = "file://generated-artifacts/dastak-rider-server-source.zip"
+type = "unspecified"
+title = "Dastak Rider server source"
+description = "ZIP containing API server source, shared API schemas, and OpenAPI source. No secrets, dependencies, or build output included."
+logical_id = "62bca4b1-bc94-41b2-bb59-9a84a1861faa"
+content_hash = "sha256:43f67f09a1cdb2e8bed5a108bf22f2207e11f63d1e1622eb661ffb6b81dc5c61"
+size = 115262
+mtime_ms = 1792661822040
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:dad0dbf6-7442-4fa1-81ce-28c29ec57969/62bca4b1-bc94-41b2-bb59-9a84a1861faa/fea90410-41f4-4fff-941e-673cf6c17850"
+storage_version_token = "1792661840953542"
+content_type = "application/octet-stream"
