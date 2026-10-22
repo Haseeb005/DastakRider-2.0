@@ -14,8 +14,11 @@ import {
   DefaultApi,
   Notification,
 } from "@onesignal/node-onesignal";
+import { ObjectId } from "mongodb";
 
 import { logger } from "./logger";
+import { usersCol } from "./mongo";
+import { filterOnlineRiderPushTargets } from "./riderPushTargets";
 
 const APP_ID =
   process.env.ONE_SIGNAL_RIDER_APP_ID ??
@@ -65,8 +68,8 @@ interface RiderNotificationPayload {
 
 /** Send one rider notification through the official OneSignal Node SDK. */
 async function notifyRiders(payload: RiderNotificationPayload): Promise<boolean> {
-  const subscriptionIds = payload.subscriptionIds ?? [];
-  const riderIds = payload.riderIds ?? [];
+  let subscriptionIds = payload.subscriptionIds ?? [];
+  let riderIds = payload.riderIds ?? [];
   if (!riderClient || !APP_ID || !REST_KEY) {
     logger.warn("notifyRiders: OneSignal env vars not set — skipping");
     return false;
@@ -75,6 +78,59 @@ async function notifyRiders(payload: RiderNotificationPayload): Promise<boolean>
   if (subscriptionIds.length > 0 && riderIds.length > 0) {
     logger.error(
       "notifyRiders: refusing mixed subscription and external-ID targets",
+    );
+    return false;
+  }
+
+  const targetClauses: Record<string, unknown>[] = [];
+  if (subscriptionIds.length > 0) {
+    targetClauses.push({ playerId: { $in: subscriptionIds } });
+  }
+  if (riderIds.length > 0) {
+    const mongoRiderIds = riderIds.flatMap((id) =>
+      ObjectId.isValid(id) ? [id, new ObjectId(id)] : [id],
+    );
+    targetClauses.push({ _id: { $in: mongoRiderIds } });
+  }
+
+  try {
+    const onlineRiders = await usersCol()
+      .find(
+        {
+          type: "rider",
+          isOnline: true,
+          deleted: { $ne: true },
+          $or: targetClauses,
+        },
+        { projection: { _id: 1, playerId: 1, type: 1, isOnline: 1, deleted: 1 } },
+      )
+      .toArray();
+    const onlineTargets = filterOnlineRiderPushTargets(
+      subscriptionIds,
+      riderIds,
+      onlineRiders,
+    );
+    const filteredCount =
+      subscriptionIds.length +
+      riderIds.length -
+      onlineTargets.subscriptionIds.length -
+      onlineTargets.riderIds.length;
+    subscriptionIds = onlineTargets.subscriptionIds;
+    riderIds = onlineTargets.riderIds;
+    if (filteredCount > 0) {
+      logger.info(
+        { filteredCount },
+        "notifyRiders: skipped targets that are not online",
+      );
+    }
+    if (subscriptionIds.length === 0 && riderIds.length === 0) {
+      logger.info("notifyRiders: no online rider targets — skipping push");
+      return false;
+    }
+  } catch (error) {
+    logger.error(
+      { err: error },
+      "notifyRiders: could not verify online riders — skipping push",
     );
     return false;
   }
