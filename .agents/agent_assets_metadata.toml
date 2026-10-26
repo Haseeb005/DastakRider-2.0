@@ -30,3 +30,10 @@ mtime_ms = 1792661822040
 storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:dad0dbf6-7442-4fa1-81ce-28c29ec57969/62bca4b1-bc94-41b2-bb59-9a84a1861faa/fea90410-41f4-4fff-941e-673cf6c17850"
 storage_version_token = "1792661840953542"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "ZNEwrWJrXdQ-EhnKYRoBy"
+uri = "file://generated-artifacts/dastak-rider-client-source.zip"
+type = "unspecified"
+title = "Dastak Rider client source"
+description = "ZIP with Rider website and Expo mobile source, shared login/session API client, user-profile screens, and app assets. Both clients use POST /api/rider/login and GET /api/rider/me. No environment files, credentials, dependencies, or build output included."
