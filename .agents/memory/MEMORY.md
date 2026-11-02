@@ -22,3 +22,4 @@
 - [Rider API response caching](rider-api-response-caching.md) — API polling must never return bodyless 304s; clients interpret them as missing profile/order data.
 - [Rider acceptance flow](rider-acceptance-anti-automation.md) — acceptance stays one tap, with a server cooldown against rapid repeated accepts; preserve eligibility and atomic assignment.
 - [Rider order distribution](rider-order-distribution.md) — idle riders get 30s priority; afterward only riders with picked-up orders and capacity may take another.
+- [Customer tracking integration](customer-tracking-contract.md) — separate services share persistent rider GPS; customer auth is distinct; verify with genuine rider fixes.

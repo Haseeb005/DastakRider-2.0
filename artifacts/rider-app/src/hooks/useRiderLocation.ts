@@ -37,7 +37,9 @@ export function useRiderLocation(orderId: string, enabled: boolean, intervalMs =
       } else {
         setLocation(null);
       }
-    } catch {}
+    } catch {
+      setLocation(null);
+    }
   };
 
   useEffect(() => {

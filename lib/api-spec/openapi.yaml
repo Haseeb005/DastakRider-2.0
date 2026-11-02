@@ -344,12 +344,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid MongoDB order id or coordinates
+        "401":
+          description: Rider not logged in
+        "403":
+          description: Order not assigned to this rider or not in transit
+        "503":
+          description: Location could not be persisted
 
   /orders/{orderId}/rider-location:
     get:
       operationId: getRiderLocation
       tags: [orders]
-      summary: Get the rider's current location for an order (public)
+      summary: Get current location for an order assigned to the authenticated rider
       parameters:
         - name: orderId
           in: path
@@ -363,8 +371,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RiderLocation"
+                nullable: true
+        "400":
+          description: Invalid MongoDB order id
+        "401":
+          description: Rider not logged in
         "404":
-          description: No recent location
+          description: Order not assigned to this rider
+        "503":
+          description: Location temporarily unavailable
 
 components:
   schemas:

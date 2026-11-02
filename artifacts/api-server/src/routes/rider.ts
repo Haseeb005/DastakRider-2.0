@@ -11,7 +11,9 @@ import {
   chatsCol,
   riderChallengesCol,
   riderWalletEntriesCol,
+  riderLocationsCol,
 } from "../lib/mongo";
+import { createRiderLocationHandlers } from "../lib/riderLocationHandlers";
 import { getHeatmapSnapshot } from "../lib/heatmapService";
 import {
   calculatePrepaidRestaurantCashAmount,
@@ -2775,48 +2777,12 @@ router.get("/rider/earnings", async (req: any, res: any) => {
 });
 
 // ── GPS location tracking ──────────────────────────────────────────────────────
-// In-memory only (no DB). The customer's order-tracking page reads the public
-// endpoint below; locations expire after 90 seconds.
-const riderLocations = new Map<
-  string,
-  { lat: number; lng: number; riderId: string; ts: number }
->();
-const LOCATION_TTL_MS = 90_000;
-
-// Rider pushes GPS coordinates for an active order they own and are delivering.
-router.post("/rider/location", async (req: any, res: any) => {
-  try {
-    const riderId = requireRiderId(req, res);
-    if (!riderId) return;
-    const { orderId, lat, lng } = req.body || {};
-    if (!orderId || typeof lat !== "number" || typeof lng !== "number")
-      return res.status(400).json({ message: "orderId, lat and lng are required" });
-    if (lat < -90 || lat > 90 || lng < -180 || lng > 180)
-      return res.status(400).json({ message: "lat/lng out of range" });
-    let orderObjectId: ObjectId;
-    try {
-      orderObjectId = new ObjectId(String(orderId));
-    } catch {
-      return res.status(400).json({ message: "Invalid order id" });
-    }
-    // Only the assigned rider may publish a location, and only while the order
-    // is in transit ("Rider Picked Up"). Prevents spoofing other orders.
-    const order = await ordersCol().findOne({
-      _id: orderObjectId,
-      riderId,
-      status: "Rider Picked Up",
-    });
-    if (!order)
-      return res
-        .status(403)
-        .json({ message: "Order is not assigned to you or not in transit" });
-    riderLocations.set(String(orderId), { lat, lng, riderId, ts: Date.now() });
-    res.json({ ok: true });
-  } catch (e: any) {
-    req.log.error(e);
-    res.status(500).json({ message: e.message });
-  }
+const locationHandlers = createRiderLocationHandlers({
+  orders: ordersCol,
+  locations: riderLocationsCol,
+  requireRiderId,
 });
+router.post("/rider/location", locationHandlers.publish);
 
 // ── Live demand heatmap ──────────────────────────────────────────────────────
 // Returns pre-computed demand-score zones filtered to the rider's own city.
@@ -2835,13 +2801,7 @@ router.get("/rider/heatmap", async (req: any, res: any) => {
   }
 });
 
-// Public — customer's tracking page reads the rider's current location
-router.get("/orders/:orderId/rider-location", (req: any, res: any) => {
-  const loc = riderLocations.get(String(req.params.orderId));
-  if (!loc || Date.now() - loc.ts > LOCATION_TTL_MS)
-    return res.status(404).json({ message: "No recent location" });
-  res.json({ lat: loc.lat, lng: loc.lng, ts: loc.ts });
-});
+router.get("/orders/:orderId/rider-location", locationHandlers.read);
 
 function toNum(v: any): number {
   const n = parseFloat(String(v));

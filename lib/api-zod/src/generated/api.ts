@@ -657,7 +657,7 @@ export const PushRiderLocationResponse = zod.object({
 
 
 /**
- * @summary Get the rider's current location for an order (public)
+ * @summary Get current location for an order assigned to the authenticated rider
  */
 export const GetRiderLocationParams = zod.object({
   "orderId": zod.coerce.string()
@@ -667,6 +667,6 @@ export const GetRiderLocationResponse = zod.object({
   "lat": zod.number(),
   "lng": zod.number(),
   "ts": zod.number()
-})
+}).nullable()
 
 

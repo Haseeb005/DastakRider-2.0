@@ -803,51 +803,70 @@ function ensureLocationPermission(): Promise<boolean> {
 type LocationShareStatus = "idle" | "sharing" | "error";
 
 // Continuously push the rider's GPS location for the order in transit while one
-// is picked up. In-memory on the server; the customer's tracking page reads it.
+// is picked up. Persisted in shared MongoDB for the customer's tracking API.
 // Returns a status so the UI can warn the rider if sharing drops mid-delivery
 // (permission revoked, no GPS fix, or no fresh location for 30s).
 function useLocationTracking(activeOrders: RiderOrder[]): LocationShareStatus {
   const pushLocation = usePushRiderLocation();
-  const inTransit = activeOrders.find((o) => o.status === "Rider Picked Up");
-  const orderId = inTransit?.id;
-  const pushRef = useRef(pushLocation.mutate);
-  pushRef.current = pushLocation.mutate;
+  const idsKey = activeOrders.filter((o) => o.status === "Rider Picked Up")
+    .map((o) => o.id).sort().join(",");
+  const pushRef = useRef(pushLocation.mutateAsync);
+  pushRef.current = pushLocation.mutateAsync;
   const [status, setStatus] = useState<LocationShareStatus>("idle");
 
   useEffect(() => {
-    if (!orderId || typeof navigator === "undefined" || !navigator.geolocation) {
+    if (!idsKey || typeof navigator === "undefined" || !navigator.geolocation) {
       setStatus("idle");
       return;
     }
-    setStatus("sharing");
+    setStatus("idle");
+    let cancelled = false;
     let lastOk = Date.now();
-    let hasFixed = false;
-    const onOk = (pos: GeolocationPosition) => {
-      lastOk = Date.now();
-      hasFixed = true;
-      setStatus("sharing");
-      pushRef.current({
-        data: { orderId, lat: pos.coords.latitude, lng: pos.coords.longitude },
-      });
+    const onOk = async (pos: GeolocationPosition) => {
+      if (cancelled) return;
+      const age = Date.now() - pos.timestamp;
+      if (!Number.isFinite(age) || age < 0 || age > 60_000) {
+        setStatus("error");
+        return;
+      }
+      try {
+        await Promise.all(idsKey.split(",").map((orderId) => pushRef.current({
+          data: { orderId, lat: pos.coords.latitude, lng: pos.coords.longitude },
+        })));
+        if (!cancelled) {
+          lastOk = Date.now();
+          setStatus("sharing");
+        }
+      } catch {
+        if (!cancelled) setStatus("error");
+      }
     };
-    const onErr = () => setStatus("error");
+    const onErr = () => { if (!cancelled) setStatus("error"); };
     // Send one immediately, then stream updates as the rider moves.
     navigator.geolocation.getCurrentPosition(onOk, onErr, { enableHighAccuracy: true });
     const watchId = navigator.geolocation.watchPosition(onOk, onErr, {
       enableHighAccuracy: true,
       maximumAge: 5_000,
     });
-    // Once sharing has started, warn if no fresh fix arrives for a while. Gated
-    // on the first successful fix so a slow initial GPS lock isn't a false alarm.
+    // Browser watch callbacks need not fire while stationary. Request real
+    // device fixes periodically rather than resending an old position.
+    const heartbeat = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(onOk, onErr, {
+        enableHighAccuracy: true, maximumAge: 5_000, timeout: 10_000,
+      });
+    }, 15_000);
+    // Warn when no server-acknowledged fix arrives, including a failed first POST.
     const monitor = setInterval(() => {
-      if (hasFixed && Date.now() - lastOk > 60_000) setStatus("error");
+      if (Date.now() - lastOk > 60_000) setStatus("error");
     }, 10_000);
     return () => {
+      cancelled = true;
       navigator.geolocation.clearWatch(watchId);
       clearInterval(monitor);
+      clearInterval(heartbeat);
       setStatus("idle");
     };
-  }, [orderId]);
+  }, [idsKey]);
 
   return status;
 }

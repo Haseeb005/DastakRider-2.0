@@ -4,7 +4,7 @@ import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 
-import { ACTIVE_ORDER_IDS_KEY, LOCATION_TASK } from "./locationTask";
+import { ACTIVE_ORDER_IDS_KEY, LOCATION_TASK, LOCATION_ACK_KEY } from "./locationTask";
 
 /**
  * Foreground location can be requested while the rider begins a delivery.
@@ -76,12 +76,20 @@ export async function requestBackgroundLocationPermissionAfterDisclosure(): Prom
  * - Auto-retries up to MAX_RETRIES times after a failure (30 s between attempts).
  */
 export function useLocationTracking(orderIds: string[]): LocationShareStatus {
-  const { mutate } = usePushRiderLocation();
-  const mutateRef = useRef(mutate);
-  mutateRef.current = mutate;
+  const { mutateAsync } = usePushRiderLocation();
+  const mutateRef = useRef(mutateAsync);
+  mutateRef.current = mutateAsync;
 
   const [status, setStatus] = useState<LocationShareStatus>("idle");
   const [retryCount, setRetryCount] = useState(0);
+  // Serialize native start/stop and stored order IDs across effect changes.
+  // Otherwise an old order's async cleanup can erase the next order's IDs.
+  const backgroundQueue = useRef<Promise<void>>(Promise.resolve());
+  const queueBackground = (work: () => Promise<void>) => {
+    const next = backgroundQueue.current.then(work);
+    backgroundQueue.current = next.catch(() => {});
+    return next;
+  };
 
   // Key derived from IDs so the tracking effect re-runs only when the set of
   // tracked orders actually changes, not on every render.
@@ -97,35 +105,47 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
     let cancelled = false;
     let cleanup: (() => void) | undefined;
     let lastOk = Date.now();
-    let hasFixed = false;
-    setStatus("sharing");
+    setStatus("idle");
 
-    const push = (lat: number, lng: number) => {
+    const push = async (lat: number, lng: number, timestamp: number) => {
       if (cancelled) return;
-      lastOk = Date.now();
-      hasFixed = true;
-      setStatus("sharing");
-      orderIds.forEach((orderId) =>
-        mutateRef.current({ data: { orderId, lat, lng } }),
-      );
+      const age = Date.now() - timestamp;
+      if (!Number.isFinite(age) || age < 0 || age > 60_000) {
+        setStatus("error");
+        return;
+      }
+      try {
+        await Promise.all(orderIds.map((orderId) =>
+          mutateRef.current({ data: { orderId, lat, lng } }),
+        ));
+        if (cancelled) return;
+        lastOk = Date.now();
+        setStatus("sharing");
+      } catch {
+        if (!cancelled) setStatus("error");
+      }
     };
 
     if (Platform.OS === "web") {
       const geo = (globalThis as any).navigator?.geolocation;
       if (geo?.watchPosition) {
         const wid = geo.watchPosition(
-          (pos: any) => push(pos.coords.latitude, pos.coords.longitude),
+          (pos: any) => { void push(pos.coords.latitude, pos.coords.longitude, pos.timestamp); },
           () => { if (!cancelled) setStatus("error"); },
           { enableHighAccuracy: true, maximumAge: 5_000 },
         );
-        cleanup = () => geo.clearWatch(wid);
+        const heartbeat = setInterval(() => {
+          geo.getCurrentPosition(
+            (pos: any) => { void push(pos.coords.latitude, pos.coords.longitude, pos.timestamp); },
+            () => { if (!cancelled) setStatus("error"); },
+            { enableHighAccuracy: true, maximumAge: 5_000, timeout: 10_000 },
+          );
+        }, 15_000);
+        cleanup = () => { geo.clearWatch(wid); clearInterval(heartbeat); };
       } else {
         setStatus("error");
       }
     } else {
-      // Store IDs in AsyncStorage so the background task can read them.
-      AsyncStorage.setItem(ACTIVE_ORDER_IDS_KEY, JSON.stringify(orderIds)).catch(() => {});
-
       (async () => {
         try {
           const { status: fg } = await Location.requestForegroundPermissionsAsync();
@@ -139,14 +159,17 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
             () => ({ status: "denied" as const }),
           );
 
-          if (bg === "granted") {
+          await queueBackground(async () => {
+            if (cancelled) return;
+            await AsyncStorage.setItem(ACTIVE_ORDER_IDS_KEY, JSON.stringify(orderIds));
+            if (bg !== "granted") return;
             const isRunning = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false);
             if (isRunning) await Location.stopLocationUpdatesAsync(LOCATION_TASK).catch(() => {});
 
             await Location.startLocationUpdatesAsync(LOCATION_TASK, {
               accuracy: Location.Accuracy.High,
               timeInterval: 5_000,
-              distanceInterval: 10,
+              distanceInterval: 0,
               showsBackgroundLocationIndicator: true,
               foregroundService: {
                 notificationTitle: "Dastak — Live Delivery",
@@ -158,7 +181,8 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
               await Location.stopLocationUpdatesAsync(LOCATION_TASK).catch(() => {});
               return;
             }
-          }
+          });
+          if (cancelled) return;
 
           // Foreground watch — runs in parallel with the background task for
           // immediate pushes while the app is on screen.
@@ -166,7 +190,7 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
           // the rider is stationary, otherwise the stale monitor fires a false alert.
           const sub = await Location.watchPositionAsync(
             { accuracy: Location.Accuracy.High, timeInterval: 5_000 },
-            (pos) => push(pos.coords.latitude, pos.coords.longitude),
+            (pos) => { void push(pos.coords.latitude, pos.coords.longitude, pos.timestamp); },
           );
           if (cancelled) { sub.remove(); return; }
           cleanup = () => sub.remove();
@@ -176,17 +200,15 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
       })();
     }
 
-    // Stale-fix monitor: warn if no GPS update arrives for STALE_THRESHOLD_MS.
-    // Gated on the first successful fix to avoid false alarms during cold GPS lock.
-    // Also skips the error when the background task is still running (app minimised) —
-    // in that case the foreground watch is paused but GPS is still being pushed.
+    // A running background task is not proof of an accepted GPS POST.
+    // Only foreground or background server acknowledgements establish freshness.
     const monitor = setInterval(async () => {
-      if (cancelled || !hasFixed || Date.now() - lastOk <= STALE_THRESHOLD_MS) return;
+      if (cancelled || Date.now() - lastOk <= STALE_THRESHOLD_MS) return;
       if (Platform.OS !== "web") {
-        const bgRunning = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false);
-        if (bgRunning) return; // background task is alive — not truly stale
+        const ack = Number(await AsyncStorage.getItem(LOCATION_ACK_KEY).catch(() => null));
+        if (ack > lastOk && ack <= Date.now()) lastOk = ack;
       }
-      if (!cancelled) setStatus("error");
+      if (!cancelled) setStatus(Date.now() - lastOk > STALE_THRESHOLD_MS ? "error" : "sharing");
     }, 10_000);
 
     return () => {
@@ -195,12 +217,11 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
       if (cleanup) cleanup();
 
       if (Platform.OS !== "web") {
-        Location.hasStartedLocationUpdatesAsync(LOCATION_TASK)
-          .then((running) => {
-            if (running) Location.stopLocationUpdatesAsync(LOCATION_TASK).catch(() => {});
-          })
-          .catch(() => {});
-        AsyncStorage.removeItem(ACTIVE_ORDER_IDS_KEY).catch(() => {});
+        void queueBackground(async () => {
+          const running = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false);
+          if (running) await Location.stopLocationUpdatesAsync(LOCATION_TASK).catch(() => {});
+          await AsyncStorage.multiRemove([ACTIVE_ORDER_IDS_KEY, LOCATION_ACK_KEY]);
+        }).catch(() => {});
       }
 
       setStatus("idle");

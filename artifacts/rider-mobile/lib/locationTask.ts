@@ -11,12 +11,17 @@ import { TOKEN_KEY } from "./auth";
 
 export const LOCATION_TASK = "DASTAK_BG_LOCATION";
 export const ACTIVE_ORDER_IDS_KEY = "dastak_active_order_ids";
+export const LOCATION_ACK_KEY = "dastak_location_last_ack";
 
 const BASE_URL = API_BASE_URL;
 
 TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
   if (error || !data?.locations?.length) return;
-  const { latitude: lat, longitude: lng } = data.locations[0].coords;
+  // A background batch can contain old fixes. Never present a cached fix as live.
+  const fix = [...data.locations].sort((a, b) => b.timestamp - a.timestamp)[0];
+  const age = Date.now() - fix.timestamp;
+  if (!Number.isFinite(age) || age < 0 || age > 60_000) return;
+  const { latitude: lat, longitude: lng } = fix.coords;
 
   try {
     const [token, idsJson] = await Promise.all([
@@ -27,7 +32,7 @@ TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
     const orderIds: string[] = idsJson ? (JSON.parse(idsJson) as string[]) : [];
     if (!orderIds.length) return;
 
-    await Promise.all(
+    const accepted = await Promise.all(
       orderIds.map((orderId) =>
         fetch(`${BASE_URL}/api/rider/location`, {
           method: "POST",
@@ -36,10 +41,21 @@ TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ orderId, lat, lng }),
-        }).catch(() => {}),
+        }).then((response) => {
+          if (!response.ok) {
+            console.warn(`[Location] Background publish rejected (${response.status})`);
+          }
+          return response.ok;
+        }).catch(() => {
+          console.warn("[Location] Background publish failed");
+          return false;
+        }),
       ),
     );
+    if (accepted.every(Boolean)) {
+      await AsyncStorage.setItem(LOCATION_ACK_KEY, String(Date.now()));
+    }
   } catch {
-    // Swallow errors — background tasks must never throw
+    console.warn("[Location] Background tracking unavailable");
   }
 });

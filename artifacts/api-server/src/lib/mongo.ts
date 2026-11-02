@@ -69,6 +69,10 @@ export function ordersCol() {
   return db.collection("orders");
 }
 
+export function riderLocationsCol() {
+  return db.collection("riderLocations");
+}
+
 export function riderOrderAcceptanceMutexCol() {
   return db.collection("riderOrderAcceptanceMutex") as any;
 }

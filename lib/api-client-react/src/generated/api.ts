@@ -1283,7 +1283,7 @@ export const pushRiderLocation = async (riderLocationInput: RiderLocationInput, 
 
 
 
-export const getPushRiderLocationMutationOptions = <TError = ErrorType<unknown>,
+export const getPushRiderLocationMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pushRiderLocation>>, TError,{data: BodyType<RiderLocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof pushRiderLocation>>, TError,{data: BodyType<RiderLocationInput>}, TContext> => {
 
@@ -1312,12 +1312,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type PushRiderLocationMutationResult = NonNullable<Awaited<ReturnType<typeof pushRiderLocation>>>
     export type PushRiderLocationMutationBody = BodyType<RiderLocationInput>
-    export type PushRiderLocationMutationError = ErrorType<unknown>
+    export type PushRiderLocationMutationError = ErrorType<void>
 
     /**
  * @summary Push the rider's current GPS location for an active order
  */
-export const usePushRiderLocation = <TError = ErrorType<unknown>,
+export const usePushRiderLocation = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pushRiderLocation>>, TError,{data: BodyType<RiderLocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof pushRiderLocation>>,
@@ -1337,11 +1337,11 @@ export const getGetRiderLocationUrl = (orderId: string,) => {
 }
 
 /**
- * @summary Get the rider's current location for an order (public)
+ * @summary Get current location for an order assigned to the authenticated rider
  */
-export const getRiderLocation = async (orderId: string, options?: RequestInit): Promise<RiderLocation> => {
+export const getRiderLocation = async (orderId: string, options?: RequestInit): Promise<RiderLocation | null> => {
 
-  return customFetch<RiderLocation>(getGetRiderLocationUrl(orderId),
+  return customFetch<RiderLocation | null>(getGetRiderLocationUrl(orderId),
   {
     ...options,
     method: 'GET'
@@ -1384,7 +1384,7 @@ export type GetRiderLocationQueryError = ErrorType<void>
 
 
 /**
- * @summary Get the rider's current location for an order (public)
+ * @summary Get current location for an order assigned to the authenticated rider
  */
 
 export function useGetRiderLocation<TData = Awaited<ReturnType<typeof getRiderLocation>>, TError = ErrorType<void>>(

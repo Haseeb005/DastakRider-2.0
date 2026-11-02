@@ -16,9 +16,9 @@ The rider app shares its Mongo with the live customer + admin apps, so every wri
 **Why:** broken-access-control flaw flagged in code review — public read endpoint amplifies the spoof.
 **How to apply:** any "publish my live location for X" endpoint needs an ownership+state guard, not just auth.
 
-**Fast-bonus delivery geofence:** delivery always completes through the normal atomic status update, but the fast-delivery bonus requires a fresh GPS point for that same assigned order within 20 meters of the order's customer latitude/longitude. Missing delivery coordinates, missing or stale location, and out-of-radius points skip the bonus.
-**Why:** delivery operations must not be blocked by GPS availability, while the time-based bonus should only reward a nearby completion.
-**How to apply:** use the server-held, authenticated in-transit location keyed to the order and rider; calculate straight-line distance server-side only for bonus eligibility. This is a normal-client arrival guard, not cryptographic proof: raw client GPS can be spoofed. Do not describe it as fraud-proof unless a platform attestation or another trusted-location mechanism validates the location evidence.
+**Fast-bonus GPS independence:** the user changed eligibility to acceptance-to-delivery within 20 minutes, ignoring GPS.
+**Why:** the user explicitly chose "Within 20 minutes only; ignore GPS."
+**How to apply:** do not reintroduce tracking/geofence requirements into the fast-delivery bonus.
 
 **PKT period math:** Pakistan is UTC+5 with no DST, so period boundaries (today/week/month) are computed as fixed UTC instants by shifting +5h; week starts Sunday (`getUTCDay()`). Safe to hardcode the offset.
 
