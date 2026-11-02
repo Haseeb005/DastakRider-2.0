@@ -23,3 +23,4 @@
 - [Rider acceptance flow](rider-acceptance-anti-automation.md) — acceptance stays one tap, with a server cooldown against rapid repeated accepts; preserve eligibility and atomic assignment.
 - [Rider order distribution](rider-order-distribution.md) — idle riders get 30s priority; afterward only riders with picked-up orders and capacity may take another.
 - [Customer tracking integration](customer-tracking-contract.md) — separate services share persistent rider GPS; customer auth is distinct; verify with genuine rider fixes.
+- [GPS retention approval](gps-retention-approval.md) — user authorized policy/audit preparation only; shared GPS deletion and timestamp maintenance require fresh approval.
