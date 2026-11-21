@@ -1,10 +1,20 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { usePushRiderLocation } from "@workspace/api-client-react";
+import {
+  capturedAtForFreshFix,
+  pushRiderLocation,
+  selectActiveDeliveryOrderIds,
+} from "@workspace/api-client-react";
 import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 
-import { ACTIVE_ORDER_IDS_KEY, LOCATION_TASK, LOCATION_ACK_KEY } from "./locationTask";
+import {
+  ACTIVE_ORDER_IDS_KEY,
+  LOCATION_ACK_KEY,
+  LOCATION_ERROR_KEY,
+  LOCATION_TASK,
+  stopBackgroundLocationTask,
+} from "./locationTrackingRuntime";
 
 /**
  * Foreground location can be requested while the rider begins a delivery.
@@ -13,8 +23,6 @@ import { ACTIVE_ORDER_IDS_KEY, LOCATION_TASK, LOCATION_ACK_KEY } from "./locatio
  */
 export type LocationShareStatus = "idle" | "sharing" | "error";
 
-const MAX_RETRIES = 5;
-const RETRY_DELAY_MS = 30_000;
 const STALE_THRESHOLD_MS = 60_000;
 
 /**
@@ -73,15 +81,19 @@ export async function requestBackgroundLocationPermissionAfterDisclosure(): Prom
  * - On native: uses a background task (expo-task-manager) so tracking continues when
  *   the app is minimised, plus a foreground watchPositionAsync for immediate updates.
  * - On web: uses the browser Geolocation API.
- * - Auto-retries up to MAX_RETRIES times after a failure (30 s between attempts).
  */
-export function useLocationTracking(orderIds: string[]): LocationShareStatus {
-  const { mutateAsync } = usePushRiderLocation();
-  const mutateRef = useRef(mutateAsync);
-  mutateRef.current = mutateAsync;
+export function useLocationTracking(
+  orderIds: string[],
+  token: string | null,
+  onAuthOrAssignmentError: () => void,
+): LocationShareStatus {
+  const refreshRef = useRef(onAuthOrAssignmentError);
+  refreshRef.current = onAuthOrAssignmentError;
 
   const [status, setStatus] = useState<LocationShareStatus>("idle");
-  const [retryCount, setRetryCount] = useState(0);
+  const [, setBlockedRevision] = useState(0);
+  const blockedIds = useRef(new Set<string>());
+  const stopGpsRef = useRef<(() => void) | null>(null);
   // Serialize native start/stop and stored order IDs across effect changes.
   // Otherwise an old order's async cleanup can erase the next order's IDs.
   const backgroundQueue = useRef<Promise<void>>(Promise.resolve());
@@ -91,39 +103,125 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
     return next;
   };
 
-  // Key derived from IDs so the tracking effect re-runs only when the set of
-  // tracked orders actually changes, not on every render.
-  const idsKey = orderIds.slice().sort().join(",");
+  const incomingIds = selectActiveDeliveryOrderIds(
+    orderIds.map((id) => ({ id, status: "Rider Picked Up" })),
+  );
+  for (const blockedId of blockedIds.current) {
+    if (!incomingIds.includes(blockedId)) blockedIds.current.delete(blockedId);
+  }
+  const publishIds = incomingIds.filter((id) => !blockedIds.current.has(id));
+  const idsKey = publishIds.join(",");
+
+  useEffect(() => {
+    if (!token) {
+      blockedIds.current.clear();
+      setBlockedRevision((revision) => revision + 1);
+    }
+  }, [token]);
 
   // ── Main tracking effect ───────────────────────────────────────────────────
   useEffect(() => {
-    if (!orderIds.length) {
-      setStatus("idle");
+    if (!token || !publishIds.length) {
+      setStatus(token && blockedIds.current.size ? "error" : "idle");
+      if (Platform.OS !== "web") {
+        void queueBackground(async () => {
+          await AsyncStorage.multiRemove([
+            ACTIVE_ORDER_IDS_KEY,
+            LOCATION_ACK_KEY,
+            LOCATION_ERROR_KEY,
+          ]);
+          await stopBackgroundLocationTask();
+        }).catch(() => {});
+      }
       return;
     }
 
     let cancelled = false;
+    let halted = false;
+    const requests = new AbortController();
     let cleanup: (() => void) | undefined;
     let lastOk = Date.now();
     setStatus("idle");
 
-    const push = async (lat: number, lng: number, timestamp: number) => {
-      if (cancelled) return;
-      const age = Date.now() - timestamp;
-      if (!Number.isFinite(age) || age < 0 || age > 60_000) {
-        setStatus("error");
-        return;
+    const stopNativeTracking = () => {
+      void queueBackground(async () => {
+        await AsyncStorage.multiRemove([
+          ACTIVE_ORDER_IDS_KEY,
+          LOCATION_ACK_KEY,
+          LOCATION_ERROR_KEY,
+        ]);
+        await stopBackgroundLocationTask();
+      }).catch(() => {});
+    };
+
+    const stopForAuthOrAssignmentError = async (httpStatus: number) => {
+      if (cancelled || halted) return;
+      halted = true;
+      requests.abort();
+      publishIds.forEach((id) => blockedIds.current.add(id));
+      setBlockedRevision((revision) => revision + 1);
+      setStatus("error");
+      stopGpsRef.current?.();
+      stopGpsRef.current = null;
+      if (Platform.OS !== "web") {
+        await AsyncStorage.removeItem(ACTIVE_ORDER_IDS_KEY).catch(() => {});
+        await AsyncStorage.setItem(LOCATION_ERROR_KEY, String(httpStatus)).catch(() => {});
+        await stopBackgroundLocationTask();
       }
+      void refreshRef.current();
+    };
+
+    const push = async (
+      latValue: number,
+      lngValue: number,
+      timestamp: number,
+    ) => {
+      if (cancelled || halted) return;
+      const capturedAt = capturedAtForFreshFix(timestamp);
+      const lat = Number(latValue);
+      const lng = Number(lngValue);
+      if (
+        !capturedAt ||
+        !Number.isFinite(lat) || Math.abs(lat) > 90 ||
+        !Number.isFinite(lng) || Math.abs(lng) > 180
+      ) return;
       try {
-        await Promise.all(orderIds.map((orderId) =>
-          mutateRef.current({ data: { orderId, lat, lng } }),
-        ));
+        for (const orderId of publishIds) {
+          await pushRiderLocation({
+            orderId,
+            lat,
+            lng,
+            capturedAt,
+          }, { signal: requests.signal });
+        }
         if (cancelled) return;
         lastOk = Date.now();
         setStatus("sharing");
-      } catch {
+        await AsyncStorage.setItem(LOCATION_ACK_KEY, String(lastOk)).catch(() => {});
+        await AsyncStorage.removeItem(LOCATION_ERROR_KEY).catch(() => {});
+      } catch (error: any) {
+        const httpStatus = Number(error?.status);
+        if (httpStatus === 401 || httpStatus === 403) {
+          if (cancelled) {
+            void refreshRef.current();
+            return;
+          }
+          await stopForAuthOrAssignmentError(httpStatus);
+          return;
+        }
+        // A later fresh GPS callback can try; this fix is never retried.
         if (!cancelled) setStatus("error");
       }
+    };
+
+    const handlePermissionError = () => {
+      if (cancelled || halted) return;
+      halted = true;
+      requests.abort();
+      setStatus("error");
+      stopGpsRef.current?.();
+      stopGpsRef.current = null;
+      stopNativeTracking();
     };
 
     if (Platform.OS === "web") {
@@ -131,26 +229,30 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
       if (geo?.watchPosition) {
         const wid = geo.watchPosition(
           (pos: any) => { void push(pos.coords.latitude, pos.coords.longitude, pos.timestamp); },
-          () => { if (!cancelled) setStatus("error"); },
+          handlePermissionError,
           { enableHighAccuracy: true, maximumAge: 5_000 },
         );
         const heartbeat = setInterval(() => {
           geo.getCurrentPosition(
             (pos: any) => { void push(pos.coords.latitude, pos.coords.longitude, pos.timestamp); },
-            () => { if (!cancelled) setStatus("error"); },
+            handlePermissionError,
             { enableHighAccuracy: true, maximumAge: 5_000, timeout: 10_000 },
           );
-        }, 15_000);
+        }, 5_000);
         cleanup = () => { geo.clearWatch(wid); clearInterval(heartbeat); };
+        stopGpsRef.current = cleanup;
       } else {
-        setStatus("error");
+        handlePermissionError();
       }
     } else {
       (async () => {
         try {
           const { status: fg } = await Location.requestForegroundPermissionsAsync();
           if (cancelled) return;
-          if (fg !== "granted") { setStatus("error"); return; }
+          if (fg !== "granted") {
+            handlePermissionError();
+            return;
+          }
 
           // Never prompt automatically for background access here. A request may
           // only happen after the rider accepts the dedicated in-app disclosure
@@ -161,9 +263,13 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
 
           await queueBackground(async () => {
             if (cancelled) return;
-            await AsyncStorage.setItem(ACTIVE_ORDER_IDS_KEY, JSON.stringify(orderIds));
-            if (bg !== "granted") return;
             const isRunning = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false);
+            await AsyncStorage.multiRemove([LOCATION_ACK_KEY, LOCATION_ERROR_KEY]);
+            await AsyncStorage.setItem(ACTIVE_ORDER_IDS_KEY, JSON.stringify(publishIds));
+            if (bg !== "granted") {
+              if (isRunning) await Location.stopLocationUpdatesAsync(LOCATION_TASK).catch(() => {});
+              return;
+            }
             if (isRunning) await Location.stopLocationUpdatesAsync(LOCATION_TASK).catch(() => {});
 
             await Location.startLocationUpdatesAsync(LOCATION_TASK, {
@@ -189,60 +295,80 @@ export function useLocationTracking(orderIds: string[]): LocationShareStatus {
           // No distanceInterval here: updates must arrive every 5 s even when
           // the rider is stationary, otherwise the stale monitor fires a false alert.
           const sub = await Location.watchPositionAsync(
-            { accuracy: Location.Accuracy.High, timeInterval: 5_000 },
+            {
+              accuracy: Location.Accuracy.High,
+              timeInterval: 5_000,
+              distanceInterval: 0,
+            },
             (pos) => { void push(pos.coords.latitude, pos.coords.longitude, pos.timestamp); },
           );
           if (cancelled) { sub.remove(); return; }
           cleanup = () => sub.remove();
+          stopGpsRef.current = cleanup;
+          void Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+          }).then((pos) => {
+            void push(pos.coords.latitude, pos.coords.longitude, pos.timestamp);
+          }).catch(() => {
+            // The watch remains active and may acquire a fresh fix shortly.
+          });
         } catch {
-          if (!cancelled) setStatus("error");
+          handlePermissionError();
         }
       })();
     }
 
     // A running background task is not proof of an accepted GPS POST.
-    // Only foreground or background server acknowledgements establish freshness.
+    // Only fresh device fixes acknowledged by the API establish freshness.
     const monitor = setInterval(async () => {
-      if (cancelled || Date.now() - lastOk <= STALE_THRESHOLD_MS) return;
+      if (cancelled || halted) return;
       if (Platform.OS !== "web") {
+        const backgroundError = await AsyncStorage.getItem(LOCATION_ERROR_KEY).catch(() => null);
+        if (backgroundError === "401" || backgroundError === "403") {
+          await AsyncStorage.removeItem(LOCATION_ERROR_KEY).catch(() => {});
+          await stopForAuthOrAssignmentError(Number(backgroundError));
+          return;
+        }
+        if (backgroundError === "permission") {
+          await AsyncStorage.removeItem(LOCATION_ERROR_KEY).catch(() => {});
+          handlePermissionError();
+          return;
+        }
+        if (AppState.currentState === "active") {
+          const permission = await Location.getForegroundPermissionsAsync().catch(() => null);
+          if (permission?.granted !== true) {
+            handlePermissionError();
+            return;
+          }
+        }
         const ack = Number(await AsyncStorage.getItem(LOCATION_ACK_KEY).catch(() => null));
         if (ack > lastOk && ack <= Date.now()) lastOk = ack;
       }
-      if (!cancelled) setStatus(Date.now() - lastOk > STALE_THRESHOLD_MS ? "error" : "sharing");
-    }, 10_000);
+      if (Date.now() - lastOk > STALE_THRESHOLD_MS) setStatus("error");
+    }, 5_000);
 
     return () => {
       cancelled = true;
+      requests.abort();
       clearInterval(monitor);
       if (cleanup) cleanup();
+      if (stopGpsRef.current === cleanup) stopGpsRef.current = null;
 
       if (Platform.OS !== "web") {
         void queueBackground(async () => {
-          const running = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false);
-          if (running) await Location.stopLocationUpdatesAsync(LOCATION_TASK).catch(() => {});
-          await AsyncStorage.multiRemove([ACTIVE_ORDER_IDS_KEY, LOCATION_ACK_KEY]);
+          await AsyncStorage.multiRemove([
+            ACTIVE_ORDER_IDS_KEY,
+            LOCATION_ACK_KEY,
+            LOCATION_ERROR_KEY,
+          ]);
+          await stopBackgroundLocationTask();
         }).catch(() => {});
       }
 
       setStatus("idle");
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idsKey, retryCount]);
-
-  // ── Auto-retry effect ──────────────────────────────────────────────────────
-  // When tracking enters the error state, schedule a retry after RETRY_DELAY_MS
-  // (up to MAX_RETRIES attempts).  Incrementing retryCount re-triggers the main
-  // tracking effect above.
-  useEffect(() => {
-    if (status !== "error" || retryCount >= MAX_RETRIES) return;
-    const t = setTimeout(() => setRetryCount((c) => c + 1), RETRY_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [status, retryCount]);
-
-  // Reset retry counter when tracking recovers.
-  useEffect(() => {
-    if (status === "sharing") setRetryCount(0);
-  }, [status]);
+  }, [idsKey, token]);
 
   return status;
 }

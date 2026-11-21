@@ -2,6 +2,8 @@ import { ObjectId, type Collection, type Document } from "mongodb";
 
 // Matches the customer API's riderLocations reader, not a process-local cache.
 export const RIDER_LOCATION_TTL_MS = 5 * 60_000;
+export const MAX_LOCATION_AGE_MS = 30_000;
+export const MAX_LOCATION_FUTURE_SKEW_MS = 5_000;
 
 export function mongoOrderId(value: unknown): ObjectId | null {
   return typeof value === "string" && /^[a-f\d]{24}$/i.test(value)
@@ -18,6 +20,17 @@ export function isFreshRiderLocationTime(value: unknown, now = Date.now()): bool
   return Number.isFinite(ts) && ts <= now && now - ts <= RIDER_LOCATION_TTL_MS;
 }
 
+export function parseCapturedAt(value: unknown, now = Date.now()): Date | null {
+  if (typeof value !== "string") return null;
+  const timestamp = Date.parse(value);
+  if (
+    !Number.isFinite(timestamp) ||
+    timestamp > now + MAX_LOCATION_FUTURE_SKEW_MS ||
+    now - timestamp > MAX_LOCATION_AGE_MS
+  ) return null;
+  return new Date(timestamp);
+}
+
 export function createRiderLocationHandlers(deps: {
   orders: () => Collection<Document>;
   locations: () => Collection<Document>;
@@ -28,9 +41,11 @@ export function createRiderLocationHandlers(deps: {
       res.setHeader("Cache-Control", "private, no-store");
       const riderId = deps.requireRiderId(req, res);
       if (!riderId) return;
-      const { orderId, lat, lng } = req.body || {};
+      const { orderId, lat, lng, capturedAt } = req.body || {};
       const _id = mongoOrderId(orderId);
       if (!_id) return res.status(400).json({ message: "Invalid MongoDB order id" });
+      const capturedAtDate = parseCapturedAt(capturedAt);
+      if (!capturedAtDate) return res.status(400).json({ message: "capturedAt must be a fresh ISO timestamp" });
       try {
         // Identity comes exclusively from the verified session/bearer token.
         const order = await deps.orders().findOne(
@@ -47,22 +62,50 @@ export function createRiderLocationHandlers(deps: {
           return res.status(400).json({ message: "Valid lat and lng are required" });
         }
         const canonicalId = _id.toHexString();
-        const update = {
-          $set: { orderId: canonicalId, riderId, lat, lng, updatedAt: new Date() },
+        const location = {
+          orderId: canonicalId,
+          riderId,
+          lat,
+          lng,
+          capturedAt: capturedAtDate,
+          updatedAt: capturedAtDate,
         };
-        // Deterministic _id prevents duplicate inserts when foreground and
-        // background writers first publish simultaneously. Existing records
-        // with an older _id are updated by orderId for compatibility.
+        const newestFixFilter = {
+          orderId: canonicalId,
+          $or: [
+            { updatedAt: { $lte: capturedAtDate } },
+            { updatedAt: { $exists: false } },
+          ],
+        };
         try {
-          await deps.locations().updateOne(
-            { orderId: canonicalId },
-            { ...update, $setOnInsert: { _id: _id } },
-            { upsert: true },
+          const update = await deps.locations().updateOne(
+            newestFixFilter,
+            { $set: location },
           );
+          if (update.matchedCount) return res.json({ ok: true });
+
+          const existing = await deps.locations().findOne(
+            { orderId: canonicalId },
+            { projection: { _id: 1 } },
+          );
+          // A later fix was already saved; acknowledge this older in-flight
+          // request without allowing it to move the customer map backwards.
+          if (existing) return res.json({ ok: true });
+
+          await deps.locations().insertOne({ _id, ...location });
         } catch (error: any) {
           if (error?.code !== 11000) throw error;
-          const result = await deps.locations().updateOne({ orderId: canonicalId }, update);
-          if (!result.matchedCount) throw error;
+          const update = await deps.locations().updateOne(
+            newestFixFilter,
+            { $set: location },
+          );
+          if (!update.matchedCount) {
+            const existing = await deps.locations().findOne(
+              { orderId: canonicalId },
+              { projection: { _id: 1 } },
+            );
+            if (!existing) throw error;
+          }
         }
         return res.json({ ok: true });
       } catch {

@@ -21,7 +21,13 @@ export function saveRiderChatToken(token: string) {
   } catch {}
 }
 
-function getToken(): string | null {
+export function clearRiderChatToken() {
+  try {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {}
+}
+
+export function getRiderChatToken(): string | null {
   try {
     return localStorage.getItem(TOKEN_STORAGE_KEY);
   } catch {
@@ -38,7 +44,7 @@ export function useOrderChat(orderId: string | null) {
   const fetchMessages = useCallback(async () => {
     if (!orderId) return;
     try {
-      const token = getToken();
+      const token = getRiderChatToken();
       const res = await fetch(`${CHAT_BASE}/api/orders/${orderId}/chat`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -60,7 +66,7 @@ export function useOrderChat(orderId: string | null) {
       if (!orderId) return false;
       setSending(true);
       try {
-        const token = getToken();
+        const token = getRiderChatToken();
         const res = await fetch(`${CHAT_BASE}/api/orders/${orderId}/chat`, {
           method: "POST",
           headers: {

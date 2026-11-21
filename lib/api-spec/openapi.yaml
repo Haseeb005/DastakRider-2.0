@@ -955,10 +955,14 @@ components:
           type: number
         lng:
           type: number
+        capturedAt:
+          type: string
+          format: date-time
       required:
         - orderId
         - lat
         - lng
+        - capturedAt
 
     RiderLocation:
       type: object

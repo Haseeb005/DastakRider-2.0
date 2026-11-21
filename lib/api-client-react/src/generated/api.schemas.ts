@@ -365,6 +365,7 @@ export interface RiderLocationInput {
   orderId: string;
   lat: number;
   lng: number;
+  capturedAt: string;
 }
 
 export interface RiderLocation {

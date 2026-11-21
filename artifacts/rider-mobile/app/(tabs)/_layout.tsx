@@ -4,6 +4,7 @@ import {
   getGetActiveOrdersQueryKey,
   getGetAvailableOrdersQueryKey,
   getGetRiderMeQueryKey,
+  selectActiveDeliveryOrderIds,
   useGetActiveOrders,
   useGetAvailableOrders,
   useGetRiderMe,
@@ -376,10 +377,10 @@ export default function TabLayout() {
   // ── Live GPS tracking ─────────────────────────────────────────────────────
   // Lifted here (always-mounted layout) so location sharing survives tab
   // switches. Only tracks orders whose status is "Rider Picked Up".
-  const trackIds = (activeQ.data ?? [])
-    .filter((o) => o.status === "Rider Picked Up")
-    .map((o) => o.id);
-  const locationStatus = useLocationTracking(trackIds);
+  const trackIds = selectActiveDeliveryOrderIds(activeQ.data ?? []);
+  const locationStatus = useLocationTracking(trackIds, token, () => {
+    void activeQ.refetch();
+  });
 
   // Publish tracking state to the store so active.tsx banner can read it.
   useEffect(() => {

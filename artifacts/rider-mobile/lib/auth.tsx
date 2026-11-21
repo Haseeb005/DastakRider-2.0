@@ -8,6 +8,13 @@ import React, {
   useState,
 } from "react";
 
+import {
+  ACTIVE_ORDER_IDS_KEY,
+  LOCATION_ACK_KEY,
+  LOCATION_ERROR_KEY,
+  stopBackgroundLocationTask,
+} from "./locationTrackingRuntime";
+
 export const TOKEN_KEY = "dastak_rider_token";
 
 type AuthState = {
@@ -48,7 +55,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     try {
-      await AsyncStorage.removeItem(TOKEN_KEY);
+      // Remove credentials/order scope before stopping the OS task so it cannot
+      // publish another fix while logout is in progress.
+      await AsyncStorage.multiRemove([
+        TOKEN_KEY,
+        ACTIVE_ORDER_IDS_KEY,
+        LOCATION_ACK_KEY,
+        LOCATION_ERROR_KEY,
+      ]).catch(() => {});
+      await stopBackgroundLocationTask();
     } finally {
       setToken(null);
       qc.clear();

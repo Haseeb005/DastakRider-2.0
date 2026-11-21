@@ -5,6 +5,8 @@ import {
   createRiderLocationHandlers,
   isFreshRiderLocationTime,
   mongoOrderId,
+  parseCapturedAt,
+  MAX_LOCATION_AGE_MS,
   RIDER_LOCATION_TTL_MS,
 } from "../lib/riderLocationHandlers";
 
@@ -21,7 +23,13 @@ function fixture({ authenticated = true, order = null as any, entry = null as an
       return null;
     },
     orders: () => ({
-      findOne: async (query: any) => { orderQueries.push(query); return order; },
+      findOne: async (query: any) => {
+        orderQueries.push(query);
+        if (query.riderId && order?.riderId && order.riderId !== query.riderId) return null;
+        if (query.status && order?.status !== query.status) return null;
+        if (query._id && order?._id && !query._id.equals(order._id)) return null;
+        return order;
+      },
     }) as any,
     locations: () => ({
       findOne: async (query: any) => { locationQueries.push(query); return entry; },
@@ -53,6 +61,20 @@ test("five-minute freshness matches customer reader; missing and future times fa
   }
 });
 
+test("capturedAt is required and bounded by the server freshness window", () => {
+  const now = Date.now();
+  assert.equal(parseCapturedAt(new Date(now).toISOString(), now)?.getTime(), now);
+  for (const value of [
+    null,
+    0,
+    "invalid",
+    new Date(now - MAX_LOCATION_AGE_MS - 1).toISOString(),
+    new Date(now + 6_000).toISOString(),
+  ]) {
+    assert.equal(parseCapturedAt(value, now), null);
+  }
+});
+
 test("unauthenticated publishing and reads never access the database", async () => {
   const f = fixture({ authenticated: false });
   await f.handlers.publish({ body: { orderId } }, f.res);
@@ -64,9 +86,20 @@ test("unauthenticated publishing and reads never access the database", async () 
   assert.equal(f.writes(), 0);
 });
 
-test("publishing checks verified rider assignment and in-transit status using Mongo _id", async () => {
-  const f = fixture();
-  await f.handlers.publish({ body: { orderId: orderId.toUpperCase(), riderId: "spoofed" } }, f.res);
+test("a different rider cannot publish for an assigned rider's order", async () => {
+  const f = fixture({
+    order: {
+      _id: new ObjectId(orderId),
+      riderId: "another-rider",
+      status: "Rider Picked Up",
+    },
+  });
+  await f.handlers.publish({
+    body: {
+      orderId,
+      capturedAt: new Date().toISOString(),
+    },
+  }, f.res);
   assert.equal(f.res.code, 403);
   assert.deepEqual(f.orderQueries[0], {
     _id: new ObjectId(orderId), riderId: "assigned-rider", status: "Rider Picked Up",
@@ -74,13 +107,53 @@ test("publishing checks verified rider assignment and in-transit status using Mo
   assert.equal(f.writes(), 0);
 });
 
-test("missing or non-finite coordinates cannot be persisted even for an assigned rider", async () => {
-  for (const body of [{ orderId }, { orderId, lat: NaN, lng: Infinity }]) {
-    const f = fixture({ order: { _id: new ObjectId(orderId) } });
-    await f.handlers.publish({ body }, f.res);
-    assert.equal(f.res.code, 400);
-    assert.equal(f.writes(), 0);
-  }
+test("request body cannot override verified rider identity", async () => {
+  const f = fixture();
+  await f.handlers.publish({
+    body: {
+      orderId: orderId.toUpperCase(),
+      capturedAt: new Date().toISOString(),
+      riderId: "spoofed-rider",
+    },
+  }, f.res);
+  assert.equal(f.res.code, 403);
+  assert.deepEqual(f.orderQueries[0], {
+    _id: new ObjectId(orderId), riderId: "assigned-rider", status: "Rider Picked Up",
+  });
+  assert.equal(f.writes(), 0);
+});
+
+test("missing coordinates cannot be persisted even for an assigned rider", async () => {
+  const f = fixture({
+    order: {
+      _id: new ObjectId(orderId),
+      riderId: "assigned-rider",
+      status: "Rider Picked Up",
+    },
+  });
+  await f.handlers.publish({
+    body: { orderId, capturedAt: new Date().toISOString() },
+  }, f.res);
+  assert.equal(f.res.code, 400);
+  assert.equal(f.writes(), 0);
+});
+
+test("completed deliveries are rejected before any location write", async () => {
+  const f = fixture({
+    order: {
+      _id: new ObjectId(orderId),
+      riderId: "assigned-rider",
+      status: "Delivered",
+    },
+  });
+  await f.handlers.publish({
+    body: { orderId, capturedAt: new Date().toISOString() },
+  }, f.res);
+  assert.equal(f.res.code, 403);
+  assert.deepEqual(f.orderQueries[0], {
+    _id: new ObjectId(orderId), riderId: "assigned-rider", status: "Rider Picked Up",
+  });
+  assert.equal(f.writes(), 0);
 });
 
 test("unassigned read is hidden; completed deliveries never read coordinates", async () => {

@@ -648,7 +648,8 @@ export const GetRiderWalletResponse = zod.object({
 export const PushRiderLocationBody = zod.object({
   "orderId": zod.string(),
   "lat": zod.number(),
-  "lng": zod.number()
+  "lng": zod.number(),
+  "capturedAt": zod.coerce.date()
 })
 
 export const PushRiderLocationResponse = zod.object({

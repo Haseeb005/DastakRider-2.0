@@ -22,7 +22,9 @@ import {
   getGetRiderWalletQueryKey,
   useGetRiderReviews,
   getGetRiderReviewsQueryKey,
-  usePushRiderLocation,
+  pushRiderLocation,
+  capturedAtForFreshFix,
+  selectActiveDeliveryOrderIds,
   type AvailableRiderOrder,
   type Rider,
   type RiderOrder,
@@ -73,7 +75,12 @@ import {
 } from "lucide-react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ChatNotificationBanner, type BannerInfo } from "@/components/ChatNotificationBanner";
-import { saveRiderChatToken, useOrderChat } from "@/hooks/useOrderChat";
+import {
+  clearRiderChatToken,
+  getRiderChatToken,
+  saveRiderChatToken,
+  useOrderChat,
+} from "@/hooks/useOrderChat";
 import { useChatWatcher } from "@/hooks/useChatWatcher";
 import { useRiderLocation } from "@/hooks/useRiderLocation";
 import { WalletOverview } from "@/components/WalletOverview";
@@ -806,42 +813,97 @@ type LocationShareStatus = "idle" | "sharing" | "error";
 // is picked up. Persisted in shared MongoDB for the customer's tracking API.
 // Returns a status so the UI can warn the rider if sharing drops mid-delivery
 // (permission revoked, no GPS fix, or no fresh location for 30s).
-function useLocationTracking(activeOrders: RiderOrder[]): LocationShareStatus {
-  const pushLocation = usePushRiderLocation();
-  const idsKey = activeOrders.filter((o) => o.status === "Rider Picked Up")
-    .map((o) => o.id).sort().join(",");
-  const pushRef = useRef(pushLocation.mutateAsync);
-  pushRef.current = pushLocation.mutateAsync;
+function useLocationTracking(
+  activeOrders: RiderOrder[],
+  enabled: boolean,
+  refreshOrders: () => void,
+): LocationShareStatus {
+  const orderIds = selectActiveDeliveryOrderIds(activeOrders);
+  const refreshRef = useRef(refreshOrders);
+  refreshRef.current = refreshOrders;
   const [status, setStatus] = useState<LocationShareStatus>("idle");
+  const [blockedRevision, setBlockedRevision] = useState(0);
+  const blockedIds = useRef(new Set<string>());
+
+  for (const blockedId of blockedIds.current) {
+    if (!orderIds.includes(blockedId)) blockedIds.current.delete(blockedId);
+  }
+  const publishIds = orderIds.filter((id) => !blockedIds.current.has(id));
+  const publishKey = publishIds.join(",");
 
   useEffect(() => {
-    if (!idsKey || typeof navigator === "undefined" || !navigator.geolocation) {
-      setStatus("idle");
+    if (!enabled || !publishIds.length) {
+      setStatus(enabled && blockedIds.current.size ? "error" : "idle");
       return;
     }
-    setStatus("idle");
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setStatus("error");
+      return;
+    }
     let cancelled = false;
+    let halted = false;
+    const requests = new AbortController();
+    let cleanup: (() => void) | null = null;
     let lastOk = Date.now();
+    setStatus("idle");
+    const stopForAuthOrAssignmentError = () => {
+      if (cancelled || halted) return;
+      halted = true;
+      requests.abort();
+      publishIds.forEach((id) => blockedIds.current.add(id));
+      setBlockedRevision((revision) => revision + 1);
+      setStatus("error");
+      cleanup?.();
+      cleanup = null;
+      void refreshRef.current();
+    };
+    const stopForPermissionError = () => {
+      if (cancelled || halted) return;
+      halted = true;
+      requests.abort();
+      setStatus("error");
+      cleanup?.();
+      cleanup = null;
+    };
     const onOk = async (pos: GeolocationPosition) => {
-      if (cancelled) return;
-      const age = Date.now() - pos.timestamp;
-      if (!Number.isFinite(age) || age < 0 || age > 60_000) {
-        setStatus("error");
+      if (cancelled || halted) return;
+      const capturedAt = capturedAtForFreshFix(pos.timestamp);
+      const lat = Number(pos.coords.latitude);
+      const lng = Number(pos.coords.longitude);
+      if (!capturedAt || !Number.isFinite(lat) || Math.abs(lat) > 90 ||
+          !Number.isFinite(lng) || Math.abs(lng) > 180) return;
+      const riderToken = getRiderChatToken();
+      if (!riderToken) {
+        stopForAuthOrAssignmentError();
         return;
       }
       try {
-        await Promise.all(idsKey.split(",").map((orderId) => pushRef.current({
-          data: { orderId, lat: pos.coords.latitude, lng: pos.coords.longitude },
-        })));
+        for (const orderId of publishIds) {
+          await pushRiderLocation({
+            orderId, lat, lng, capturedAt,
+          }, {
+            signal: requests.signal,
+            headers: { Authorization: `Bearer ${riderToken}` },
+          });
+        }
         if (!cancelled) {
           lastOk = Date.now();
           setStatus("sharing");
         }
-      } catch {
+      } catch (error: any) {
+        if (Number(error?.status) === 401 || Number(error?.status) === 403) {
+          if (cancelled) {
+            void refreshRef.current();
+            return;
+          }
+          stopForAuthOrAssignmentError();
+          return;
+        }
+        // A later genuine GPS callback may publish; don't retry this fix.
         if (!cancelled) setStatus("error");
       }
     };
-    const onErr = () => { if (!cancelled) setStatus("error"); };
+    const onErr = () => stopForPermissionError();
     // Send one immediately, then stream updates as the rider moves.
     navigator.geolocation.getCurrentPosition(onOk, onErr, { enableHighAccuracy: true });
     const watchId = navigator.geolocation.watchPosition(onOk, onErr, {
@@ -854,19 +916,24 @@ function useLocationTracking(activeOrders: RiderOrder[]): LocationShareStatus {
       navigator.geolocation.getCurrentPosition(onOk, onErr, {
         enableHighAccuracy: true, maximumAge: 5_000, timeout: 10_000,
       });
-    }, 15_000);
+    }, 5_000);
+    cleanup = () => {
+      navigator.geolocation.clearWatch(watchId);
+      clearInterval(heartbeat);
+    };
     // Warn when no server-acknowledged fix arrives, including a failed first POST.
     const monitor = setInterval(() => {
-      if (Date.now() - lastOk > 60_000) setStatus("error");
-    }, 10_000);
+      if (!cancelled && Date.now() - lastOk > 60_000) setStatus("error");
+    }, 5_000);
     return () => {
       cancelled = true;
-      navigator.geolocation.clearWatch(watchId);
+      requests.abort();
+      cleanup?.();
       clearInterval(monitor);
-      clearInterval(heartbeat);
       setStatus("idle");
     };
-  }, [idsKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, publishKey, blockedRevision]);
 
   return status;
 }
@@ -2153,6 +2220,7 @@ function RiderProfile({ rider }: { rider: Rider }) {
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
       onSuccess: () => {
+        clearRiderChatToken();
         qc.clear();
         qc.invalidateQueries({ queryKey: getGetRiderMeQueryKey() });
       },
@@ -2396,13 +2464,18 @@ export default function RiderApp() {
     query: { queryKey: getGetRiderMeQueryKey(), retry: false },
   });
 
-  const { data: activeOrders = [] } = useGetActiveOrders({
+  const activeOrdersQuery = useGetActiveOrders({
     query: { queryKey: getGetActiveOrdersQueryKey(), refetchInterval: 10_000, enabled: !!rider },
   });
+  const activeOrders = activeOrdersQuery.data ?? [];
 
   // GPS tracking runs app-wide (not tab-scoped) so it keeps publishing while a
   // picked-up order is in transit, regardless of which tab the rider is on.
-  const locationStatus = useLocationTracking(activeOrders);
+  const locationStatus = useLocationTracking(
+    activeOrders,
+    !!rider,
+    () => { void activeOrdersQuery.refetch(); },
+  );
 
   // Chat watcher runs app-wide so incoming customer messages are fetched on any
   // tab, not just when the rider is looking at the Active tab.

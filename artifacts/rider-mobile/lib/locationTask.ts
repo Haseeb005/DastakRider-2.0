@@ -4,58 +4,68 @@
  * Import this file as a side-effect in _layout.tsx.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  capturedAtForFreshFix,
+  pushRiderLocation,
+  selectActiveDeliveryOrderIds,
+} from "@workspace/api-client-react";
 import * as TaskManager from "expo-task-manager";
 
-import { API_BASE_URL } from "./apiBase";
-import { TOKEN_KEY } from "./auth";
+import {
+  ACTIVE_ORDER_IDS_KEY,
+  LOCATION_ACK_KEY,
+  LOCATION_ERROR_KEY,
+  LOCATION_TASK,
+  stopBackgroundLocationTask,
+} from "./locationTrackingRuntime";
 
-export const LOCATION_TASK = "DASTAK_BG_LOCATION";
-export const ACTIVE_ORDER_IDS_KEY = "dastak_active_order_ids";
-export const LOCATION_ACK_KEY = "dastak_location_last_ack";
-
-const BASE_URL = API_BASE_URL;
+export { ACTIVE_ORDER_IDS_KEY, LOCATION_ACK_KEY, LOCATION_ERROR_KEY, LOCATION_TASK };
 
 TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
-  if (error || !data?.locations?.length) return;
-  // A background batch can contain old fixes. Never present a cached fix as live.
-  const fix = [...data.locations].sort((a, b) => b.timestamp - a.timestamp)[0];
-  const age = Date.now() - fix.timestamp;
-  if (!Number.isFinite(age) || age < 0 || age > 60_000) return;
-  const { latitude: lat, longitude: lng } = fix.coords;
+  if (error) {
+    await AsyncStorage.setItem(LOCATION_ERROR_KEY, "permission").catch(() => {});
+    await AsyncStorage.removeItem(ACTIVE_ORDER_IDS_KEY).catch(() => {});
+    await stopBackgroundLocationTask();
+    return;
+  }
+  if (!data?.locations?.length) return;
+  // A background batch can contain old fixes. Choose the newest fresh device fix.
+  const fix = data.locations
+    .filter((location: any) => capturedAtForFreshFix(location?.timestamp))
+    .sort((a: any, b: any) => b.timestamp - a.timestamp)[0];
+  if (!fix) return;
+  const capturedAt = capturedAtForFreshFix(fix.timestamp);
+  if (!capturedAt) return;
+  const lat = Number(fix.coords?.latitude);
+  const lng = Number(fix.coords?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
   try {
-    const [token, idsJson] = await Promise.all([
-      AsyncStorage.getItem(TOKEN_KEY),
-      AsyncStorage.getItem(ACTIVE_ORDER_IDS_KEY),
-    ]);
-    if (!token || !BASE_URL) return;
-    const orderIds: string[] = idsJson ? (JSON.parse(idsJson) as string[]) : [];
+    const idsJson = await AsyncStorage.getItem(ACTIVE_ORDER_IDS_KEY);
+    const storedIds: string[] = idsJson ? (JSON.parse(idsJson) as string[]) : [];
+    const orderIds = selectActiveDeliveryOrderIds(
+      storedIds.map((id) => ({ id, status: "Rider Picked Up" })),
+    );
     if (!orderIds.length) return;
 
-    const accepted = await Promise.all(
-      orderIds.map((orderId) =>
-        fetch(`${BASE_URL}/api/rider/location`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ orderId, lat, lng }),
-        }).then((response) => {
-          if (!response.ok) {
-            console.warn(`[Location] Background publish rejected (${response.status})`);
-          }
-          return response.ok;
-        }).catch(() => {
-          console.warn("[Location] Background publish failed");
-          return false;
-        }),
-      ),
-    );
-    if (accepted.every(Boolean)) {
-      await AsyncStorage.setItem(LOCATION_ACK_KEY, String(Date.now()));
+    for (const orderId of orderIds) {
+      try {
+        await pushRiderLocation({ orderId, lat, lng, capturedAt });
+      } catch (publishError: any) {
+        const status = Number(publishError?.status);
+        if (status === 401 || status === 403) {
+          await AsyncStorage.setItem(LOCATION_ERROR_KEY, String(status));
+          await AsyncStorage.removeItem(ACTIVE_ORDER_IDS_KEY);
+          await stopBackgroundLocationTask();
+          return;
+        }
+        // No retry of this fix. A later genuine GPS fix may publish normally.
+        return;
+      }
     }
+    await AsyncStorage.setItem(LOCATION_ACK_KEY, String(Date.now()));
+    await AsyncStorage.removeItem(LOCATION_ERROR_KEY);
   } catch {
-    console.warn("[Location] Background tracking unavailable");
+    // Do not log request payloads, coordinates, rider IDs or tokens.
   }
 });
