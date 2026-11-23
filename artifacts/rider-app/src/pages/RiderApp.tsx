@@ -633,6 +633,19 @@ function RiderOrderDetailModal({
             </div>
           )}
 
+          {order.status === "Rider Accepted" &&
+            order.payCashToRestaurant &&
+            order.restaurantCashAmount != null && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2">
+                <p className="text-sm font-bold text-amber-900">
+                  Pay Cash to Restaurant
+                </p>
+                <p className="mt-1 text-base font-bold text-amber-900">
+                  Total to give (incl. VAT): {formatMoney(order.restaurantCashAmount)}
+                </p>
+              </div>
+            )}
+
           {/* Items with deal parsing */}
           {order.items && order.items.length > 0 && (
             <div className="space-y-2">

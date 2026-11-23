@@ -315,6 +315,42 @@ export function OrderDetailModal({
             ) : null}
           </Section>
 
+          {order.status === "Rider Accepted" &&
+          order.payCashToRestaurant &&
+          order.restaurantCashAmount != null ? (
+            <View
+              style={{
+                marginTop: 18,
+                borderRadius: c.radius,
+                borderWidth: 1,
+                borderColor: c.warning,
+                backgroundColor: c.warningBg,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+              }}
+            >
+              <Text
+                style={{
+                  color: c.warning,
+                  fontFamily: "Inter_700Bold",
+                  fontSize: 14,
+                }}
+              >
+                Pay Cash to Restaurant
+              </Text>
+              <Text
+                style={{
+                  color: c.warning,
+                  fontFamily: "Inter_700Bold",
+                  fontSize: 16,
+                  marginTop: 4,
+                }}
+              >
+                Total to give (incl. VAT): {money(order.restaurantCashAmount)}
+              </Text>
+            </View>
+          ) : null}
+
           <Section title="Customer">
             <Text
               style={{
