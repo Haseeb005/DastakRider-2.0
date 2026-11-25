@@ -3206,6 +3206,7 @@ const IOS_VERSIONS = [
   "4.6.7",
   "4.6.8",
   "4.6.9",
+  "4.6.10",
 ];
 const ANDROID_VERSIONS = [
   "4.3.0",
@@ -3220,6 +3221,7 @@ const ANDROID_VERSIONS = [
   "4.6.7",
   "4.6.8",
   "4.6.9",
+  "4.6.10",
 ];
 
 router.post("/ridersCheckVersion", (req, res) => {
